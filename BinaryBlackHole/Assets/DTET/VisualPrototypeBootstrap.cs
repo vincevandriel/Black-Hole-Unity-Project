@@ -23,6 +23,9 @@ namespace DTET.VisualPrototype
         private Transform bodyB;
         private GameObject remnantMarker;
         private LineRenderer orbit;
+        private LineRenderer trailA;
+        private LineRenderer trailB;
+        private RectTransform graphCursor;
         private Text scenarioText;
         private Text separationText;
         private Text playbackText;
@@ -86,10 +89,15 @@ namespace DTET.VisualPrototype
             bodyB.gameObject.SetActive(!atEndpoint);
             remnantMarker.SetActive(atEndpoint);
             orbit.enabled = !atEndpoint;
+            trailA.enabled = !atEndpoint;
+            trailB.enabled = !atEndpoint;
             if (endpointText != null) endpointText.text = atEndpoint
                 ? "CONCEPTUAL MERGER / REMNANT: visual placeholder, no merger physics"
                 : "MERGER / REMNANT: conceptual endpoint, not simulated here";
             DrawOrbit(radius);
+            DrawTrail(trailA, radius, visualPhase, false);
+            DrawTrail(trailB, radius, visualPhase, true);
+            if (graphCursor != null) graphCursor.anchoredPosition = new Vector2(102f + visualProgress * 270f, -106f);
             if (seekText != null) seekText.text = $"Story position  {visualProgress * 100f:0}%";
         }
 
@@ -125,60 +133,73 @@ namespace DTET.VisualPrototype
             plane.GetComponent<Renderer>().material = Material("Orbital plane", Hex("#13243B"), false);
             Destroy(plane.GetComponent<Collider>());
 
-            var orbitObject = new GameObject("Initial orbit / storyboard guide");
-            orbit = orbitObject.AddComponent<LineRenderer>();
+            orbit = VisualAssetFactory.CreateGlowLine(null, "Initial orbit / storyboard guide", new Color(Cyan.r, Cyan.g, Cyan.b, 0.55f), 0.018f, 128, true);
             orbit.useWorldSpace = true;
-            orbit.loop = true;
-            orbit.positionCount = 96;
-            orbit.widthMultiplier = 0.025f;
-            orbit.material = Material("Orbit guide", Cyan, true);
-            orbit.startColor = Cyan;
-            orbit.endColor = Cyan;
 
-            bodyA = CreateBody("Body A - illustrative marker", Cyan).transform;
-            bodyB = CreateBody("Body B - illustrative marker", Violet).transform;
-            remnantMarker = CreateBody("Conceptual remnant - not simulated", Gold);
+            MakeReferenceRing(3.1f, 0.22f);
+            MakeReferenceRing(3.7f, 0.12f);
+            MakeRadialTicks();
+
+            bodyA = VisualAssetFactory.CreateBody("Body A - illustrated black-hole marker", Cyan).transform;
+            bodyB = VisualAssetFactory.CreateBody("Body B - illustrated black-hole marker", Violet).transform;
+            remnantMarker = VisualAssetFactory.CreateBody("Conceptual remnant - not simulated", Gold, true);
             remnantMarker.transform.position = new Vector3(-3.25f, 0, 0);
             remnantMarker.transform.localScale = Vector3.one * 1.25f;
             remnantMarker.SetActive(false);
-            for (var i = 0; i < 36; i++)
+            trailA = MakeTrail("Body A / illustrative motion trail", Cyan);
+            trailB = MakeTrail("Body B / illustrative motion trail", Violet);
+            VisualAssetFactory.CreateStarfield(camera);
+        }
+
+        private void MakeReferenceRing(float radius, float opacity)
+        {
+            var color = new Color(Cyan.r, Cyan.g, Cyan.b, opacity);
+            var line = VisualAssetFactory.CreateGlowLine(null, "Static orbital reference / not a path", color, 0.012f, 128, true);
+            line.useWorldSpace = true;
+            for (var i = 0; i < line.positionCount; i++)
             {
-                var star = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                star.name = "Background star " + i;
-                var x = Mathf.Sin(i * 12.9898f) * 9f - 3f;
-                var y = Mathf.Cos(i * 5.398f) * 5f + 2f;
-                var z = 6f + Mathf.Sin(i * 3.71f) * 2f;
-                star.transform.position = new Vector3(x, y, z);
-                star.transform.localScale = Vector3.one * (0.018f + (i % 4) * 0.009f);
-                star.GetComponent<Renderer>().material = Material("Star", i % 3 == 0 ? Cyan : White, true);
-                Destroy(star.GetComponent<Collider>());
+                var t = i * Mathf.PI * 2f / line.positionCount;
+                line.SetPosition(i, new Vector3(-3.25f + Mathf.Cos(t) * radius, -0.04f, Mathf.Sin(t) * radius));
             }
         }
 
-        private GameObject CreateBody(string name, Color accent)
+        private void MakeRadialTicks()
         {
-            var root = new GameObject(name);
-            var core = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            core.name = "Dark central marker";
-            core.transform.SetParent(root.transform, false);
-            core.transform.localScale = Vector3.one * 0.85f;
-            core.GetComponent<Renderer>().material = Material("Dark marker", Hex("#02040B"), false);
-            Destroy(core.GetComponent<Collider>());
-
-            var halo = new GameObject("Illustrative luminous ring");
-            halo.transform.SetParent(root.transform, false);
-            var line = halo.AddComponent<LineRenderer>();
-            line.loop = true;
-            line.useWorldSpace = false;
-            line.positionCount = 64;
-            line.widthMultiplier = 0.075f;
-            line.material = Material("Luminous ring", accent, true);
-            for (var i = 0; i < 64; i++)
+            var color = new Color(Cyan.r, Cyan.g, Cyan.b, 0.28f);
+            for (var tick = 0; tick < 12; tick++)
             {
-                var theta = i * Mathf.PI * 2f / 64f;
-                line.SetPosition(i, new Vector3(Mathf.Cos(theta) * 0.67f, 0.08f, Mathf.Sin(theta) * 0.67f));
+                var line = VisualAssetFactory.CreateGlowLine(null, "Orbital reference tick " + tick, color, 0.014f, 2, false);
+                line.useWorldSpace = true;
+                var angle = tick * Mathf.PI * 2f / 12f;
+                var direction = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle));
+                line.SetPosition(0, new Vector3(-3.25f, -0.035f, 0) + direction * 3.64f);
+                line.SetPosition(1, new Vector3(-3.25f, -0.035f, 0) + direction * 3.82f);
             }
-            return root;
+        }
+
+        private static LineRenderer MakeTrail(string name, Color color)
+        {
+            var line = VisualAssetFactory.CreateGlowLine(null, name, color, 0.058f, 52, false);
+            line.useWorldSpace = true;
+            line.colorGradient = new Gradient
+            {
+                colorKeys = new[] { new GradientColorKey(color, 0), new GradientColorKey(color, 1) },
+                alphaKeys = new[] { new GradientAlphaKey(0, 0), new GradientAlphaKey(0.7f, 1) }
+            };
+            line.widthCurve = new AnimationCurve(new Keyframe(0, 0.04f), new Keyframe(1, 1f));
+            return line;
+        }
+
+        private static void DrawTrail(LineRenderer line, float radius, float phase, bool opposite)
+        {
+            var sign = opposite ? -1f : 1f;
+            for (var i = 0; i < line.positionCount; i++)
+            {
+                var fraction = i / (float)(line.positionCount - 1);
+                var angle = phase - (1f - fraction) * 1.35f;
+                var point = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * radius * sign;
+                line.SetPosition(i, new Vector3(-3.25f + point.x, 0.06f, point.z));
+            }
         }
 
         private void DrawOrbit(float radius)
@@ -210,8 +231,9 @@ namespace DTET.VisualPrototype
 
             var banner = Block(canvasObject.transform, "Prototype status", Hex("#273148"), Anchor.TopLeft, new Vector2(42, -186), new Vector2(475, 40));
             TextAt(banner.transform, "VISUAL STAGING  |  NO LIVE PHYSICS", 15, Gold, Vector2.zero, new Vector2(455, 36), TextAnchor.MiddleCenter, Anchor.Center);
-            TextAt(canvasObject.transform, "Body markers, ring and motion are conceptual illustrations.", 15, Muted, new Vector2(42, -233), new Vector2(720, 34), TextAnchor.MiddleLeft, Anchor.TopLeft);
-            TextAt(canvasObject.transform, "Not a view of an event horizon or curved spacetime.", 15, Muted, new Vector2(42, -261), new Vector2(720, 34), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            TextAt(canvasObject.transform, "Orbit, trails and disk glow are conceptual illustrations.", 15, Muted, new Vector2(42, -233), new Vector2(720, 34), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            TextAt(canvasObject.transform, "Luminous gas is artistic, not predicted for an isolated binary.", 15, Muted, new Vector2(42, -261), new Vector2(720, 34), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            TextAt(canvasObject.transform, "No ray-traced horizons or binary spacetime yet.", 15, Muted, new Vector2(42, -289), new Vector2(720, 34), TextAnchor.MiddleLeft, Anchor.TopLeft);
 
             var card = Block(canvasObject.transform, "Learning controls", Panel, Anchor.TopRight, new Vector2(-40, -38), new Vector2(450, 812));
             TextAt(card.transform, "EXPLORE THE INSPIRAL", 22, White, new Vector2(20, -16), new Vector2(410, 40), TextAnchor.MiddleLeft, Anchor.TopLeft);
@@ -302,6 +324,8 @@ namespace DTET.VisualPrototype
                 rect.pivot = new Vector2(0, 0.5f);
                 rect.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(-(b.y - a.y), b.x - a.x) * Mathf.Rad2Deg);
             }
+            graphCursor = Block(parent, "Illustrative story-position cursor", Cyan, Anchor.TopLeft, new Vector2(102, -106), new Vector2(2, 54)).GetComponent<RectTransform>();
+            graphCursor.pivot = new Vector2(0.5f, 0);
             TextAt(parent, "No live data or Hz values yet", 12, Gold, new Vector2(108, -38), new Vector2(265, 20), TextAnchor.MiddleRight, Anchor.TopLeft);
         }
 
