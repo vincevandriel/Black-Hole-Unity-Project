@@ -1,0 +1,20 @@
+# Generated Unity state (once the selected project is added).
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+
+# Keep the portable staging projects, but ignore their build products.
+!Staging/Simulation/*.csproj
+!Staging/Simulation.Tests/*.csproj
+**/bin/
+**/obj/
+.vs/
