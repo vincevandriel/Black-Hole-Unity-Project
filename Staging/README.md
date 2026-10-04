@@ -1,6 +1,6 @@
 # Desktop inspiral foundation (source staging)
 
-This repository currently has **no Unity project**: there is no `ProjectSettings/ProjectVersion.txt`, `Packages/manifest.json`, or scene. These sources are a portable foundation for the first desktop milestone, not an executed Unity prototype. Integrate them only after the intended Unity project and its `AGENTS.md`, Editor version, render pipeline, and package versions have been inspected.
+The repository now includes a separate Unity 6.3 LTS **visual staging** project at `BinaryBlackHole/`. This portable source remains a foundation for the later physics milestone; it is **not yet bound to the Unity scene**. The visual choreography and chirp illustration must not be presented as calculations from this model.
 
 ## Model and controls
 
@@ -24,11 +24,11 @@ dotnet run --project Staging/Simulation.Tests/BlackHole.Staging.Simulation.Tests
 
 The console checks frequency scaling and ratio, monotonic finite inspiral, equal/unequal center of mass, deterministic seeking, pause/reset, scenario replacement, layer independence, cutoff behavior, graph linkage, stale tutor replies, and invalid input recovery. Numerical comparisons use a relative tolerance of `1e-12` for the primary model quantities, scaled by `max(1, |expected|)`; center-of-mass residual checks use an absolute `1e-8 m` allowance in the test's chosen representation. These are source checks, not Unity Edit Mode or Play Mode evidence.
 
-## Unity integration gate
+## Future Unity physics integration gate
 
-Once the actual Unity project is identified:
+When the visual prototype is ready for model integration:
 
-1. Read every applicable `AGENTS.md`, record Git status, Editor version, render pipeline, input system, XR packages, and installed package versions.
+1. Recheck every applicable `AGENTS.md`, Editor version, render pipeline, input system, XR packages, and resolved package versions after a licensed Editor import.
 2. Move or copy the pure `Simulation/*.cs` sources into a runtime assembly under the project `Assets` tree. Keep `.NET` console test project outside `Assets`; create Unity Edit Mode tests using the installed Test Framework version.
 3. Build an idempotent `BinaryBlackHole_Staging` scene with a stationary desktop camera, two model-driven markers, an orbital-plane reference, a readable linked frequency graph, and Story/Graph/Model panels. Bind UI commands to one `SimulationSession`; use unscaled UI input when simulation is paused.
 4. Show separation (m or km), orbital frequency (Hz), GW frequency (Hz), physical time (s), playback rate, scenario ID, and explicit display-scale/merger labels. Show `N/A` for post-cutoff frequencies. Draw graph and body positions from the same evaluated state after every command.
