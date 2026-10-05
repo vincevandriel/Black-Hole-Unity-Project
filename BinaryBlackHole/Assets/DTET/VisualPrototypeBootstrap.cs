@@ -37,6 +37,14 @@ namespace DTET.VisualPrototype
         private Text checkpointFeedback;
         private Text viewModeText;
         private Image sceneDimmer;
+        private ExhibitCameraRig observer;
+        private GameObject learningOverlay;
+        private GameObject observationOverlay;
+        private Slider observationSeek;
+        private Text observationTime;
+        private Text observationCameraStatus;
+        private Text observationEventStatus;
+        private bool learningVisible;
         private GameObject storyGroup;
         private GameObject graphGroup;
         private GameObject modelGroup;
@@ -52,6 +60,9 @@ namespace DTET.VisualPrototype
         private bool dimView;
         private int scenario;
         private Font font;
+
+        public ExhibitCameraRig Observer => observer;
+        public bool LearningVisible => learningVisible;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
@@ -69,6 +80,7 @@ namespace DTET.VisualPrototype
             BuildHud();
             SetLayer(0);
             SetScenario(0);
+            SetLearningVisible(false);
         }
 
         private void Update()
@@ -107,6 +119,12 @@ namespace DTET.VisualPrototype
             DrawTrail(trailB, radius, visualPhase, true);
             if (graphCursor != null) graphCursor.anchoredPosition = new Vector2(102f + visualProgress * 270f, -106f);
             if (seekText != null) seekText.text = $"Story position  {visualProgress * 100f:0}%";
+            if (observationSeek != null) observationSeek.SetValueWithoutNotify(visualProgress);
+            if (observationTime != null) observationTime.text = $"{visualProgress * 100f:0}%  /  {(playing ? "playing" : "paused")}";
+            if (observationCameraStatus != null) observationCameraStatus.text = observer.Status;
+            if (observationEventStatus != null) observationEventStatus.text = atEndpoint
+                ? "CONCEPTUAL REMNANT  /  reset or seek back to inspect the binary"
+                : "VISUAL EXHIBIT  /  illustrative orbit, gas glow and chirp";
         }
 
         private void BuildWorld()
@@ -118,10 +136,6 @@ namespace DTET.VisualPrototype
                 camera = go.AddComponent<Camera>();
                 go.tag = "MainCamera";
             }
-            camera.transform.position = new Vector3(-3.25f, 7.5f, -15.5f);
-            camera.transform.LookAt(new Vector3(-3.25f, 0, 0));
-            camera.orthographic = true;
-            camera.orthographicSize = 5.8f;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = Ink;
 
@@ -149,7 +163,9 @@ namespace DTET.VisualPrototype
             remnantMarker.SetActive(false);
             trailA = MakeTrail("Body A / illustrative motion trail", Cyan);
             trailB = MakeTrail("Body B / illustrative motion trail", Violet);
-            VisualAssetFactory.CreateStarfield(camera);
+            var stars = VisualAssetFactory.CreateStarfield(camera);
+            observer = camera.gameObject.AddComponent<ExhibitCameraRig>();
+            observer.Initialize(camera, bodyA, bodyB, stars);
         }
 
         private void MakeReferenceRing(float radius, float opacity)
@@ -228,21 +244,40 @@ namespace DTET.VisualPrototype
             eventSystem.transform.SetParent(canvasObject.transform);
             eventSystem.GetComponent<InputSystemUIInputModule>().AssignDefaultActions();
 
-            TextAt(canvasObject.transform, "DT / ET", 34, White, new Vector2(42, -36), new Vector2(620, 50), TextAnchor.MiddleLeft, Anchor.TopLeft);
-            TextAt(canvasObject.transform, "BINARY BLACK HOLES  /  EINSTEIN TELESCOPE", 15, Cyan, new Vector2(42, -84), new Vector2(720, 30), TextAnchor.MiddleLeft, Anchor.TopLeft);
-            TextAt(canvasObject.transform, "Two bodies. One evolving story.", 21, White, new Vector2(42, -125), new Vector2(700, 45), TextAnchor.MiddleLeft, Anchor.TopLeft);
-            TextAt(canvasObject.transform, "GOAL  Explain why smaller separation means a higher dominant GW frequency.", 15, White, new Vector2(42, -155), new Vector2(930, 30), TextAnchor.MiddleLeft, Anchor.TopLeft);
-            ButtonAt(canvasObject.transform, "EXIT APP", new Vector2(820, -38), new Vector2(160, 42), Gold, ExitExperience);
+            learningOverlay = new GameObject("Learning overlay", typeof(RectTransform));
+            learningOverlay.transform.SetParent(canvasObject.transform, false);
+            Place(learningOverlay.GetComponent<RectTransform>(), Anchor.Stretch, Vector2.zero, Vector2.zero);
+            BuildLearningHud(learningOverlay.transform);
+            observationOverlay = new GameObject("Observation overlay", typeof(RectTransform));
+            observationOverlay.transform.SetParent(canvasObject.transform, false);
+            Place(observationOverlay.GetComponent<RectTransform>(), Anchor.Stretch, Vector2.zero, Vector2.zero);
+            BuildObservationHud(observationOverlay.transform);
+            SetLearningVisible(false);
+        }
 
-            var banner = Block(canvasObject.transform, "Prototype status", Hex("#273148"), Anchor.TopLeft, new Vector2(42, -186), new Vector2(475, 40));
+        private void BuildLearningHud(Transform parent)
+        {
+            // A reduced camera viewport does not clear pixels outside its rectangle.
+            // Cover the reserved area so opening panels cannot retain the previous frame's HUD.
+            var reserved = Block(parent, "Learning reserved background", Ink, Anchor.Stretch, Vector2.zero, Vector2.zero);
+            reserved.GetComponent<RectTransform>().anchorMin = new Vector2(0.68f, 0);
+            reserved.GetComponent<Image>().raycastTarget = false;
+            TextAt(parent, "DT / ET", 34, White, new Vector2(42, -36), new Vector2(620, 50), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            TextAt(parent, "BINARY BLACK HOLES  /  EINSTEIN TELESCOPE", 15, Cyan, new Vector2(42, -84), new Vector2(720, 30), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            TextAt(parent, "Two bodies. One evolving story.", 21, White, new Vector2(42, -125), new Vector2(700, 45), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            TextAt(parent, "GOAL  Explain why smaller separation means a higher dominant GW frequency.", 15, White, new Vector2(42, -155), new Vector2(930, 30), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            ButtonAt(parent, "OBSERVE / H", new Vector2(820, -38), new Vector2(160, 42), Cyan, () => SetLearningVisible(false));
+            ButtonAt(parent, "EXIT APP", new Vector2(820, -88), new Vector2(160, 38), Gold, ExitExperience);
+
+            var banner = Block(parent, "Prototype status", Hex("#273148"), Anchor.TopLeft, new Vector2(42, -186), new Vector2(475, 40));
             TextAt(banner.transform, "VISUAL STAGING  |  NO LIVE PHYSICS", 15, Gold, Vector2.zero, new Vector2(455, 36), TextAnchor.MiddleCenter, Anchor.Center);
-            TextAt(canvasObject.transform, "Orbit, trails and disk glow are conceptual illustrations.", 15, Muted, new Vector2(42, -233), new Vector2(720, 34), TextAnchor.MiddleLeft, Anchor.TopLeft);
-            TextAt(canvasObject.transform, "Luminous gas is artistic, not predicted for an isolated binary.", 15, Muted, new Vector2(42, -261), new Vector2(720, 34), TextAnchor.MiddleLeft, Anchor.TopLeft);
-            TextAt(canvasObject.transform, "No ray-traced horizons or binary spacetime yet.", 15, Muted, new Vector2(42, -289), new Vector2(720, 34), TextAnchor.MiddleLeft, Anchor.TopLeft);
-            ButtonAt(canvasObject.transform, "DIM / NORMAL", new Vector2(535, -186), new Vector2(160, 40), Cyan, ToggleDimView);
-            viewModeText = TextAt(canvasObject.transform, "View: normal  |  B toggles dimming", 13, Muted, new Vector2(42, -321), new Vector2(700, 28), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            TextAt(parent, "Orbit, trails and disk glow are conceptual illustrations.", 15, Muted, new Vector2(42, -233), new Vector2(720, 34), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            TextAt(parent, "Luminous gas is artistic, not predicted for an isolated binary.", 15, Muted, new Vector2(42, -261), new Vector2(720, 34), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            TextAt(parent, "No ray-traced horizons or binary spacetime yet.", 15, Muted, new Vector2(42, -289), new Vector2(720, 34), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            ButtonAt(parent, "DIM / NORMAL", new Vector2(535, -186), new Vector2(160, 40), Cyan, ToggleDimView);
+            viewModeText = TextAt(parent, "View: normal  |  B toggles dimming", 13, Muted, new Vector2(42, -321), new Vector2(700, 28), TextAnchor.MiddleLeft, Anchor.TopLeft);
 
-            var card = Block(canvasObject.transform, "Learning controls", Panel, Anchor.TopRight, new Vector2(-40, -38), new Vector2(450, 812));
+            var card = Block(parent, "Learning controls", Panel, Anchor.TopRight, new Vector2(-40, -38), new Vector2(450, 812));
             TextAt(card.transform, "EXPLORE THE INSPIRAL", 22, White, new Vector2(20, -16), new Vector2(410, 40), TextAnchor.MiddleLeft, Anchor.TopLeft);
             TextAt(card.transform, "Choose depth without changing the same story.", 14, Muted, new Vector2(20, -53), new Vector2(410, 32), TextAnchor.MiddleLeft, Anchor.TopLeft);
 
@@ -281,10 +316,7 @@ namespace DTET.VisualPrototype
             transportText = TextAt(card.transform, "Illustrative playback running", 13, Muted, new Vector2(20, -577), new Vector2(410, 24), TextAnchor.MiddleLeft, Anchor.TopLeft);
             seekSlider = SliderAt(card.transform, new Vector2(20, -610), new Vector2(410, 24), 0, 1, 0, value =>
             {
-                visualProgress = value;
-                visualPhase = value * Mathf.PI * 8f;
-                playing = false;
-                transportText.text = "Illustrative storyboard seek (paused)";
+                SeekStoryboard(value);
             });
             seekText = TextAt(card.transform, "Story position  0%", 13, Muted, new Vector2(20, -635), new Vector2(410, 24), TextAnchor.MiddleLeft, Anchor.TopLeft);
 
@@ -297,7 +329,7 @@ namespace DTET.VisualPrototype
             playbackText = TextAt(card.transform, "", 13, Cyan, new Vector2(20, -725), new Vector2(410, 25), TextAnchor.MiddleLeft, Anchor.TopLeft);
             TextAt(card.transform, "TUTOR  /  OFFLINE STAGING ADAPTER ONLY", 12, Gold, new Vector2(20, -765), new Vector2(410, 26), TextAnchor.MiddleLeft, Anchor.TopLeft);
 
-            var checkpoint = Block(canvasObject.transform, "One-question formative check", Hex("#142138"), Anchor.BottomLeft, new Vector2(42, 106), new Vector2(820, 150));
+            var checkpoint = Block(parent, "One-question formative check", Hex("#142138"), Anchor.BottomLeft, new Vector2(42, 106), new Vector2(820, 150));
             TextAt(checkpoint.transform, "QUICK CHECK  /  THINK BEFORE REVEALING", 14, Cyan, new Vector2(17, -10), new Vector2(780, 26), TextAnchor.MiddleLeft, Anchor.TopLeft);
             TextAt(checkpoint.transform, "If the two bodies move closer, should the dominant GW frequency rise, fall, or stay the same?", 15, White, new Vector2(17, -38), new Vector2(780, 33), TextAnchor.MiddleLeft, Anchor.TopLeft);
             ButtonAt(checkpoint.transform, "RISE", new Vector2(17, -78), new Vector2(116, 35), Cyan, () => AnswerCheckpoint(true));
@@ -305,9 +337,55 @@ namespace DTET.VisualPrototype
             ButtonAt(checkpoint.transform, "SAME", new Vector2(269, -78), new Vector2(116, 35), Violet, () => AnswerCheckpoint(false));
             checkpointFeedback = TextAt(checkpoint.transform, "Choose an answer, then compare A and B.", 13, Muted, new Vector2(400, -74), new Vector2(400, 63), TextAnchor.UpperLeft, Anchor.TopLeft);
 
-            endpointText = TextAt(canvasObject.transform, "MERGER / REMNANT: conceptual endpoint, not simulated here", 14, Gold, new Vector2(42, 38), new Vector2(900, 28), TextAnchor.MiddleLeft, Anchor.BottomLeft);
+            endpointText = TextAt(parent, "MERGER / REMNANT: conceptual endpoint, not simulated here", 14, Gold, new Vector2(42, 38), new Vector2(900, 28), TextAnchor.MiddleLeft, Anchor.BottomLeft);
             separationText.text = "Current start: 30 GM/c²  (visual scale only)";
             playbackText.text = "1.0x visual rate  /  does not change physical frequency";
+        }
+
+        private void BuildObservationHud(Transform parent)
+        {
+            TextAt(parent, "DT / ET   /   BLACK HOLE OBSERVATORY", 23, White, new Vector2(28, -22), new Vector2(760, 36), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            observationEventStatus = TextAt(parent, "", 13, Gold, new Vector2(28, -61), new Vector2(880, 24), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            TextAt(parent, "GOAL  Explain why a closer binary has a higher gravitational-wave frequency.", 14, White, new Vector2(28, -89), new Vector2(1050, 24), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            observationCameraStatus = TextAt(parent, "", 13, Muted, new Vector2(28, -117), new Vector2(1000, 24), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            var actions = Block(parent, "Observation actions", new Color(0, 0, 0, 0), Anchor.TopRight, new Vector2(-24, -24), new Vector2(430, 40));
+            actions.GetComponent<Image>().raycastTarget = false;
+            ButtonAt(actions.transform, "LEARNING / H", Vector2.zero, new Vector2(160, 40), Cyan, () => SetLearningVisible(true));
+            ButtonAt(actions.transform, "DIM / B", new Vector2(170, 0), new Vector2(120, 40), Cyan, ToggleDimView);
+            ButtonAt(actions.transform, "EXIT", new Vector2(300, 0), new Vector2(130, 40), Gold, ExitExperience);
+
+            var navigation = Block(parent, "Observation controls", new Color(0.06f, 0.10f, 0.18f, 0.92f), Anchor.BottomLeft, new Vector2(24, 24), new Vector2(1052, 132));
+            ButtonAt(navigation.transform, "OVERVIEW / F", new Vector2(14, -12), new Vector2(138, 36), Cyan, () => observer.SetPreset(ExhibitCameraRig.ViewPreset.Overview));
+            ButtonAt(navigation.transform, "ABOVE", new Vector2(160, -12), new Vector2(100, 36), Cyan, () => observer.SetPreset(ExhibitCameraRig.ViewPreset.Above));
+            ButtonAt(navigation.transform, "SIDE", new Vector2(268, -12), new Vector2(100, 36), Cyan, () => observer.SetPreset(ExhibitCameraRig.ViewPreset.Side));
+            ButtonAt(navigation.transform, "FOCUS A", new Vector2(376, -12), new Vector2(116, 36), Cyan, () => observer.Focus(ExhibitCameraRig.ObservationTarget.BodyA));
+            ButtonAt(navigation.transform, "FOCUS B", new Vector2(500, -12), new Vector2(116, 36), Violet, () => observer.Focus(ExhibitCameraRig.ObservationTarget.BodyB));
+            ButtonAt(navigation.transform, "ORBIT / FLY / C", new Vector2(624, -12), new Vector2(174, 36), Gold, observer.ToggleFlight);
+            ButtonAt(navigation.transform, "ZOOM +", new Vector2(806, -12), new Vector2(110, 36), Cyan, () => observer.Zoom(1));
+            ButtonAt(navigation.transform, "ZOOM -", new Vector2(924, -12), new Vector2(110, 36), Cyan, () => observer.Zoom(-1));
+            TextAt(navigation.transform, "Right-drag: orbit / look   |   Wheel: zoom   |   WASD: move   |   Q/E: height   |   Shift: faster   |   Middle-drag: pan", 13, Muted, new Vector2(14, -53), new Vector2(1020, 25), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            ButtonAt(navigation.transform, "PAUSE / SPACE", new Vector2(14, -87), new Vector2(148, 32), Cyan, TogglePlayback);
+            ButtonAt(navigation.transform, "RESET / R", new Vector2(170, -87), new Vector2(116, 32), Violet, ResetPlayback);
+            observationSeek = SliderAt(navigation.transform, new Vector2(304, -91), new Vector2(528, 22), 0, 1, 0, SeekStoryboard);
+            observationTime = TextAt(navigation.transform, "", 14, White, new Vector2(852, -84), new Vector2(180, 36), TextAnchor.MiddleLeft, Anchor.TopLeft);
+        }
+
+        public void SetLearningVisible(bool visible)
+        {
+            learningVisible = visible;
+            learningOverlay.SetActive(visible);
+            observationOverlay.SetActive(!visible);
+            observer.SetLearningViewport(visible);
+        }
+
+        private void SeekStoryboard(float value)
+        {
+            visualProgress = Mathf.Clamp01(value);
+            visualPhase = visualProgress * Mathf.PI * 8f;
+            playing = false;
+            seekSlider.SetValueWithoutNotify(visualProgress);
+            if (observationSeek != null) observationSeek.SetValueWithoutNotify(visualProgress);
+            transportText.text = "Illustrative storyboard seek (paused)";
         }
 
         private void DrawGraph(Transform parent)
@@ -413,6 +491,7 @@ namespace DTET.VisualPrototype
             }
             if (keyboard.rKey.wasPressedThisFrame) ResetPlayback();
             if (keyboard.bKey.wasPressedThisFrame) ToggleDimView();
+            if (keyboard.hKey.wasPressedThisFrame) SetLearningVisible(!learningVisible);
             if (keyboard.digit1Key.wasPressedThisFrame) SetLayer(0);
             if (keyboard.digit2Key.wasPressedThisFrame) SetLayer(1);
             if (keyboard.digit3Key.wasPressedThisFrame) SetLayer(2);
@@ -421,6 +500,7 @@ namespace DTET.VisualPrototype
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
         public void SetQualityCheckView(int layer, float progress)
         {
+            SetLearningVisible(true);
             SetLayer(Mathf.Clamp(layer, 0, 2));
             visualProgress = Mathf.Clamp01(progress);
             visualPhase = visualProgress * Mathf.PI * 8f;
@@ -432,6 +512,7 @@ namespace DTET.VisualPrototype
 
         private void SetLayer(int layer)
         {
+            if (observationOverlay != null) SetLearningVisible(true);
             storyGroup.SetActive(layer == 0);
             graphGroup.SetActive(layer == 1);
             modelGroup.SetActive(layer == 2);
