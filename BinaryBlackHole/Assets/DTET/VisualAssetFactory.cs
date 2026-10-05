@@ -15,14 +15,14 @@ namespace DTET.VisualPrototype
             var root = new GameObject(name);
             var inner = remnant ? new Color(1f, 0.78f, 0.43f) : new Color(1f, 0.62f, 0.31f);
 
-            CreateDisk(root.transform, "Layered accretion illustration / inner", inner, accent, 0.72f, 0.42f, new Vector3(26, -16, 11));
-            CreateDisk(root.transform, "Layered accretion illustration / outer haze", accent, inner, 0.22f, -0.16f, new Vector3(28, -13, 11), 1.18f);
+            CreateDisk(root.transform, "Layered accretion illustration / inner", inner, accent, 0.72f, 0.42f, new Vector3(-24, -16, 11));
+            CreateDisk(root.transform, "Layered accretion illustration / outer haze", accent, inner, 0.22f, -0.16f, new Vector3(-22, -13, 11), 1.18f);
 
             var core = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             core.name = "Central silhouette / not an event-horizon render";
             core.transform.SetParent(root.transform, false);
             core.transform.localScale = Vector3.one * 0.78f;
-            core.GetComponent<Renderer>().sharedMaterial = MakeUrpMaterial("Dark core", new Color(0.006f, 0.009f, 0.019f), false);
+            core.GetComponent<Renderer>().sharedMaterial = CreateSolidMaterial("Dark core", new Color(0.006f, 0.009f, 0.019f));
             Object.Destroy(core.GetComponent<Collider>());
 
             var photonGuide = CreateGlowLine(root.transform, "Illustrative bright inner rim", inner, 0.043f, 128, true);
@@ -31,7 +31,7 @@ namespace DTET.VisualPrototype
                 var t = i * Mathf.PI * 2f / photonGuide.positionCount;
                 photonGuide.SetPosition(i, new Vector3(Mathf.Cos(t) * 0.45f, 0.045f, Mathf.Sin(t) * 0.45f));
             }
-            photonGuide.transform.localRotation = Quaternion.Euler(26, -16, 11);
+            photonGuide.transform.localRotation = Quaternion.Euler(-24, -16, 11);
 
             var outerGuide = CreateGlowLine(root.transform, "Soft outer rim / visual guide", accent, 0.012f, 128, true);
             for (var i = 0; i < outerGuide.positionCount; i++)
@@ -39,7 +39,8 @@ namespace DTET.VisualPrototype
                 var t = i * Mathf.PI * 2f / outerGuide.positionCount;
                 outerGuide.SetPosition(i, new Vector3(Mathf.Cos(t) * 1.08f, 0, Mathf.Sin(t) * 1.08f));
             }
-            outerGuide.transform.localRotation = Quaternion.Euler(26, -16, 11);
+            outerGuide.transform.localRotation = Quaternion.Euler(-24, -16, 11);
+            root.transform.localScale = Vector3.one * 1.08f;
             return root;
         }
 
@@ -175,11 +176,9 @@ namespace DTET.VisualPrototype
             return diskMesh;
         }
 
-        private static Material MakeUrpMaterial(string name, Color color, bool unlit)
+        public static Material CreateSolidMaterial(string name, Color color)
         {
-            var fallback = unlit ? "Unlit/Color" : "Standard";
-            var shader = Shader.Find(unlit ? "Universal Render Pipeline/Unlit" : "Universal Render Pipeline/Lit");
-            if (shader == null) shader = Shader.Find(fallback);
+            var shader = LoadShader("DTET/SolidSurface", "Universal Render Pipeline/Unlit");
             return new Material(shader) { name = name, color = color };
         }
 

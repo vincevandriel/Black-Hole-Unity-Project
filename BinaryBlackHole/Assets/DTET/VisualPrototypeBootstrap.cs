@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
@@ -33,6 +34,9 @@ namespace DTET.VisualPrototype
         private Text layerBody;
         private Text transportText;
         private Text endpointText;
+        private Text checkpointFeedback;
+        private Text viewModeText;
+        private Image sceneDimmer;
         private GameObject storyGroup;
         private GameObject graphGroup;
         private GameObject modelGroup;
@@ -43,7 +47,9 @@ namespace DTET.VisualPrototype
         private float visualProgress;
         private float visualSpeed = 1f;
         private float initialSeparation = 30f;
+        private float pendingSeparation = 30f;
         private bool playing = true;
+        private bool dimView;
         private int scenario;
         private Font font;
 
@@ -67,6 +73,7 @@ namespace DTET.VisualPrototype
 
         private void Update()
         {
+            HandleKeyboard();
             if (playing)
             {
                 visualProgress = Mathf.Clamp01(visualProgress + Time.unscaledDeltaTime * visualSpeed * 0.025f);
@@ -79,7 +86,8 @@ namespace DTET.VisualPrototype
                 }
             }
 
-            var radius = Mathf.Lerp(2.45f, 1.05f, visualProgress) * initialSeparation / 30f;
+            var displayScale = Mathf.Lerp(0.95f, 1.2f, Mathf.InverseLerp(25f, 50f, initialSeparation));
+            var radius = Mathf.Lerp(2.45f, 1.05f, visualProgress) * displayScale;
             var center = new Vector3(-3.25f, 0, 0);
             var delta = new Vector3(Mathf.Cos(visualPhase), 0, Mathf.Sin(visualPhase)) * radius;
             bodyA.position = center + delta;
@@ -113,7 +121,7 @@ namespace DTET.VisualPrototype
             camera.transform.position = new Vector3(-3.25f, 7.5f, -15.5f);
             camera.transform.LookAt(new Vector3(-3.25f, 0, 0));
             camera.orthographic = true;
-            camera.orthographicSize = 7.2f;
+            camera.orthographicSize = 5.8f;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = Ink;
 
@@ -125,13 +133,6 @@ namespace DTET.VisualPrototype
                 lamp.transform.rotation = Quaternion.Euler(35, -25, 0);
                 lamp.intensity = 1.5f;
             }
-
-            var plane = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            plane.name = "Orbital plane reference (not spacetime)";
-            plane.transform.position = new Vector3(-3.25f, -0.15f, 0);
-            plane.transform.localScale = new Vector3(5.3f, 0.012f, 5.3f);
-            plane.GetComponent<Renderer>().material = Material("Orbital plane", Hex("#13243B"), false);
-            Destroy(plane.GetComponent<Collider>());
 
             orbit = VisualAssetFactory.CreateGlowLine(null, "Initial orbit / storyboard guide", new Color(Cyan.r, Cyan.g, Cyan.b, 0.55f), 0.018f, 128, true);
             orbit.useWorldSpace = true;
@@ -220,6 +221,8 @@ namespace DTET.VisualPrototype
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1600, 900);
             scaler.matchWidthOrHeight = 0.5f;
+            sceneDimmer = Block(canvasObject.transform, "Scene-only brightness veil", new Color(0, 0, 0, 0), Anchor.Stretch, Vector2.zero, Vector2.zero).GetComponent<Image>();
+            sceneDimmer.raycastTarget = false;
 
             var eventSystem = new GameObject("EventSystem", typeof(UnityEngine.EventSystems.EventSystem), typeof(InputSystemUIInputModule));
             eventSystem.transform.SetParent(canvasObject.transform);
@@ -228,12 +231,16 @@ namespace DTET.VisualPrototype
             TextAt(canvasObject.transform, "DT / ET", 34, White, new Vector2(42, -36), new Vector2(620, 50), TextAnchor.MiddleLeft, Anchor.TopLeft);
             TextAt(canvasObject.transform, "BINARY BLACK HOLES  /  EINSTEIN TELESCOPE", 15, Cyan, new Vector2(42, -84), new Vector2(720, 30), TextAnchor.MiddleLeft, Anchor.TopLeft);
             TextAt(canvasObject.transform, "Two bodies. One evolving story.", 21, White, new Vector2(42, -125), new Vector2(700, 45), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            TextAt(canvasObject.transform, "GOAL  Explain why smaller separation means a higher dominant GW frequency.", 15, White, new Vector2(42, -155), new Vector2(930, 30), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            ButtonAt(canvasObject.transform, "EXIT APP", new Vector2(820, -38), new Vector2(160, 42), Gold, ExitExperience);
 
             var banner = Block(canvasObject.transform, "Prototype status", Hex("#273148"), Anchor.TopLeft, new Vector2(42, -186), new Vector2(475, 40));
             TextAt(banner.transform, "VISUAL STAGING  |  NO LIVE PHYSICS", 15, Gold, Vector2.zero, new Vector2(455, 36), TextAnchor.MiddleCenter, Anchor.Center);
             TextAt(canvasObject.transform, "Orbit, trails and disk glow are conceptual illustrations.", 15, Muted, new Vector2(42, -233), new Vector2(720, 34), TextAnchor.MiddleLeft, Anchor.TopLeft);
             TextAt(canvasObject.transform, "Luminous gas is artistic, not predicted for an isolated binary.", 15, Muted, new Vector2(42, -261), new Vector2(720, 34), TextAnchor.MiddleLeft, Anchor.TopLeft);
             TextAt(canvasObject.transform, "No ray-traced horizons or binary spacetime yet.", 15, Muted, new Vector2(42, -289), new Vector2(720, 34), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            ButtonAt(canvasObject.transform, "DIM / NORMAL", new Vector2(535, -186), new Vector2(160, 40), Cyan, ToggleDimView);
+            viewModeText = TextAt(canvasObject.transform, "View: normal  |  B toggles dimming", 13, Muted, new Vector2(42, -321), new Vector2(700, 28), TextAnchor.MiddleLeft, Anchor.TopLeft);
 
             var card = Block(canvasObject.transform, "Learning controls", Panel, Anchor.TopRight, new Vector2(-40, -38), new Vector2(450, 812));
             TextAt(card.transform, "EXPLORE THE INSPIRAL", 22, White, new Vector2(20, -16), new Vector2(410, 40), TextAnchor.MiddleLeft, Anchor.TopLeft);
@@ -253,34 +260,24 @@ namespace DTET.VisualPrototype
 
             modelGroup = Block(card.transform, "Model content", Hex("#19263D"), Anchor.TopLeft, new Vector2(20, -155), new Vector2(410, 132));
             TextAt(modelGroup.transform, "MODEL  /  ASSUMPTIONS", 14, Gold, new Vector2(15, -11), new Vector2(380, 26), TextAnchor.MiddleLeft, Anchor.TopLeft);
-            layerBody = TextAt(modelGroup.transform, "Equal-mass, circular binary. The future physics stage uses a leading-order inspiral approximation. The merger remains explicitly conceptual.", 15, White, new Vector2(15, -40), new Vector2(380, 82), TextAnchor.UpperLeft, Anchor.TopLeft);
+            layerBody = TextAt(modelGroup.transform, "Planned model: f_orbit ~ sqrt(GM/r^3) / (2pi); f_GW ~ 2 f_orbit. M is kg, r is metres, f is Hz. These equations are not driving this visual preview. Merger remains conceptual.", 14, White, new Vector2(15, -40), new Vector2(380, 82), TextAnchor.UpperLeft, Anchor.TopLeft);
 
             TextAt(card.transform, "COMPARE TWO STARTING POINTS", 14, Muted, new Vector2(20, -305), new Vector2(410, 26), TextAnchor.MiddleLeft, Anchor.TopLeft);
             ButtonAt(card.transform, "A  /  CLOSER", new Vector2(20, -335), new Vector2(194, 44), Cyan, () => SetScenario(0));
             ButtonAt(card.transform, "B  /  WIDER", new Vector2(234, -335), new Vector2(194, 44), Violet, () => SetScenario(1));
             scenarioText = TextAt(card.transform, "", 15, White, new Vector2(20, -384), new Vector2(410, 28), TextAnchor.MiddleLeft, Anchor.TopLeft);
 
-            TextAt(card.transform, "INITIAL SEPARATION  /  VISUAL RANGE", 14, Muted, new Vector2(20, -426), new Vector2(410, 25), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            TextAt(card.transform, "INITIAL SEPARATION  /  VISUAL RANGE", 14, Muted, new Vector2(20, -426), new Vector2(270, 25), TextAnchor.MiddleLeft, Anchor.TopLeft);
             separationSlider = SliderAt(card.transform, new Vector2(20, -458), new Vector2(410, 24), 25, 50, 30, value =>
             {
-                initialSeparation = value;
-                separationText.text = $"{value:0} GM/c²  (bounded preview; not metres to scale)";
+                pendingSeparation = value;
+                separationText.text = $"Next start: {value:0} GM/c²  |  press APPLY";
             });
             separationText = TextAt(card.transform, "", 14, Cyan, new Vector2(20, -485), new Vector2(410, 25), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            ButtonAt(card.transform, "APPLY START", new Vector2(295, -421), new Vector2(133, 33), Cyan, ApplyPendingSeparation);
 
-            ButtonAt(card.transform, "PAUSE / PLAY", new Vector2(20, -532), new Vector2(194, 42), Cyan, () =>
-            {
-                playing = !playing;
-                transportText.text = playing ? "Illustrative playback running" : "Illustrative playback paused";
-            });
-            ButtonAt(card.transform, "RESET", new Vector2(234, -532), new Vector2(194, 42), Violet, () =>
-            {
-                visualProgress = 0;
-                visualPhase = 0;
-                seekSlider.SetValueWithoutNotify(0);
-                playing = false;
-                transportText.text = "Illustrative playback reset and paused";
-            });
+            ButtonAt(card.transform, "PAUSE / PLAY", new Vector2(20, -532), new Vector2(194, 42), Cyan, TogglePlayback);
+            ButtonAt(card.transform, "RESET", new Vector2(234, -532), new Vector2(194, 42), Violet, ResetPlayback);
             transportText = TextAt(card.transform, "Illustrative playback running", 13, Muted, new Vector2(20, -577), new Vector2(410, 24), TextAnchor.MiddleLeft, Anchor.TopLeft);
             seekSlider = SliderAt(card.transform, new Vector2(20, -610), new Vector2(410, 24), 0, 1, 0, value =>
             {
@@ -300,8 +297,16 @@ namespace DTET.VisualPrototype
             playbackText = TextAt(card.transform, "", 13, Cyan, new Vector2(20, -725), new Vector2(410, 25), TextAnchor.MiddleLeft, Anchor.TopLeft);
             TextAt(card.transform, "TUTOR  /  OFFLINE STAGING ADAPTER ONLY", 12, Gold, new Vector2(20, -765), new Vector2(410, 26), TextAnchor.MiddleLeft, Anchor.TopLeft);
 
+            var checkpoint = Block(canvasObject.transform, "One-question formative check", Hex("#142138"), Anchor.BottomLeft, new Vector2(42, 106), new Vector2(820, 150));
+            TextAt(checkpoint.transform, "QUICK CHECK  /  THINK BEFORE REVEALING", 14, Cyan, new Vector2(17, -10), new Vector2(780, 26), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            TextAt(checkpoint.transform, "If the two bodies move closer, should the dominant GW frequency rise, fall, or stay the same?", 15, White, new Vector2(17, -38), new Vector2(780, 33), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            ButtonAt(checkpoint.transform, "RISE", new Vector2(17, -78), new Vector2(116, 35), Cyan, () => AnswerCheckpoint(true));
+            ButtonAt(checkpoint.transform, "FALL", new Vector2(143, -78), new Vector2(116, 35), Violet, () => AnswerCheckpoint(false));
+            ButtonAt(checkpoint.transform, "SAME", new Vector2(269, -78), new Vector2(116, 35), Violet, () => AnswerCheckpoint(false));
+            checkpointFeedback = TextAt(checkpoint.transform, "Choose an answer, then compare A and B.", 13, Muted, new Vector2(400, -74), new Vector2(400, 63), TextAnchor.UpperLeft, Anchor.TopLeft);
+
             endpointText = TextAt(canvasObject.transform, "MERGER / REMNANT: conceptual endpoint, not simulated here", 14, Gold, new Vector2(42, 38), new Vector2(900, 28), TextAnchor.MiddleLeft, Anchor.BottomLeft);
-            separationText.text = "30 GM/c²  (bounded preview; not metres to scale)";
+            separationText.text = "Current start: 30 GM/c²  (visual scale only)";
             playbackText.text = "1.0x visual rate  /  does not change physical frequency";
         }
 
@@ -309,6 +314,8 @@ namespace DTET.VisualPrototype
         {
             TextAt(parent, "frequency", 12, Muted, new Vector2(15, -38), new Vector2(90, 18), TextAnchor.MiddleLeft, Anchor.TopLeft);
             TextAt(parent, "story time  ->", 12, Muted, new Vector2(270, -109), new Vector2(120, 18), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            Block(parent, "Illustrative horizontal axis", Hex("#4D617F"), Anchor.TopLeft, new Vector2(102, -106), new Vector2(270, 1)).GetComponent<Image>().raycastTarget = false;
+            Block(parent, "Illustrative vertical axis", Hex("#4D617F"), Anchor.TopLeft, new Vector2(102, -43), new Vector2(1, 63)).GetComponent<Image>().raycastTarget = false;
             var points = new Vector2[20];
             for (var i = 0; i < points.Length; i++)
             {
@@ -322,7 +329,7 @@ namespace DTET.VisualPrototype
                 var line = Block(parent, "Chirp preview segment", Violet, Anchor.TopLeft, a, new Vector2(Vector2.Distance(a, b), 3));
                 var rect = line.GetComponent<RectTransform>();
                 rect.pivot = new Vector2(0, 0.5f);
-                rect.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(-(b.y - a.y), b.x - a.x) * Mathf.Rad2Deg);
+                rect.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(b.y - a.y, b.x - a.x) * Mathf.Rad2Deg);
             }
             graphCursor = Block(parent, "Illustrative story-position cursor", Cyan, Anchor.TopLeft, new Vector2(102, -106), new Vector2(2, 54)).GetComponent<RectTransform>();
             graphCursor.pivot = new Vector2(0.5f, 0);
@@ -333,8 +340,9 @@ namespace DTET.VisualPrototype
         {
             scenario = value;
             initialSeparation = value == 0 ? 30 : 45;
+            pendingSeparation = initialSeparation;
             if (separationSlider != null) separationSlider.SetValueWithoutNotify(initialSeparation);
-            if (separationText != null) separationText.text = $"{initialSeparation:0} GM/c²  (bounded preview; not metres to scale)";
+            if (separationText != null) separationText.text = $"Current start: {initialSeparation:0} GM/c²  (visual scale only)";
             if (scenarioText != null) scenarioText.text = value == 0
                 ? "Scenario A: 30 + 30 solar masses, closer start"
                 : "Scenario B: 30 + 30 solar masses, wider start";
@@ -344,19 +352,89 @@ namespace DTET.VisualPrototype
             if (transportText != null) transportText.text = "Illustrative playback reset for comparison";
         }
 
+        private void ApplyPendingSeparation()
+        {
+            initialSeparation = pendingSeparation;
+            visualProgress = 0;
+            visualPhase = 0;
+            playing = false;
+            seekSlider.SetValueWithoutNotify(0);
+            separationText.text = $"Current start: {initialSeparation:0} GM/c²  (visual scale only)";
+            transportText.text = "New visual starting point applied; paused";
+        }
+
+        private void TogglePlayback()
+        {
+            if (visualProgress >= 1f) ResetPlayback();
+            playing = !playing;
+            transportText.text = playing ? "Illustrative playback running" : "Illustrative playback paused";
+        }
+
+        private void ResetPlayback()
+        {
+            visualProgress = 0;
+            visualPhase = 0;
+            seekSlider.SetValueWithoutNotify(0);
+            playing = false;
+            transportText.text = "Illustrative playback reset and paused";
+        }
+
+        private void ToggleDimView()
+        {
+            dimView = !dimView;
+            sceneDimmer.color = new Color(0, 0, 0, dimView ? 0.32f : 0f);
+            viewModeText.text = dimView ? "View: dimmed  |  B returns to normal" : "View: normal  |  B toggles dimming";
+        }
+
+        private void AnswerCheckpoint(bool correct)
+        {
+            checkpointFeedback.text = correct
+                ? "Yes. In the simplified inspiral relation, closer means faster orbit; dominant GW frequency follows at about twice the orbital rate."
+                : "Try again: as separation shrinks, orbital motion speeds up. What should happen to the wave frequency?";
+            checkpointFeedback.color = correct ? Cyan : Gold;
+        }
+
+        private void ExitExperience()
+        {
+            playing = false;
+            Application.Quit();
+            transportText.text = "Exit requested; in the Editor, use the Play toolbar to stop";
+        }
+
+        private void HandleKeyboard()
+        {
+            var keyboard = Keyboard.current;
+            if (keyboard == null) return;
+            if (keyboard.spaceKey.wasPressedThisFrame) TogglePlayback();
+            if (keyboard.escapeKey.wasPressedThisFrame)
+            {
+                playing = false;
+                transportText.text = "Paused with Esc; Space resumes, Exit closes the app";
+            }
+            if (keyboard.rKey.wasPressedThisFrame) ResetPlayback();
+            if (keyboard.bKey.wasPressedThisFrame) ToggleDimView();
+            if (keyboard.digit1Key.wasPressedThisFrame) SetLayer(0);
+            if (keyboard.digit2Key.wasPressedThisFrame) SetLayer(1);
+            if (keyboard.digit3Key.wasPressedThisFrame) SetLayer(2);
+        }
+
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+        public void SetQualityCheckView(int layer, float progress)
+        {
+            SetLayer(Mathf.Clamp(layer, 0, 2));
+            visualProgress = Mathf.Clamp01(progress);
+            visualPhase = visualProgress * Mathf.PI * 8f;
+            seekSlider.SetValueWithoutNotify(visualProgress);
+            playing = false;
+            transportText.text = "Development visual check; illustrative storyboard paused";
+        }
+#endif
+
         private void SetLayer(int layer)
         {
             storyGroup.SetActive(layer == 0);
             graphGroup.SetActive(layer == 1);
             modelGroup.SetActive(layer == 2);
-        }
-
-        private static Material Material(string name, Color color, bool unlit)
-        {
-            var shader = Shader.Find(unlit ? "Universal Render Pipeline/Unlit" : "Universal Render Pipeline/Lit");
-            if (shader == null) shader = Shader.Find(unlit ? "Unlit/Color" : "Standard");
-            var material = new Material(shader) { name = name, color = color };
-            return material;
         }
 
         private static GameObject Block(Transform parent, string name, Color color, Anchor anchor, Vector2 offset, Vector2 size)
@@ -404,7 +482,7 @@ namespace DTET.VisualPrototype
             var root = Block(parent, "Slider track", Hex("#35465B"), Anchor.TopLeft, offset, size);
             var slider = root.AddComponent<Slider>();
             var fill = Block(root.transform, "Fill", Cyan, Anchor.Stretch, Vector2.zero, Vector2.zero).GetComponent<RectTransform>();
-            var handle = Block(root.transform, "Handle", White, Anchor.Center, Vector2.zero, new Vector2(16, 28)).GetComponent<RectTransform>();
+            var handle = Block(root.transform, "Handle", White, Anchor.Center, Vector2.zero, new Vector2(14, 0)).GetComponent<RectTransform>();
             slider.fillRect = fill;
             slider.handleRect = handle;
             slider.targetGraphic = handle.GetComponent<Image>();
