@@ -1,0 +1,9 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GuideStyles.uss" />
+    <ui:VisualElement name="timerRoot" class="guide-timer" picking-mode="Ignore">
+        <ui:Label name="timerLabel" text="0:30" class="guide-timer-label" picking-mode="Ignore" />
+        <ui:VisualElement name="timerTrack" class="guide-timer-track" picking-mode="Ignore">
+            <ui:VisualElement name="timerFill" class="guide-timer-fill" picking-mode="Ignore" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

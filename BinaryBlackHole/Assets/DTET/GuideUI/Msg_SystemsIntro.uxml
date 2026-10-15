@@ -1,0 +1,10 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GuideStyles.uss" />
+    <ui:Template name="GuidePopup" src="GuidePopup.uxml" />
+    <ui:VisualElement name="systemsIntro" class="guide-message-root" picking-mode="Ignore">
+        <ui:Instance template="GuidePopup" name="popup">
+            <ui:AttributeOverrides element-name="titleLabel" text="STAGE 6" />
+            <ui:AttributeOverrides element-name="bodyLabel" text="System 1 and System 2" />
+        </ui:Instance>
+    </ui:VisualElement>
+</ui:UXML>

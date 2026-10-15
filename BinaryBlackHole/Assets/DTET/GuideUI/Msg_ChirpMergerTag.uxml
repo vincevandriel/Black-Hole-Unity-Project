@@ -1,0 +1,9 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GuideStyles.uss" />
+    <ui:Template name="GuideTag" src="GuideTag.uxml" />
+    <ui:VisualElement name="chirpMergerTag" class="guide-message-root" picking-mode="Ignore">
+        <ui:Instance template="GuideTag" name="popup">
+            <ui:AttributeOverrides element-name="tagLabel" text="Merger: the peak" />
+        </ui:Instance>
+    </ui:VisualElement>
+</ui:UXML>

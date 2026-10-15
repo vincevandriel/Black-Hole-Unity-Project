@@ -1,0 +1,10 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GuideStyles.uss" />
+    <ui:Template name="GuidePopup" src="GuidePopup.uxml" />
+    <ui:VisualElement name="postMerger" class="guide-message-root" picking-mode="Ignore">
+        <ui:Instance template="GuidePopup" name="popup" class="guide-warning guide-wide">
+            <ui:AttributeOverrides element-name="titleLabel" text="CONCEPTUAL" />
+            <ui:AttributeOverrides element-name="bodyLabel" text="Conceptual post-merger state. The simple formula no longer applies this close." />
+        </ui:Instance>
+    </ui:VisualElement>
+</ui:UXML>

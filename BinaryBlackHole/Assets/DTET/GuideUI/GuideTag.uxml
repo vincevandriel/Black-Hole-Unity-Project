@@ -1,0 +1,6 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GuideStyles.uss" />
+    <ui:VisualElement name="tagRoot" class="guide-tag" picking-mode="Ignore">
+        <ui:Label name="tagLabel" text="Name" class="guide-tag-label" picking-mode="Ignore" />
+    </ui:VisualElement>
+</ui:UXML>

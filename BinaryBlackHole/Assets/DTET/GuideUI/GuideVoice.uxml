@@ -1,0 +1,10 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GuideStyles.uss" />
+    <ui:VisualElement name="voiceRoot" class="guide-voice" picking-mode="Ignore">
+        <ui:VisualElement name="voiceBar1" class="guide-voice-bar guide-voice-bar-1" picking-mode="Ignore" />
+        <ui:VisualElement name="voiceBar2" class="guide-voice-bar guide-voice-bar-2" picking-mode="Ignore" />
+        <ui:VisualElement name="voiceBar3" class="guide-voice-bar guide-voice-bar-3" picking-mode="Ignore" />
+        <ui:VisualElement name="voiceBar4" class="guide-voice-bar guide-voice-bar-4" picking-mode="Ignore" />
+        <ui:VisualElement name="voiceBar5" class="guide-voice-bar guide-voice-bar-5" picking-mode="Ignore" />
+    </ui:VisualElement>
+</ui:UXML>
