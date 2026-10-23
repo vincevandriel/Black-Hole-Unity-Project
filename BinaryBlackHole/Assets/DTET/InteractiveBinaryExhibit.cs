@@ -526,7 +526,7 @@ namespace DTET.VisualPrototype
                 double residual = mass - (d.InitialMass - sink - outflow + floor);
                 state.Coverage = $"COVERAGE {history.StartSeconds:0.0000} – {history.EndSeconds:0.0000} s\n{(state.Covered ? "Current epoch is covered" : "Outside coverage: generated fluid is hidden")}";
                 state.Metrics = $"{history.GridSize}² cells / {history.FrameCount} frames / {GeneratedFluidPlayer.PlaybackPayloadBytes / 1048576.0:0.0} MiB payload\n"
-                    + $"{(covered ? "At cursor" : "Run end")}: M {mass:G4} / sink {sink:G3}\n"
+                    + $"{(covered ? "M(t)" : "M(end)")} [relative] {mass:G4} / sink {sink:G3}\n"
                     + $"out {outflow:G3} / floor {floor:G3} / residual {residual:G3}\n"
                     + $"{d.StepCount} steps / max CFL {d.MaxCourantNumber:0.000}";
             }
