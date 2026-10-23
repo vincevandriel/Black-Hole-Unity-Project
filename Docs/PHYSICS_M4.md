@@ -47,13 +47,18 @@ Each scene owns its target, materials, sample mesh, sky mesh and graph texture. 
 
 ## Validation and remaining gates
 
+See the [M4 validation receipt](PHYSICS_M4_VALIDATION.md) for the tested revision, results, package hash and remaining device gates.
+
 Run the portable suite, build the development QA player, then run:
 
 ```powershell
 dotnet run --project Staging/Simulation.Tests/BlackHole.Staging.Simulation.Tests.csproj -c Release
 & .\Scripts\Test-ReducedExhibitMilestone.ps1 -OutputDirectory C:/temp/dtet-m4 -BenchmarkSeconds 3
+& .\Scripts\Test-ReducedExhibitMilestone.ps1 -OutputDirectory C:/temp/dtet-m4-steady -PerformanceOnly -BenchmarkSeconds 5
 ```
 
 The M4 harness exercises startup/profile selection, timeline and mode controls, recorded body/radiation bindings, deterministic repeated seeks, camera independence, fallback, unload/reload, CPU/GPU field fixtures and actual rendered views. Performance windows explicitly render the scene and interface, then wait for a one-pixel GPU readback to establish completion. This measures completed offscreen frames, including that synchronization overhead, rather than treating a hidden player's update-loop cadence as rendering performance. PNG encoding, file I/O and full-image readbacks are outside those windows. The PowerShell runner samples Windows working set/private memory every 250 ms; these sampled peaks include QA captures/fixtures and exclude dedicated VRAM accounting.
+
+The separate `-PerformanceOnly` process requests High (subject to capability admission), skips profile cycling, PNG captures and full-image validation reads, and measures five completed-render windows. Its process-memory trace is reported separately from the full QA run. In the portable package, `RUN_DEVICE_CHECK.cmd` and `RUN_PERFORMANCE_CHECK.cmd` run these two paths and preserve their receipts next to the player.
 
 A laptop profile measured on a desktop is not a laptop benchmark. The plan's designated laptop performance gate requires a real laptop run. Scientific GRMHD, compatible binary metric data, observer light-cone rendering, headset performance and human usability remain outside this reduced desktop milestone.
