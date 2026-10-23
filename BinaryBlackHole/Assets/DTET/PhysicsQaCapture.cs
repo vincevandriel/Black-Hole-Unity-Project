@@ -173,14 +173,15 @@ namespace DTET.VisualPrototype
         private void CheckBoardLabels(bool physical)
         {
             var texts = GameObject.Find("Learning controls").GetComponentsInChildren<Text>(true);
-            bool axis = false, legend = false, rate = false;
+            bool axis = false, legend = false, rate = false, rateDetail = false;
             foreach (var text in texts)
             {
                 if (text.text == (physical ? "f_GW (Hz)" : "Illustrative")) axis = true;
                 if (physical ? text.text.Contains(" Hz / 0–") : text.text == "Qualitative amplitude / story position 0–100%") legend = true;
                 if (text.text == (physical ? "PLAYBACK RATE / SOURCE TIME" : "PLAYBACK RATE / STORY POSITION")) rate = true;
+                if (text.text.EndsWith(physical ? "x playback / frequency stays physical" : "x illustrative playback", StringComparison.Ordinal)) rateDetail = true;
             }
-            Check(axis && legend && rate, (physical ? "physical" : "artistic") + " board restores matching axis, legend and time labels");
+            Check(axis && legend && rate && rateDetail, (physical ? "physical" : "artistic") + " board restores matching axis, legend and time labels");
             foreach (var graph in FindObjectsByType<HudSignalGraphic>(FindObjectsInactive.Include, FindObjectsSortMode.None))
                 Check(physical ? ReferenceEquals(graph.Model, prototype.PhysicalFrame.Model) : graph.Model == null,
                     (physical ? "physical" : "artistic") + " graph binding restored: " + graph.name);
