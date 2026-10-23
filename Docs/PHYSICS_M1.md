@@ -1,5 +1,7 @@
 # M1: shared SI inspiral in Unity
 
+[Validation receipt](PHYSICS_M1_VALIDATION.md): seven portable test groups, successful fresh-clone Windows build, 43 physical runtime checks and nine retained artistic regression groups.
+
 The default exhibit mode now binds the existing circular quadrupole inspiral to the Unity bodies, source-time controls, spatial readouts and frequency graph. The original artistic storyboard is separately selectable. This is the first model-integration milestone; it is not the numerical GW150914 merger, gas model, binary metric or a calibrated detector waveform.
 
 ## Run and compare
