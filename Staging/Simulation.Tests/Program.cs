@@ -107,3 +107,6 @@ NumericalEventTests.Run();
 ReferenceFlowTests.Run();
 SchwarzschildReferenceTests.Run();
 Console.WriteLine("PASS: Schwarzschild rays, independent quadrature, capture/escape, disk intersections and frequency shifts");
+ReducedBinaryFlowTests.Run();
+ExhibitQualitySkyTests.Run();
+Console.WriteLine("PASS: quality admission, bounded render budgets, synthetic sky reproducibility and PSF flux invariants");

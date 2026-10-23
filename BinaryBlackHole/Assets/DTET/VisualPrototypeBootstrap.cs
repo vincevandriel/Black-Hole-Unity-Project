@@ -172,7 +172,20 @@ namespace DTET.VisualPrototype
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            if (Array.IndexOf(Environment.GetCommandLineArgs(), "--reference-lab") >= 0)
+            bool reducedExhibit = Array.IndexOf(Environment.GetCommandLineArgs(), "--reduced-exhibit") >= 0;
+            bool referenceLab = Array.IndexOf(Environment.GetCommandLineArgs(), "--reference-lab") >= 0;
+#if UNITY_EDITOR
+            int editorExhibit = UnityEditor.SessionState.GetInt("DTET.StartupExhibit", 0);
+            reducedExhibit |= editorExhibit == 2;
+            referenceLab |= editorExhibit == 1;
+#endif
+            if (reducedExhibit)
+            {
+                if (FindFirstObjectByType<ReducedBinaryExhibit>() == null)
+                    new GameObject("DT-ET reduced binary exhibit").AddComponent<ReducedBinaryExhibit>();
+                return;
+            }
+            if (referenceLab)
             {
                 if (FindFirstObjectByType<ReferenceFlowLab>() == null)
                     new GameObject("DT-ET isolated field reference lab").AddComponent<ReferenceFlowLab>();

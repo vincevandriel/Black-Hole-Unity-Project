@@ -1,0 +1,82 @@
+#ifndef DTET_REDUCED_BINARY_FLOW_INCLUDED
+#define DTET_REDUCED_BINARY_FLOW_INCLUDED
+// Exact prescribed M4 field counterpart of ReducedBinaryFlowModel.cs.
+// All positions are in total-source-mass rg, Unity XZ=SXS XY. No fluid solver.
+float4 _FlowA, _FlowB, _FlowRemnant; // position xyz, mass fraction
+float4 _FlowARadii, _FlowBRadii, _FlowRemnantRadii; // inner, outer, equal-area proxy, unused
+float4 _FlowReservoir; // inner, outer, cos(2 pattern phase), sin(2 pattern phase)
+float4 _FlowWeights; // binary weight, remnant weight, common horizon flag, unused
+float4 _FlowBounds; // half extent XZ, half extent Y, unused, unused
+float4 _FlowStreamAStart, _FlowStreamAEnd, _FlowStreamABow; // bow xyz unit normal; w chord length squared
+float4 _FlowStreamBStart, _FlowStreamBEnd, _FlowStreamBBow;
+
+float FlowSmooth(float value)
+{
+    value = saturate(value);
+    return value * value * (3.0 - 2.0 * value);
+}
+
+float2 FlowRing(float3 p, float inner, float outer, float aspect, float strength,
+    float temperatureScale, float contrast, float2 patternPhase)
+{
+    float radius2 = dot(p.xz, p.xz);
+    if (outer <= inner || radius2 <= inner * inner || radius2 >= outer * outer) return 0;
+    float radius = sqrt(radius2);
+    float height = p.y / (aspect * radius);
+    if (abs(height) >= 1.0) return 0;
+    float u = (radius - inner) / (outer - inner);
+    float radial = 4.0 * u * (1.0 - u), vertical = 1.0 - height * height;
+    float pattern = 1.0 + contrast * (((p.x * p.x - p.z * p.z) * patternPhase.x
+        + 2.0 * p.x * p.z * patternPhase.y) / radius2);
+    float density = strength * radial * radial * vertical * vertical * pattern;
+    float ratio = inner / radius;
+    float t4 = temperatureScale * temperatureScale;
+    t4 *= t4 * ratio * ratio * ratio;
+    return float2(density, density * t4);
+}
+
+float2 FlowStream(float3 p, float4 start, float4 end, float4 bow, float weight)
+{
+    float2 chord = end.xz - start.xz;
+    float u = dot(p.xz - start.xz, chord) / bow.w;
+    if (u <= 0.0 || u >= 1.0) return 0;
+    float3 center = lerp(start.xyz, end.xyz, u) + bow.xyz * (10.0 * u * (1.0 - u));
+    float3 delta = p - center;
+    float ellipse = dot(delta.xz, delta.xz) / 1.96 + delta.y * delta.y / .64;
+    if (ellipse >= 1.0) return 0;
+    float along = 4.0 * u * (1.0 - u), across = 1.0 - ellipse;
+    float density = .9 * weight * along * along * across * across;
+    float temperature = .4 + .5 * u, t4 = temperature * temperature;
+    t4 *= t4;
+    return float2(density, density * t4);
+}
+
+float FlowHorizonMask(float3 p, float4 body, float4 radii)
+{
+    return FlowSmooth((length(p - body.xyz) / radii.z - 1.0) / .2);
+}
+
+// Density and normalized bolometric emission. The source function for gray LTE transfer is y/x.
+// No observer-dependent quantity enters this field; camera only chooses its ray samples.
+float2 SampleReducedFlow(float3 p)
+{
+    if (abs(p.x) >= _FlowBounds.x || abs(p.z) >= _FlowBounds.x || abs(p.y) >= _FlowBounds.y) return 0;
+    float2 value = FlowRing(p, _FlowReservoir.x, _FlowReservoir.y, .18, .55, .35, .2, _FlowReservoir.zw);
+    if (_FlowWeights.x > 0.0)
+    {
+        value += FlowRing(p - _FlowA.xyz, _FlowARadii.x, _FlowARadii.y, .24,
+            3.0 * _FlowWeights.x * FlowSmooth(_FlowARadii.y - _FlowARadii.x), 1.1, 0, float2(1, 0));
+        value += FlowRing(p - _FlowB.xyz, _FlowBRadii.x, _FlowBRadii.y, .24,
+            3.0 * _FlowWeights.x * FlowSmooth(_FlowBRadii.y - _FlowBRadii.x), 1.1, 0, float2(1, 0));
+        value += FlowStream(p, _FlowStreamAStart, _FlowStreamAEnd, _FlowStreamABow, _FlowWeights.x);
+        value += FlowStream(p, _FlowStreamBStart, _FlowStreamBEnd, _FlowStreamBBow, _FlowWeights.x);
+    }
+    if (_FlowWeights.y > 0.0)
+        value += FlowRing(p - _FlowRemnant.xyz, _FlowRemnantRadii.x, _FlowRemnantRadii.y, .24,
+            2.0 * _FlowWeights.y, 1.1, 0, float2(1, 0));
+    if (value.x <= 0.0) return 0;
+    float mask = _FlowWeights.z > .5 ? FlowHorizonMask(p, _FlowRemnant, _FlowRemnantRadii)
+        : FlowHorizonMask(p, _FlowA, _FlowARadii) * FlowHorizonMask(p, _FlowB, _FlowBRadii);
+    return value * mask;
+}
+#endif
