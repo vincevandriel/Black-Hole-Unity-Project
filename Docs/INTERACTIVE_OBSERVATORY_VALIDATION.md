@@ -63,3 +63,7 @@ Run the portable suite, build the QA player, then execute `Scripts/Test-Interact
 The working research receipts live in `outputs/Interactive-validation/` in the active research workspace. The package includes the full interactive receipt and runtime provenance; raw build/test logs and captures remain outside editable source.
 
 Before calling this a validated laptop/XR or scientific release, complete the explicit [device and scientific gates](FINAL_DESKTOP_SCOPE.md). Compatible gas/metric acquisition is still required for M5/M6; a higher particle count or an attractive warped image cannot substitute for it.
+
+## Published desktop candidate
+
+[Draft PR #6](https://github.com/vincevandriel/Black-Hole-Unity-Project/pull/6) publishes the source, stacked on M4. `DTET_Observatory_Windows.zip` contains **196 files**, including **168 exact runtime files**, and is **66,132,037 bytes**. SHA-256: `ea0d7233a3a582113dcca8832642a3754679a6cfeeb1c1f5f5b70945a566a7f2`. Every ZIP entry and freshly extracted file was hash-verified. The adapted device-check runner then passed **193 checks** from the extracted package itself. The package includes the preceding validation text; this archive identity and extracted-run confirmation were added to source after packaging to avoid a self-referential ZIP hash.
