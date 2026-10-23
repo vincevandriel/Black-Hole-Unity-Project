@@ -1,6 +1,14 @@
 Shader "DTET/ReferenceVolume"
 {
-    Properties { _OpacityScale ("Gray opacity multiplier", Float) = 1 _Exposure ("False colour exposure", Float) = 3 }
+    Properties
+    {
+        _OpacityScale ("Gray opacity multiplier", Float) = 1
+        _Exposure ("False colour exposure", Float) = 3
+        [HideInInspector] _SlabTest ("Slab fixture", Float) = 0
+        [HideInInspector] _Steps ("Integration segments", Float) = 192
+        [HideInInspector] _Extinction ("Extinction per rg", Float) = .3
+        [HideInInspector] _Blend ("Frame interpolation", Float) = 0
+    }
     SubShader
     {
         Tags { "RenderPipeline"="UniversalPipeline" "Queue"="Transparent" "RenderType"="Transparent" }

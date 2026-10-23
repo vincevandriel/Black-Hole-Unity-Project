@@ -252,8 +252,8 @@ namespace DTET.VisualPrototype
         {
             if(EventSystem.current==null) { var es=new GameObject("Reference UI events",typeof(EventSystem),typeof(InputSystemUIInputModule));es.transform.SetParent(transform);es.GetComponent<InputSystemUIInputModule>().AssignDefaultActions(); }
             var root=new GameObject("Reference lab HUD",typeof(RectTransform),typeof(Canvas),typeof(CanvasScaler),typeof(GraphicRaycaster));root.transform.SetParent(transform);
-            var canvas=root.GetComponent<Canvas>();canvas.renderMode=RenderMode.ScreenSpaceOverlay;
-            var scaler=root.GetComponent<CanvasScaler>();scaler.uiScaleMode=CanvasScaler.ScaleMode.ScaleWithScreenSize;scaler.referenceResolution=new Vector2(1600,900);scaler.matchWidthOrHeight=.5f;
+            var canvas=root.GetComponent<Canvas>();canvas.renderMode=RenderMode.ScreenSpaceCamera;canvas.worldCamera=View;canvas.planeDistance=.1f;
+            var scaler=root.GetComponent<CanvasScaler>();scaler.uiScaleMode=CanvasScaler.ScaleMode.ScaleWithScreenSize;scaler.referenceResolution=new Vector2(1600,900);scaler.screenMatchMode=CanvasScaler.ScreenMatchMode.Expand;
             var imageGo=new GameObject("Schwarzschild reference image",typeof(RectTransform),typeof(CanvasRenderer),typeof(RawImage));imageGo.transform.SetParent(root.transform,false);
             var ir=imageGo.GetComponent<RectTransform>();ir.anchorMin=Vector2.zero;ir.anchorMax=Vector2.one;ir.offsetMin=ir.offsetMax=Vector2.zero;
             opticalImage=imageGo.GetComponent<RawImage>();opticalImage.raycastTarget=false;

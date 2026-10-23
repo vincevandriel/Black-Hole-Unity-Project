@@ -46,6 +46,7 @@ namespace DTET.VisualPrototype
             public string targetFormat;
             public double expectedLinearRadiance, measured64, measured256, error64, error256, stepDifference;
             public double extinctionPerRg, opacityScale, lengthRg, sourceFunction, exposure;
+            public double thinOpacityScale, thinExpectedLinearRadiance, thinMeasured256, thinError256;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -86,6 +87,14 @@ namespace DTET.VisualPrototype
             Check(FindFirstObjectByType<VisualPrototypeBootstrap>() == null,
                 "reference laboratory is isolated from the M1 and M2 exhibit bootstrap");
             Check(!lab.Playing && lab.View != null, "laboratory starts paused with an independent camera");
+            bool cameraHud = false;
+            foreach (var canvas in lab.GetComponentsInChildren<Canvas>(true))
+                cameraHud |= canvas.isActiveAndEnabled && canvas.renderMode == RenderMode.ScreenSpaceCamera && canvas.worldCamera == lab.View;
+            Check(cameraHud, "laboratory controls are rendered through the reference camera");
+            yield return new WaitForEndOfFrame();
+            CaptureScreen("field-lab-controls.png");
+            Check(images[images.Count - 1].centralMean > .001,
+                "the integrated reference camera presents a nonblack laboratory view");
             lab.SetOpticalMode(false);
             lab.SetPlaying(false);
             lab.SetRate(64);
@@ -279,6 +288,8 @@ namespace DTET.VisualPrototype
             float previousExtinction = material.GetFloat("_Extinction"), previousSlab = material.GetFloat("_SlabTest");
             var cameraData = camera.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
             bool previousPostProcessing = cameraData != null && cameraData.renderPostProcessing;
+            Canvas[] canvases = lab.GetComponentsInChildren<Canvas>(true);
+            bool[] canvasStates = HideCanvases(canvases);
             try
             {
                 camera.transform.SetPositionAndRotation(new Vector3(0, 0, -30), Quaternion.identity);
@@ -307,6 +318,14 @@ namespace DTET.VisualPrototype
                 Check(error64 < .003, "64-step GPU slab transfer matches the analytic linear-radiance fixture within 0.003");
                 Check(error256 < .003, "256-step GPU slab transfer matches the analytic linear-radiance fixture within 0.003");
                 Check(difference < .001, "GPU constant-slab transfer is stable when ray steps increase from 64 to 256");
+                lab.SetOpacity(1e-6f);
+                Color thin = ReadLinearCentralPixel(camera, format);
+                double thinExpected = 1 - Math.Exp(-(1 - Math.Exp(-.3 * 1e-6 * 40)));
+                double thinError = ChannelError(thin, thinExpected);
+                gpuTransfer.thinOpacityScale = 1e-6; gpuTransfer.thinExpectedLinearRadiance = thinExpected;
+                gpuTransfer.thinMeasured256 = thin.r; gpuTransfer.thinError256 = thinError;
+                Check(thinError < 2.5e-7 && thin.r > 0,
+                    "very thin GPU slab preserves nonzero transfer within 0.00000025 linear radiance");
             }
             finally
             {
@@ -317,6 +336,7 @@ namespace DTET.VisualPrototype
                 camera.backgroundColor = previousBackground; camera.aspect = previousAspect;
                 camera.allowHDR = previousHdr; camera.allowMSAA = previousMsaa; camera.orthographic = previousOrthographic;
                 if (cameraData != null) cameraData.renderPostProcessing = previousPostProcessing;
+                RestoreCanvases(canvases, canvasStates);
             }
         }
 
@@ -353,16 +373,18 @@ namespace DTET.VisualPrototype
             }
         }
 
-        private Color32[] CaptureCamera(string file)
+        private Color32[] CaptureCamera(string file, int width = 640, int height = 360, bool includeInterface = false)
         {
-            const int width = 640, height = 360;
             var target = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32);
             var previousTarget = RenderTexture.active;
             float previousAspect = lab.View.aspect;
+            Canvas[] canvases = includeInterface ? Array.Empty<Canvas>() : lab.GetComponentsInChildren<Canvas>(true);
+            bool[] canvasStates = HideCanvases(canvases);
             Texture2D texture = null;
             try
             {
                 lab.View.aspect = width / (float)height;
+                Canvas.ForceUpdateCanvases();
                 var request = new RenderPipeline.StandardRequest { destination = target };
                 if (!RenderPipeline.SupportsRenderRequest(lab.View, request))
                     throw new InvalidOperationException("The reference camera does not support a render request.");
@@ -379,15 +401,30 @@ namespace DTET.VisualPrototype
                 RenderTexture.active = previousTarget;
                 if (texture != null) Destroy(texture);
                 RenderTexture.ReleaseTemporary(target);
+                RestoreCanvases(canvases, canvasStates);
             }
         }
 
         private void CaptureScreen(string file)
         {
-            // The isolated observer image is a screen overlay, so this capture includes its real player presentation.
-            Texture2D texture = ScreenCapture.CaptureScreenshotAsTexture();
-            try { SaveAndMeasure(texture, file); }
-            finally { if (texture != null) Destroy(texture); }
+            // ScreenSpaceCamera makes the actual HUD and observer image part of this camera render.
+            // Explicit rendering remains available when the automated Windows player is hidden;
+            // this is not a claim that an OS-window backbuffer was captured.
+            CaptureCamera(file, 1600, 900, true);
+        }
+
+        private static bool[] HideCanvases(Canvas[] canvases)
+        {
+            var states = new bool[canvases.Length];
+            for (int i = 0; i < canvases.Length; i++) { states[i] = canvases[i].enabled; canvases[i].enabled = false; }
+            Canvas.ForceUpdateCanvases();
+            return states;
+        }
+
+        private static void RestoreCanvases(Canvas[] canvases, bool[] states)
+        {
+            for (int i = 0; i < canvases.Length; i++) canvases[i].enabled = states[i];
+            Canvas.ForceUpdateCanvases();
         }
 
         private Color32[] SaveAndMeasure(Texture2D texture, string file)
