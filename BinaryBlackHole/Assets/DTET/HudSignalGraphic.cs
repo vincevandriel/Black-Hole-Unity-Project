@@ -11,15 +11,42 @@ namespace DTET.VisualPrototype
         private float progress;
         private CircularInspiral model;
         private IReadOnlyList<FrequencyGraphPoint> samples;
+        private NumericalEventHistory eventModel;
+        private float[] eventSamples;
+        public NumericalEventHistory EventModel => eventModel;
         public double MaximumFrequencyHz { get; private set; }
         public CircularInspiral Model => model;
 
         public void SetModel(CircularInspiral value)
         {
-            if (ReferenceEquals(model, value)) return;
+            if (ReferenceEquals(model, value) && eventModel == null) return;
+            eventModel = null;
+            eventSamples = null;
             model = value;
             samples = value == null ? null : FrequencyGraph.Sample(value, value.CutoffTimeSeconds, 192);
             MaximumFrequencyHz = samples == null ? 0 : samples[samples.Count - 1].GravitationalWaveFrequencyHertz;
+            SetVerticesDirty();
+        }
+
+        public void SetEvent(NumericalEventHistory value)
+        {
+            if (ReferenceEquals(eventModel, value)) return;
+            eventModel = value;
+            model = null;
+            samples = null;
+            eventSamples = null;
+            MaximumFrequencyHz = 0;
+            if (value != null)
+            {
+                // Graph presentation only; authoritative native samples remain full precision in the model.
+                const int count = 1536;
+                eventSamples = new float[count];
+                for (int i = 0; i < count; i++)
+                {
+                    var radiation = value.Evaluate(value.DurationSeconds * i / (count - 1.0)).Radiation;
+                    eventSamples[i] = radiation.HasValue ? (float)(radiation.Value.RealH22 / value.WaveformPeakAmplitude) : float.NaN;
+                }
+            }
             SetVerticesDirty();
         }
         public void SetProgress(float value)
@@ -36,6 +63,22 @@ namespace DTET.VisualPrototype
             var muted = new Color(color.r, color.g, color.b, 0.19f);
             float zeroY = model == null ? rect.center.y : rect.yMin;
             Stroke(mesh, new Vector2(rect.xMin, zeroY), new Vector2(rect.xMax, zeroY), 1, muted);
+            if (eventSamples != null)
+            {
+                for (int i = 0; i < eventSamples.Length - 1; i++)
+                {
+                    if (float.IsNaN(eventSamples[i]) || float.IsNaN(eventSamples[i + 1])) continue;
+                    float x = i / (float)(eventSamples.Length - 1), nx = (i + 1) / (float)(eventSamples.Length - 1);
+                    Stroke(mesh, new Vector2(rect.xMin + x * rect.width, rect.center.y + eventSamples[i] * rect.height * .44f),
+                        new Vector2(rect.xMin + nx * rect.width, rect.center.y + eventSamples[i + 1] * rect.height * .44f),
+                        1.5f, nx <= progress ? color : muted);
+                }
+                float anchor = rect.xMin + (float)(eventModel.CommonHorizonElapsedSeconds / eventModel.DurationSeconds) * rect.width;
+                Stroke(mesh, new Vector2(anchor, rect.yMin), new Vector2(anchor, rect.yMax), 1, muted);
+                float cursor = Mathf.Lerp(rect.xMin, rect.xMax, progress);
+                Stroke(mesh, new Vector2(cursor, rect.yMin), new Vector2(cursor, rect.yMax), 1.5f, new Color(.95f, .70f, .36f));
+                return;
+            }
             if (this.samples != null)
             {
                 for (int i = 0; i < this.samples.Count - 1; i++)

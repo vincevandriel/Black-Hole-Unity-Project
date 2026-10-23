@@ -1,0 +1,29 @@
+SXS:BBH:0305 derived runtime data attribution
+
+Title: Binary black-hole simulation SXS:BBH:0305
+Creators: Larry Kidder, Harald Pfeiffer, Mark Scheel, Michael Boyle,
+          Dan Hemberger, Geoffrey Lovelace, Bela Szilagyi
+Published: 2018-04-09
+Source: https://doi.org/10.5281/zenodo.1215528
+Pinned record: https://zenodo.org/records/1215528
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+License terms: https://creativecommons.org/licenses/by/4.0/
+Legal code: https://creativecommons.org/licenses/by/4.0/legalcode
+
+The upstream dataset is distributed under CC BY 4.0. This notice applies to
+the selected numerical data redistributed in:
+  BinaryBlackHole/Assets/Resources/Physics/SXS0305.bytes
+and the source-derived numerical values in this directory's JSON files.
+It does not relicense unrelated project code or artwork.
+
+Changes made by the DT-ET project: extracted selected Lev6 horizon datasets
+and the N=2 (ell,m)=(2,2) asymptotic CoM-corrected radiation mode; interleaved
+the selected binary64 arrays into a documented little-endian binary format;
+added unit-conversion metadata, independently calculated fixtures and
+validation receipts. All selected native sample values remain unchanged.
+The runtime displays an illustrative mass scaling and an explicitly labelled
+reference-epoch alignment. These are DT-ET presentation choices, not SXS
+endorsements or measured properties of a gas-rich GW150914 reconstruction.
+
+Please retain this attribution and the license link when redistributing the
+asset or copies of its selected data, and identify further modifications.

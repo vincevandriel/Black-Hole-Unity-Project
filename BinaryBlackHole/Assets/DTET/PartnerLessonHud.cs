@@ -23,11 +23,12 @@ namespace DTET.VisualPrototype
         private Text visitorClock, referenceClock, clockDifference, clockState;
         private ObserverPhysicsBridge observerPhysics;
         private StellarSourceField stellarField;
-        private Text bendingStatus, lensButton, rayButton;
+        private Text bendingStatus, lensButton, rayButton, bendingExplanation;
+        private UnityEngine.UI.Button alignmentButton, lensControl, rayControl;
         private ExhibitCameraRig observerRig;
         private GameObject wristControls, inputOptions;
         private Slider lookSlider, scrollSlider;
-        private Text lookValue, scrollValue, separationLabel, timeLabel, honestyLabel, signalTitle, signalSubtitle, signalLegend;
+        private Text lookValue, scrollValue, separationLabel, timeLabel, honestyLabel, signalTitle, signalSubtitle, signalLegend, orbitLabel, frequencyLabel;
         private bool lastPhysicalMode;
         private long lastScenarioVersion = -1;
         public void InvalidateNarration() { lastStage = -1; lastScenarioVersion = -1; }
@@ -54,9 +55,9 @@ namespace DTET.VisualPrototype
             Label(readout, "LESSON READOUTS", 13, Accent, 18, 12, 230, 24);
             separationLabel = Label(readout, "SEPARATION (VISUAL)", 12, Muted, 18, 48, 230, 20);
             separation = Label(readout, "", 29, White, 18, 70, 230, 36);
-            Label(readout, "ORBITS PER SECOND", 12, Muted, 18, 113, 230, 20);
+            orbitLabel = Label(readout, "ORBITS PER SECOND", 12, Muted, 18, 113, 230, 20);
             orbits = Label(readout, "", 24, White, 18, 136, 230, 34);
-            Label(readout, "WAVE FREQUENCY", 12, Muted, 18, 177, 230, 20);
+            frequencyLabel = Label(readout, "WAVE FREQUENCY", 12, Muted, 18, 177, 230, 20);
             frequency = Label(readout, "", 24, Accent, 18, 200, 230, 34);
             timeLabel = Label(readout, "PLAYBACK LEFT / NOT PHYSICAL TIME", 11, Muted, 18, 241, 230, 20);
             remaining = Label(readout, "", 26, White, 18, 264, 230, 34);
@@ -95,7 +96,7 @@ namespace DTET.VisualPrototype
             var bending = WorldCard("Approximate bending card", new Vector3(-7.3f, -1.25f, 0), new Vector2(350, 190));
             Label(bending, "LIGHT BENDING / APPROXIMATE", 14, Accent, 18, 12, 314, 25);
             bendingStatus = Label(bending, "", 13, Warning, 18, 45, 314, 43);
-            Label(bending, "J aligns a fixed star behind a marker. Move to split/stretch its images. G shows thin-lens ray guides; not GR paths.",
+            bendingExplanation = Label(bending, "J aligns a fixed star behind a marker. Move to split/stretch its images. G shows thin-lens ray guides; not GR paths.",
                 13, White, 18, 96, 314, 75, TextAnchor.UpperLeft);
 
             var wristCanvas = WorldCanvas("Wrist control canvas", new Vector2(404, 376));
@@ -127,7 +128,9 @@ namespace DTET.VisualPrototype
             Button(wrist, "EXIT", 266, 254, 116, 34, exit);
             lensButton = Button(wrist, "LENS / L", 18, 296, 116, 34, stars.ToggleLensing).GetComponentInChildren<Text>();
             rayButton = Button(wrist, "RAYS / G", 142, 296, 116, 34, stars.ToggleRayPaths).GetComponentInChildren<Text>();
-            Button(wrist, "ALIGN / J", 266, 296, 116, 34, align);
+            lensControl = lensButton.GetComponentInParent<UnityEngine.UI.Button>(true);
+            rayControl = rayButton.GetComponentInParent<UnityEngine.UI.Button>(true);
+            alignmentButton = Button(wrist, "ALIGN / J", 266, 296, 116, 34, align).GetComponent<UnityEngine.UI.Button>();
             Button(wrist, "OPTIONS / O", 18, 338, 170, 26, ToggleOptions);
             status = Label(wrist, "", 11, Muted, 196, 338, 186, 26, TextAnchor.MiddleCenter);
             BuildInputOptions(wristCanvas.transform);
@@ -232,6 +235,12 @@ namespace DTET.VisualPrototype
         {
             if (provider == null) return;
             var snapshot = provider.CaptureHudSnapshot();
+            if (snapshot.NumericalModel) RefreshNumericalReadouts(snapshot);
+            else
+            {
+            orbitLabel.text = "ORBITS PER SECOND";
+            frequencyLabel.text = "WAVE FREQUENCY";
+            frequency.fontSize = 24;
             separationLabel.text = snapshot.PhysicalModel ? "CENTRE SEPARATION / MODEL" : "SEPARATION (VISUAL)";
             timeLabel.text = snapshot.PhysicalModel ? "SOURCE TIME / SECONDS" : "PLAYBACK LEFT / NOT PHYSICAL TIME";
             honestyLabel.text = snapshot.PhysicalModel ? "SI inspiral · optics approximate" : "No orbital physics · approximate optics";
@@ -247,16 +256,23 @@ namespace DTET.VisualPrototype
             frequency.text = snapshot.WaveFrequencyHz.HasValue ? $"{snapshot.WaveFrequencyHz.Value:0.0} Hz" : "Not connected";
             remaining.text = snapshot.PhysicalModel ? $"{snapshot.Physics.State.PhysicalTimeSeconds:0.000} s"
                 : $"{snapshot.PlaybackSecondsLeft:0.0} s{(snapshot.Playing ? "" : " / paused")}";
+            }
             playLabel.text = snapshot.Progress >= 1f ? "PLAY" : snapshot.Playing ? "PAUSE" : "PLAY";
-            speedLabel.text = $"{snapshot.PlaybackRate:0.#}×";
+            speedLabel.text = snapshot.NumericalModel ? $"{snapshot.PlaybackRate:0.00}×" : $"{snapshot.PlaybackRate:0.#}×";
             status.text = $"{snapshot.Progress * 100f:0}% · V lowers wrist";
             lookSlider.SetValueWithoutNotify(observerRig.LookSensitivity);
             scrollSlider.SetValueWithoutNotify(observerRig.ScrollSensitivity);
             lookValue.text = $"{observerRig.LookSensitivity:0.00}×";
             scrollValue.text = $"{observerRig.ScrollSensitivity:0.00}×";
             bendingStatus.text = stellarField.OpticalStatus;
+            bendingExplanation.text = stellarField.ApproximationAvailable
+                ? "J aligns a fixed star behind a marker. Move to split/stretch its images. G shows thin-lens ray guides; not GR paths."
+                : "Numerical replay shows coordinate positions. Lensing, ray guides and alignment are unavailable; this history has no metric for photon paths.";
             lensButton.text = stellarField.LensingEnabled ? "LENS ON / L" : "LENS OFF / L";
             rayButton.text = stellarField.ShowRayPaths ? "RAYS ON / G" : "RAYS OFF / G";
+            lensControl.interactable = stellarField.ApproximationAvailable;
+            rayControl.interactable = stellarField.ApproximationAvailable;
+            alignmentButton.interactable = stellarField.ApproximationAvailable;
             if (observerPhysics != null)
             {
                 var clocks = observerPhysics.CaptureClocks();
@@ -275,6 +291,14 @@ namespace DTET.VisualPrototype
                 ? new Color(Accent.r, Accent.g, Accent.b, 0.35f) : new Color(1, 1, 1, 0.1f);
             // Local scripted narration only. Never sends a snapshot to a network provider.
             var narrationStage = snapshot.ConceptualEndpoint ? 4 : Mathf.Min(3, Mathf.FloorToInt(snapshot.Progress * 4f));
+            if (snapshot.NumericalModel)
+            {
+                tutor.text = snapshot.Numerical.Value.HasCommonHorizon
+                    ? "A common apparent horizon is now present in the numerical data. The wire sphere has the same area; it does not reconstruct its shape or optical shadow."
+                    : "These centres follow the SXS0305 numerical solution. Inspect freely, pause or reverse. The distant radiation uses a separately labelled comparison epoch.";
+                lastStage = -1;
+                return;
+            }
             if (snapshot.PhysicalModel)
             {
                 if (narrationStage == lastStage && lastPhysicalMode && lastScenarioVersion == snapshot.Physics.ScenarioVersion) return;
@@ -299,8 +323,31 @@ namespace DTET.VisualPrototype
         {
             var currentRate = provider.CaptureHudSnapshot().PlaybackRate;
             var current = Mathf.Abs(currentRate);
-            provider.SetHudPlaybackRate((currentRate < 0 ? -1 : 1) * (current < 0.99f ? 1f : current < 1.99f ? 2f : 0.5f));
+            var numerical = provider.CaptureHudSnapshot().NumericalModel;
+            var next = numerical ? (current < .049f ? .05f : current < .099f ? .1f : current < .499f ? .5f : .01f)
+                : (current < 0.99f ? 1f : current < 1.99f ? 2f : 0.5f);
+            provider.SetHudPlaybackRate((currentRate < 0 ? -1 : 1) * next);
             Refresh();
+        }
+
+        private void RefreshNumericalReadouts(LessonHudSnapshot snapshot)
+        {
+            var state = snapshot.Numerical.Value;
+            separationLabel.text = state.HasCommonHorizon ? "COMMON APPARENT HORIZON" : "COORDINATE CENTRE SEPARATION";
+            separation.fontSize = state.HasCommonHorizon ? 22 : 29;
+            separation.text = state.HasCommonHorizon ? "Remnant area proxy" : $"{snapshot.SeparationKm.Value:0.0} km";
+            orbitLabel.text = state.HasCommonHorizon ? "REMNANT MASS / SOLAR MASSES" : "RELAXED TOTAL / SOLAR MASSES";
+            orbits.text = state.HasCommonHorizon ? $"{state.Remnant.Value.MassSolar:0.00}" : $"{snapshot.NumericalHistory.TotalMassSolar:0.0}";
+            frequencyLabel.text = "RADIATION |H22| / DIMENSIONLESS";
+            frequency.fontSize = state.Radiation.HasValue ? 24 : 17;
+            frequency.text = state.Radiation.HasValue ? $"{state.Radiation.Value.Amplitude:0.0000}" : "Outside waveform coverage";
+            timeLabel.text = "SOURCE COORDINATE t / SECONDS";
+            remaining.text = $"{state.SourceCoordinateTimeSeconds:0.0000} s";
+            honestyLabel.text = "SXS0305 · coordinate inspection";
+            signalTitle.text = "SXS0305 / Re[H22] / peak |H22|";
+            signalSubtitle.text = "NUMERICAL MODE / NOT DETECTOR STRAIN";
+            signal.SetEvent(snapshot.NumericalHistory);
+            signalLegend.text = $"Δt = {state.SourceReferenceAlignedSeconds:+0.0000;-0.0000;0} s / peak aligned to first AH";
         }
 
         private Transform Card(Transform parent, string name, Vector2 position, Vector2 size, bool right, bool bottom = false)
