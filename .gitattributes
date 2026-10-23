@@ -1,0 +1,3 @@
+# Keep the checksummed numerical asset untouched and generated receipts byte-reproducible on Windows.
+*.bytes binary
+Docs/Data/SXS0305/*.json text eol=lf
