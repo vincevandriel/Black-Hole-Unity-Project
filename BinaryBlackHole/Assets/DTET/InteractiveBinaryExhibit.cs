@@ -1,0 +1,455 @@
+using System;
+using System.IO;
+using BlackHole.Staging.Simulation;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.UI;
+using UnityEngine.Rendering;
+using UnityEngine.UI;
+
+namespace DTET.VisualPrototype
+{
+    /// <summary>Desktop experiment and recorded replay, with one model and presentation-only optics.</summary>
+    public sealed class InteractiveBinaryExhibit : MonoBehaviour, IInteractiveExhibitPresenter
+    {
+        public bool Ready { get; private set; }
+        public ExhibitQualitySettings Profile { get; private set; }
+        public ExhibitQualityProfile SelectedProfile { get; private set; } = ExhibitQualityProfile.Auto;
+        public InteractiveBinarySession Session { get; private set; }
+        public InteractiveBinarySnapshot Snapshot => Session.Snapshot;
+        public Camera View { get; private set; }
+        public Camera CaptureCamera { get; private set; }
+        public InteractiveWristDisplay Wrist { get; private set; }
+        public InteractiveOptics Optics { get; private set; }
+        public RenderTexture SceneTarget { get; private set; }
+        public Texture PresentedTexture => sceneImage == null ? null : sceneImage.texture;
+        public bool EmulatedInputEnabled { get; set; } = true;
+        public bool GasVisible { get; private set; }
+        public bool SamplesVisible { get; private set; }
+        public InteractiveOpticalStyle OpticalStyle { get; private set; } = InteractiveOpticalStyle.Subtle;
+        public float LensGain { get; private set; } = .7f;
+        public float WaveGain { get; private set; } = .35f;
+        public Transform BodyATransform => bodyA;
+        public Transform BodyBTransform => bodyB;
+        public Transform RemnantTransform => remnant;
+        public Material GasMaterial => gasMaterial;
+        public string ValidationMessage { get; private set; } = "";
+        public double SampleWeight { get; private set; }
+        public long PresentedGeneration { get; private set; }
+
+        private GameObject launcher, sceneRoot, hud, sampleObject;
+        private Text launchDetail, phaseLabel, statusLabel;
+        private RawImage sceneImage;
+        private Transform bodyA, bodyB, remnant, gasBox;
+        private Material bodyMaterial, guideMaterial, gasMaterial, sampleMaterial, displayMaterial;
+        private Mesh sampleMesh;
+        private MeshRenderer gasRenderer, sampleRenderer;
+        private ReducedExhibitSky sky;
+        private Vector3[] samplePositions;
+        private Color[] sampleColours;
+        private int lastWidth, lastHeight;
+        private long lastGeneration = -1;
+        private double lastTime = double.NaN, nextLabels;
+        private bool disposed, manualRendering;
+        private static readonly Color Gold = new Color(1, .72f, .35f);
+
+        private void Awake()
+        {
+            RenderPipelineManager.endCameraRendering += AfterSceneRender;
+            CaptureCamera = Camera.main;
+            if (CaptureCamera == null)
+            {
+                var camera = new GameObject("Suit presentation camera");
+                camera.tag = "MainCamera";
+                CaptureCamera = camera.AddComponent<Camera>();
+            }
+            CaptureCamera.cullingMask = 1 << 5;
+            CaptureCamera.clearFlags = CameraClearFlags.SolidColor;
+            CaptureCamera.backgroundColor = new Color(.008f, .015f, .028f);
+            CaptureCamera.nearClipPlane = .01f; CaptureCamera.farClipPlane = 10;
+            CaptureCamera.depth = 10; CaptureCamera.allowHDR = false; CaptureCamera.allowMSAA = false;
+            if (EventSystem.current == null)
+            {
+                var events = new GameObject("Suit input", typeof(EventSystem), typeof(InputSystemUIInputModule));
+                events.transform.SetParent(transform);
+                events.GetComponent<InputSystemUIInputModule>().AssignDefaultActions();
+            }
+            BuildLauncher();
+        }
+
+        private ExhibitCapabilities Capabilities(bool fallback) => new ExhibitCapabilities(
+            fallback ? 0 : SystemInfo.graphicsShaderLevel, SystemInfo.graphicsMemorySize,
+            SystemInfo.systemMemorySize, SystemInfo.supports3DTextures, SystemInfo.supportsComputeShaders);
+
+        private void BuildLauncher()
+        {
+            launcher = ReducedExhibitUi.Canvas(transform, CaptureCamera, "Interactive exhibit launcher");
+            var p = launcher.transform;
+            ReducedExhibitUi.Label(p, "DT / ET     SPACESUIT OBSERVATORY", 18, 100, 85, 1400, 45, ReducedExhibitUi.Accent);
+            ReducedExhibitUi.Label(p, "BINARY EXPLORER", 64, 95, 155, 1400, 95, Color.white);
+            ReducedExhibitUi.Label(p, "A real event to explore. A laboratory to experiment in.", 26, 100, 275, 1400, 50, ReducedExhibitUi.Muted);
+            ReducedExhibitUi.Label(p, "Numerical replay  /  adjustable experiment  /  illustrative gas and light warping", 18, 100, 340, 1400, 50, Gold);
+            var choices = new[] { ExhibitQualityProfile.Auto, ExhibitQualityProfile.Laptop, ExhibitQualityProfile.Balanced, ExhibitQualityProfile.High };
+            for (int i = 0; i < choices.Length; i++)
+            {
+                var selected = choices[i];
+                ReducedExhibitUi.Button(p, selected.ToString().ToUpperInvariant(), 100 + i * 350, 430, 325, 60, () => SelectProfile(selected));
+            }
+            launchDetail = ReducedExhibitUi.Label(p, "", 19, 100, 520, 1390, 100, ReducedExhibitUi.Muted);
+            ReducedExhibitUi.Button(p, "ENTER OBSERVATORY", 100, 665, 390, 64, () => Launch(SelectedProfile));
+            ReducedExhibitUi.Button(p, "COMPATIBILITY", 520, 665, 300, 64, () => Launch(SelectedProfile, true));
+            ReducedExhibitUi.Button(p, "EXIT", 850, 665, 160, 64, () => Application.Quit());
+            ReducedExhibitUi.Label(p, "Select before loading. The simulation starts paused; V raises your wrist display.\nLower rendering budgets preserve event and experiment parameters. Compatibility disables gas and distortion.", 17, 100, 775, 1390, 75, ReducedExhibitUi.Muted);
+            SelectProfile(SelectedProfile);
+        }
+
+        public void SelectProfile(ExhibitQualityProfile value)
+        {
+            SelectedProfile = value;
+            var profile = ExhibitQuality.Resolve(value, Capabilities(false));
+            launchDetail.text = $"SELECTED {value} → {profile.EffectiveProfile}\nScene up to {profile.MaxRenderWidth} × {profile.MaxRenderHeight} · {profile.RaySteps} base gas samples + inner refinement\n{profile.Reason}";
+        }
+
+        public void Launch(ExhibitQualityProfile profile, bool fallback = false)
+        {
+            try { LaunchInternal(profile, fallback); }
+            catch { ReturnToLauncher(); throw; }
+        }
+
+        private void LaunchInternal(ExhibitQualityProfile profile, bool fallback)
+        {
+            if (Ready) ReturnToLauncher();
+            var gasShader = Resources.Load<Shader>("DTET/ReducedBinaryVolume");
+            Profile = ExhibitQuality.Resolve(profile, Capabilities(fallback || gasShader == null || !gasShader.isSupported));
+            SelectedProfile = profile;
+            var data = Resources.Load<TextAsset>("Physics/SXS0305");
+            if (data == null) throw new InvalidOperationException("The licensed SXS replay asset is missing.");
+            try
+            {
+                using (var stream = new MemoryStream(data.bytes, false))
+                    Session = new InteractiveBinarySession(NumericalEventHistory.Load(stream));
+            }
+            finally { Resources.UnloadAsset(data); }
+            Session.SetPlaybackRate(.05);
+            sceneRoot = new GameObject("Interactive astronomical scene"); sceneRoot.transform.SetParent(transform);
+            var camera = new GameObject("Astronomical inspection camera"); camera.transform.SetParent(sceneRoot.transform);
+            View = camera.AddComponent<Camera>(); View.cullingMask = ~(1 << 5);
+            View.clearFlags = CameraClearFlags.SolidColor; View.backgroundColor = new Color(.001f, .002f, .004f);
+            View.nearClipPlane = .04f; View.farClipPlane = 20000; View.fieldOfView = 52;
+            View.depth = -10; View.allowHDR = true; View.allowMSAA = false;
+            ResizeTarget();
+            sky = sceneRoot.AddComponent<ReducedExhibitSky>(); sky.Initialize(View, Profile.StarCount);
+            bodyMaterial = new Material(Resources.Load<Shader>("DTET/SolidSurface")); bodyMaterial.SetColor("_Color", Color.black);
+            guideMaterial = new Material(Resources.Load<Shader>("DTET/GlowLine"));
+            bodyA = BuildMarker("Primary horizon proxy", new Color(.3f, .77f, 1));
+            bodyB = BuildMarker("Secondary horizon proxy", new Color(.8f, .55f, 1));
+            remnant = BuildMarker("Remnant horizon proxy", Gold);
+            if (Profile.GasEnabled) BuildGas();
+            BuildHud();
+            Optics = sceneRoot.AddComponent<InteractiveOptics>();
+            Ready = true; GasVisible = Profile.GasEnabled; SamplesVisible = false;
+            Wrist = hud.AddComponent<InteractiveWristDisplay>(); Wrist.Initialize(CaptureCamera, this);
+            lastGeneration = -1; lastTime = double.NaN;
+            launcher.SetActive(false); SetViewPreset(0); Present(); Wrist.SetRaised(true);
+        }
+
+        private void ResizeTarget()
+        {
+            Profile.RenderDimensions(Math.Max(320, Screen.width), Math.Max(180, Screen.height), out int w, out int h);
+            if (SceneTarget != null) { View.targetTexture = null; SceneTarget.Release(); Destroy(SceneTarget); }
+            var format = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBHalf) ? RenderTextureFormat.ARGBHalf : RenderTextureFormat.ARGB32;
+            SceneTarget = new RenderTexture(w, h, 24, format, RenderTextureReadWrite.Linear) { name = "Bounded interactive scene", filterMode = FilterMode.Bilinear, antiAliasing = 1 };
+            if (!SceneTarget.Create()) throw new NotSupportedException("Scene target allocation failed. Select a smaller rendering budget.");
+            View.targetTexture = SceneTarget; lastWidth = Screen.width; lastHeight = Screen.height;
+            if (sceneImage != null) sceneImage.texture = SceneTarget;
+        }
+
+        private Transform BuildMarker(string name, Color colour)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere); go.name = name; go.transform.SetParent(sceneRoot.transform);
+            Destroy(go.GetComponent<Collider>()); go.GetComponent<MeshRenderer>().sharedMaterial = bodyMaterial;
+            // Three thin coordinate guides keep the proxy visible from arbitrary inclinations.
+            for (int plane = 0; plane < 3; plane++)
+            {
+                var guide = new GameObject("Horizon coordinate guide"); guide.transform.SetParent(go.transform, false);
+                var line = guide.AddComponent<LineRenderer>(); line.sharedMaterial = guideMaterial; line.useWorldSpace = false;
+                line.loop = true; line.positionCount = 64; line.widthMultiplier = .013f; line.startColor = line.endColor = colour * .65f;
+                for (int i = 0; i < 64; i++)
+                {
+                    float a = i * 2 * Mathf.PI / 64, x = Mathf.Cos(a) * .506f, y = Mathf.Sin(a) * .506f;
+                    line.SetPosition(i, plane == 0 ? new Vector3(x, 0, y) : plane == 1 ? new Vector3(x, y, 0) : new Vector3(0, x, y));
+                }
+            }
+            return go.transform;
+        }
+
+        private void BuildGas()
+        {
+            var box = GameObject.CreatePrimitive(PrimitiveType.Cube); box.name = "Prescribed emitting gas";
+            box.transform.SetParent(sceneRoot.transform); Destroy(box.GetComponent<Collider>()); gasBox = box.transform;
+            gasMaterial = new Material(Resources.Load<Shader>("DTET/ReducedBinaryVolume"));
+            gasMaterial.SetFloat("_Steps", Profile.RaySteps); gasMaterial.SetFloat("_Exposure", 2.5f);
+            gasMaterial.SetFloat("_Opacity", (float)ReducedBinaryFlowModel.GrayExtinctionPerRg);
+            gasRenderer = box.GetComponent<MeshRenderer>(); gasRenderer.sharedMaterial = gasMaterial;
+        }
+
+        private void BuildHud()
+        {
+            hud = ReducedExhibitUi.Canvas(transform, CaptureCamera, "Observatory presentation");
+            sceneImage = ReducedExhibitUi.Image(hud.transform, "Scene", SceneTarget, 0, 0, 1600, 900);
+            displayMaterial = new Material(Resources.Load<Shader>("DTET/ExhibitDisplay")); sceneImage.material = displayMaterial;
+            var r = sceneImage.rectTransform; r.anchorMin = Vector2.zero; r.anchorMax = Vector2.one; r.offsetMin = r.offsetMax = Vector2.zero;
+            ReducedExhibitUi.Panel(hud.transform, "Title strip", 0, 0, 1600, 88, ReducedExhibitUi.Ink);
+            ReducedExhibitUi.Label(hud.transform, "DT / ET     BINARY EXPLORER", 26, 28, 12, 1450, 36, Color.white);
+            phaseLabel = ReducedExhibitUi.Label(hud.transform, "", 15, 30, 53, 1500, 30, Gold);
+            statusLabel = ReducedExhibitUi.Label(hud.transform, "", 14, 25, 866, 1540, 32, ReducedExhibitUi.Muted);
+        }
+
+        private void RebuildSamples()
+        {
+            if (sampleObject != null) { sampleObject.SetActive(false); Destroy(sampleObject); }
+            if (sampleMesh != null) Destroy(sampleMesh);
+            if (sampleMaterial == null) sampleMaterial = new Material(Resources.Load<Shader>("DTET/ReducedDensitySamples"));
+            int count = Profile.TracerCount;
+            samplePositions = new Vector3[count]; var vertices = new Vector3[count * 4]; var uv = new Vector2[count * 4];
+            sampleColours = new Color[count * 4]; var indices = new int[count * 6];
+            double x = Session.Model.HalfExtentXZ, y = Session.Model.HalfExtentY;
+            for (int i = 0; i < count; i++)
+            {
+                var p = new Vector3((float)((Radical(i + 1, 2) * 2 - 1) * x), (float)((Radical(i + 1, 3) * 2 - 1) * y), (float)((Radical(i + 1, 5) * 2 - 1) * x));
+                samplePositions[i] = p;
+                for (int j = 0; j < 4; j++) vertices[4 * i + j] = p;
+                uv[4 * i] = new Vector2(-1, -1); uv[4 * i + 1] = new Vector2(-1, 1); uv[4 * i + 2] = new Vector2(1, 1); uv[4 * i + 3] = new Vector2(1, -1);
+                int k = 4 * i, t = 6 * i; indices[t] = k; indices[t + 1] = k + 1; indices[t + 2] = k + 2; indices[t + 3] = k; indices[t + 4] = k + 2; indices[t + 5] = k + 3;
+            }
+            sampleMesh = new Mesh { name = "Interactive weighted spatial samples" }; sampleMesh.MarkDynamic();
+            sampleMesh.vertices = vertices; sampleMesh.uv = uv; sampleMesh.colors = sampleColours; sampleMesh.triangles = indices;
+            sampleMesh.bounds = new Bounds(Vector3.zero, new Vector3((float)x * 2, (float)y * 2, (float)x * 2));
+            sampleObject = new GameObject("Weighted density overlay", typeof(MeshFilter), typeof(MeshRenderer)); sampleObject.transform.SetParent(sceneRoot.transform);
+            sampleObject.GetComponent<MeshFilter>().sharedMesh = sampleMesh; sampleRenderer = sampleObject.GetComponent<MeshRenderer>();
+            sampleRenderer.sharedMaterial = sampleMaterial; sampleRenderer.enabled = SamplesVisible;
+        }
+
+        public void Present()
+        {
+            if (!Ready) return;
+            var s = Snapshot;
+            if (s.Generation != lastGeneration)
+            {
+                lastGeneration = s.Generation; lastTime = double.NaN; RebuildSamples();
+                if (gasMaterial != null)
+                {
+                    float x = (float)Session.Model.HalfExtentXZ, y = (float)Session.Model.HalfExtentY;
+                    gasBox.localScale = new Vector3(x * 2, y * 2, x * 2);
+                    gasMaterial.SetVector("_HalfExtent", new Vector4(x, y, x, 0)); gasMaterial.SetVector("_FlowBounds", new Vector4(x, y, 0, 0));
+                }
+            }
+            if (s.ElapsedSeconds == lastTime) return;
+            lastTime = s.ElapsedSeconds; PresentedGeneration = s.Generation;
+            PresentBody(bodyA, s.BodyA); PresentBody(bodyB, s.BodyB); PresentBody(remnant, s.Remnant);
+            MoveCamera(Vector3.zero);
+            if (gasMaterial != null)
+            {
+                ReducedBinaryFlowBinding.Bind(gasMaterial, s.GasState);
+                gasMaterial.SetVector("_HorizonA", Horizon(s.BodyA)); gasMaterial.SetVector("_HorizonB", Horizon(s.BodyB)); gasMaterial.SetVector("_HorizonR", Horizon(s.Remnant));
+            }
+            SampleWeight = 0;
+            double cell = 8 * Session.Model.HalfExtentXZ * Session.Model.HalfExtentXZ * Session.Model.HalfExtentY / samplePositions.Length;
+            for (int i = 0; i < samplePositions.Length; i++)
+            {
+                var p = samplePositions[i]; var field = Session.Model.SampleGas(s.GasState, p.x, p.y, p.z);
+                SampleWeight += field.RelativeDensity * cell;
+                var c = new Color(.25f, .95f, 1, (float)Math.Min(.95, field.RelativeDensity * 1.5));
+                for (int j = 0; j < 4; j++) sampleColours[4 * i + j] = c;
+            }
+            sampleMesh.colors = sampleColours;
+        }
+
+        private void PresentBody(Transform target, InteractiveBinaryBody? body)
+        {
+            target.gameObject.SetActive(body.HasValue); if (!body.HasValue) return;
+            target.position = V(body.Value.PositionRg); target.localScale = Vector3.one * (float)(2 * body.Value.HorizonRadiusRg);
+        }
+        private static Vector3 V(NumericalVector3 p) => new Vector3((float)p.X, (float)p.Y, (float)p.Z);
+        private static Vector4 Horizon(InteractiveBinaryBody? h) => h.HasValue ? new Vector4((float)h.Value.PositionRg.X, (float)h.Value.PositionRg.Y, (float)h.Value.PositionRg.Z, (float)h.Value.HorizonRadiusRg) : Vector4.zero;
+        private static double Radical(int n, int b) { double f = 1.0 / b, v = 0; while (n > 0) { v += n % b * f; n /= b; f /= b; } return v; }
+
+        public void SetViewPreset(int index)
+        {
+            if (View == null || Session == null) return;
+            float r = (float)Session.Model.HalfExtentXZ;
+            Vector3[] points = { new Vector3(0, r * .95f, -r * 1.8f), new Vector3(0, r * 2.05f, -.01f), new Vector3(0, r * .035f, -r * 2), new Vector3(0, -r * .95f, -r * 1.8f), new Vector3(0, 10, -23) };
+            if (index < 0 || index >= points.Length) throw new ArgumentOutOfRangeException(nameof(index));
+            View.transform.position = points[index]; View.transform.LookAt(Vector3.zero); MoveCamera(Vector3.zero);
+        }
+        public void MoveCamera(Vector3 delta)
+        {
+            if (!Ready || !float.IsFinite(delta.x) || !float.IsFinite(delta.y) || !float.IsFinite(delta.z)) return;
+            var p = Vector3.ClampMagnitude(View.transform.position + delta, 10000);
+            var s = Snapshot; KeepOutside(ref p, s.BodyA); KeepOutside(ref p, s.BodyB); KeepOutside(ref p, s.Remnant);
+            View.transform.position = p;
+        }
+        private static void KeepOutside(ref Vector3 p, InteractiveBinaryBody? body)
+        {
+            if (!body.HasValue) return; var h = body.Value; var d = p - V(h.PositionRg); float radius = (float)h.HorizonRadiusRg * 1.12f;
+            if (d.sqrMagnitude < radius * radius) p = V(h.PositionRg) + (d.sqrMagnitude < 1e-8 ? Vector3.back : d.normalized) * radius;
+        }
+
+        private void Update()
+        {
+            if (!Ready) return;
+            if (lastWidth != Screen.width || lastHeight != Screen.height) ResizeTarget();
+            if (EmulatedInputEnabled) HandleInput();
+            if (!Ready) return;
+            Session.Tick(Time.unscaledDeltaTime); Present();
+            if (Time.unscaledTimeAsDouble >= nextLabels) { RefreshLabels(); nextLabels = Time.unscaledTimeAsDouble + .1; }
+        }
+        private void AfterSceneRender(ScriptableRenderContext context, Camera camera)
+        {
+            if (Ready && !manualRendering && camera == View) RenderOptics();
+        }
+        public void RenderOptics()
+        {
+            if (!Ready) return;
+            sceneImage.texture = Optics.Apply(SceneTarget, View, Session.Model, Snapshot,
+                Profile.GasEnabled && OpticalStyle != InteractiveOpticalStyle.Off, LensGain, WaveGain, GasVisible);
+        }
+        public void RenderFrame()
+        {
+            if (!Ready) return;
+            Present(); RefreshLabels(); Wrist.RefreshNow(); Canvas.ForceUpdateCanvases();
+            manualRendering = true;
+            try { View.Render(); RenderOptics(); CaptureCamera.Render(); }
+            finally { manualRendering = false; }
+        }
+        private void HandleInput()
+        {
+            var k = Keyboard.current; var m = Mouse.current;
+            if (k != null && k.escapeKey.wasPressedThisFrame) SetWristPlaying(false);
+            if (Wrist != null && Wrist.InputFocused) return;
+            if (k != null)
+            {
+                if (k.spaceKey.wasPressedThisFrame) SetWristPlaying(!Session.IsPlaying);
+                if (k.commaKey.wasPressedThisFrame) SetWristRate(-Session.PlaybackRate);
+                if (k.rKey.wasPressedThisFrame) ResetWristScenario();
+                if (k.mKey.wasPressedThisFrame) { Session.Pause(); Session.Seek(Session.Model.MergerTimeSeconds); Present(); RefreshLabels(); }
+                if (k.gKey.wasPressedThisFrame) SetWristGas(!GasVisible);
+                if (k.tKey.wasPressedThisFrame) SetWristSamples(!SamplesVisible);
+                if (k.digit1Key.wasPressedThisFrame) SetViewPreset(0); if (k.digit2Key.wasPressedThisFrame) SetViewPreset(1);
+                if (k.digit3Key.wasPressedThisFrame) SetViewPreset(2); if (k.digit4Key.wasPressedThisFrame) SetViewPreset(3); if (k.digit5Key.wasPressedThisFrame) SetViewPreset(4);
+                var movement = new Vector3((k.dKey.isPressed ? 1 : 0) - (k.aKey.isPressed ? 1 : 0), (k.eKey.isPressed ? 1 : 0) - (k.qKey.isPressed ? 1 : 0), (k.wKey.isPressed ? 1 : 0) - (k.sKey.isPressed ? 1 : 0));
+                if (movement.sqrMagnitude > 0) MoveCamera(View.transform.TransformDirection(movement.normalized) * Time.unscaledDeltaTime * (k.leftShiftKey.isPressed ? 40 : 12));
+            }
+            if (m != null)
+            {
+                if (m.rightButton.isPressed) { var d = m.delta.ReadValue(); View.transform.Rotate(Vector3.up, d.x * .12f, Space.World); View.transform.Rotate(Vector3.right, -d.y * .12f, Space.Self); }
+                float wheel = m.scroll.ReadValue().y; if (wheel != 0) MoveCamera(View.transform.forward * wheel * .02f);
+            }
+        }
+
+        private void RefreshLabels()
+        {
+            if (!Ready) return;
+            var s = CaptureWristState();
+            phaseLabel.text = $"{s.ScenarioLabel}  ·  {s.StageLabel}  ·  ASSUMED GAS / ILLUSTRATIVE OPTICS";
+            statusLabel.text = $"V wrist · WASD + Q/E move · right-drag look · 1–5 views · Space pause · {Profile.EffectiveProfile} {SceneTarget.width}×{SceneTarget.height} · {OpticalStyle}";
+        }
+
+        public InteractiveWristState CaptureWristState()
+        {
+            if (!Ready) return default;
+            var s = Snapshot; var signal = s.Signal;
+            bool replay = s.Mode.ToString().Contains("Replay");
+            double? value = replay ? signal.NormalizedRealH22 : signal.HPlus;
+            return new InteractiveWristState
+            {
+                Generation = s.Generation, ReplayMode = replay, Playing = Session.IsPlaying, GasEnabled = GasVisible, SamplesEnabled = SamplesVisible,
+                FrequencyAvailable = signal.FrequencyHertz.HasValue, SignalAvailable = value.HasValue,
+                Progress = s.ElapsedSeconds / s.DurationSeconds, SourceTimeSeconds = s.ElapsedSeconds, DurationSeconds = s.DurationSeconds,
+                PlaybackRate = Session.PlaybackRate, Mass1Solar = s.Mass1Solar, Mass2Solar = s.Mass2Solar,
+                SeparationRg = s.SeparationRg, SeparationKm = s.SeparationMeters / 1000,
+                FrequencyHz = signal.FrequencyHertz.GetValueOrDefault(), Signal = value.GetValueOrDefault(),
+                ScenarioLabel = replay ? "GW150914-inspired / SXS0305" : "ADJUSTABLE EDUCATIONAL EXPERIMENT",
+                StageLabel = PhaseLabel(s.Phase), SignalLabel = replay ? "Normalized numerical Re(H22)" : "Leading-order h+ at D = 10^12 m, i = 60 deg",
+                Status = replay ? "Recorded binary; comparison-epoch alignment" : "Quantitative inspiral ends at 10 rg; merger is illustrative",
+                OpticalStyle = OpticalStyle, LensGain = LensGain, WaveGain = WaveGain,
+                CameraDistanceRg = View.transform.position.magnitude, WaveformAxisMaximum = replay ? 1 : 1e-8,
+                FrequencyAxisMaximum = replay ? 500 : 250, SignalUnitLabel = replay ? "Re(H22) / peak |H22|" : "strain (local far-field model)", ValidationMessage = ValidationMessage
+            };
+        }
+        private static string PhaseLabel(InteractiveBinaryPhase phase)
+        {
+            switch (phase)
+            {
+                case InteractiveBinaryPhase.NumericalInspiral: return "RECORDED INSPIRAL";
+                case InteractiveBinaryPhase.NumericalRemnant: return "COMMON HORIZON / REMNANT";
+                case InteractiveBinaryPhase.BoundedInspiral: return "BOUNDED PHYSICAL INSPIRAL";
+                case InteractiveBinaryPhase.ConceptualMerger: return "ILLUSTRATIVE MERGER";
+                default: return "ILLUSTRATIVE REMNANT";
+            }
+        }
+        public double? SampleWristGraph(double fraction, bool frequency)
+        {
+            if (!Ready) return null;
+            var s = Session.Model.Evaluate(Math.Max(0, Math.Min(1, fraction)) * Snapshot.DurationSeconds);
+            if (frequency) return s.Signal.FrequencyHertz;
+            return s.Mode.ToString().Contains("Replay") ? s.Signal.NormalizedRealH22 : s.Signal.HPlus;
+        }
+        public void SelectWristScenario(bool replay)
+        {
+            if (!Ready) return;
+            if (replay) Session.SelectReplay(); else Session.SelectExperiment(new InteractiveBinaryParameters(35, 30, 30));
+            ValidationMessage = ""; SetViewPreset(0); Present(); RefreshLabels();
+        }
+        public void ApplyWristExperiment(double m1, double m2, double separationRg)
+        {
+            if (!Ready) return;
+            try
+            {
+                var parameters = new InteractiveBinaryParameters(m1, m2, separationRg);
+                double oldRg = Snapshot.GravitationalRadiusMeters;
+                Session.SelectExperiment(parameters);
+                View.transform.position *= (float)(oldRg / Snapshot.GravitationalRadiusMeters);
+                ValidationMessage = "Applied together; paused at the new scenario's start.";
+                Present(); RefreshLabels();
+            }
+            catch (ArgumentException e) { ValidationMessage = e.Message; }
+        }
+        public void ResetWristScenario() { if (!Ready) return; Session.Reset(); Present(); RefreshLabels(); }
+        public void SetWristPlaying(bool playing) { if (!Ready) return; if (playing) Session.Play(); else Session.Pause(); RefreshLabels(); }
+        public void SeekWrist(double fraction) { if (!Ready) return; Session.Seek(Math.Max(0, Math.Min(1, fraction)) * Snapshot.DurationSeconds); Present(); RefreshLabels(); }
+        public void SetWristRate(double rate) { if (!Ready) return; Session.SetPlaybackRate(rate); RefreshLabels(); }
+        public void SetWristOptics(InteractiveOpticalStyle style, float lensGain, float waveGain)
+        {
+            if (!Enum.IsDefined(typeof(InteractiveOpticalStyle), style) || !float.IsFinite(lensGain) || !float.IsFinite(waveGain)) return;
+            OpticalStyle = style; LensGain = Mathf.Clamp(lensGain, 0, 2); WaveGain = Mathf.Clamp(waveGain, 0, 2);
+            if (Ready) { RenderOptics(); RefreshLabels(); }
+        }
+        public void SetWristGas(bool value) { GasVisible = value && Ready && Profile.GasEnabled; if (gasRenderer != null) gasRenderer.enabled = GasVisible; }
+        public void SetWristSamples(bool value) { SamplesVisible = value && Ready; if (sampleRenderer != null) sampleRenderer.enabled = SamplesVisible; }
+        public void SetWristView(int index) => SetViewPreset(index);
+        public void LeaveWristExhibit() => ReturnToLauncher();
+
+        public void ReturnToLauncher()
+        {
+            Ready = false;
+            if (sceneRoot != null) sceneRoot.SetActive(false);
+            if (hud != null) hud.SetActive(false);
+            if (SceneTarget != null) { if (View != null) View.targetTexture = null; SceneTarget.Release(); Destroy(SceneTarget); }
+            foreach (var owned in new UnityEngine.Object[] { sceneRoot, hud, bodyMaterial, guideMaterial, gasMaterial, sampleMaterial, displayMaterial, sampleMesh })
+                if (owned != null) Destroy(owned);
+            sceneRoot = hud = sampleObject = null; SceneTarget = null; sceneImage = null;
+            bodyMaterial = guideMaterial = gasMaterial = sampleMaterial = displayMaterial = null; sampleMesh = null;
+            samplePositions = null; sampleColours = null; sampleRenderer = gasRenderer = null;
+            Session = null; Wrist = null; Optics = null; View = null; sky = null;
+            lastGeneration = -1; lastTime = double.NaN; GasVisible = SamplesVisible = false;
+            if (launcher != null && !disposed) { launcher.SetActive(true); SelectProfile(SelectedProfile); }
+        }
+        private void OnDestroy()
+        {
+            RenderPipelineManager.endCameraRendering -= AfterSceneRender;
+            disposed = true; ReturnToLauncher();
+        }
+    }
+}

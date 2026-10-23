@@ -10,6 +10,11 @@ namespace DTET.VisualPrototype.Editor
     {
         private const string Scene = "Assets/DTET/Scenes/BinaryBlackHole_VisualStaging.unity";
 
+        [MenuItem("DT-ET/Startup Exhibit/Interactive Suit Observatory")]
+        private static void SelectInteractiveExhibit() => SessionState.SetInt("DTET.StartupExhibit", 3);
+        [MenuItem("DT-ET/Startup Exhibit/Interactive Suit Observatory", true)]
+        private static bool ValidateInteractiveExhibit() => ValidateStartup("Interactive Suit Observatory", 3);
+
         [MenuItem("DT-ET/Startup Exhibit/M4 Reduced Binary")]
         private static void SelectReducedExhibit() => SessionState.SetInt("DTET.StartupExhibit", 2);
         [MenuItem("DT-ET/Startup Exhibit/M3 Reference Lab")]
@@ -56,6 +61,7 @@ namespace DTET.VisualPrototype.Editor
                 "Assets/Resources/DTET/ReducedDensitySamples.shader",
                 "Assets/Resources/DTET/ExhibitSky.shader",
                 "Assets/Resources/DTET/ExhibitDisplay.shader",
+                "Assets/Resources/DTET/InteractiveOptics.shader",
                 "Assets/Resources/DTET/SolidSurface.shader",
                 "Assets/Resources/DTET/WristSurface.shader"
             };

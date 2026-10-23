@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 
 namespace BlackHole.Staging.Simulation
@@ -20,11 +21,11 @@ namespace BlackHole.Staging.Simulation
         public const double StreamWidthRg = 1.4;
         public const double StreamHeightRg = .8;
         public const double StreamBowRg = 2.5;
-        private readonly NumericalEventHistory history;
+        private readonly NumericalEventHistory? history;
         public double GravitationalRadiusMeters { get; }
         public double GravitationalTimeSeconds { get; }
-        public double DurationSeconds => history.DurationSeconds;
-        public double CommonHorizonElapsedSeconds => history.CommonHorizonElapsedSeconds;
+        public double DurationSeconds { get; }
+        public double CommonHorizonElapsedSeconds { get; }
         public double HalfExtentXZ { get; }
         public double HalfExtentY { get; }
         public double ReservoirInnerRadiusRg { get; }
@@ -34,6 +35,8 @@ namespace BlackHole.Staging.Simulation
         public ReducedBinaryFlowModel(NumericalEventHistory history)
         {
             this.history = history ?? throw new ArgumentNullException(nameof(history));
+            DurationSeconds = history.DurationSeconds;
+            CommonHorizonElapsedSeconds = history.CommonHorizonElapsedSeconds;
             GravitationalTimeSeconds = history.WaveformSecondsPerNormalizedTime;
             GravitationalRadiusMeters = GravitationalTimeSeconds * history.SpeedOfLight;
             InitialSeparationRg = (history.Evaluate(0).SeparationMeters
@@ -44,8 +47,20 @@ namespace BlackHole.Staging.Simulation
             HalfExtentY = Math.Ceiling(ReservoirAspect * ReservoirOuterRadiusRg + 1);
         }
 
+        // The adjustable scenario supplies its own immutable epoch. The existing replay constructor
+        // and EvaluateState behavior are unchanged; no fabricated NumericalEventHistory is created.
+        internal ReducedBinaryFlowModel(double rg, double tg, double separationRg, double duration, double transition)
+        {
+            GravitationalRadiusMeters = rg; GravitationalTimeSeconds = tg;
+            InitialSeparationRg = separationRg; DurationSeconds = duration; CommonHorizonElapsedSeconds = transition;
+            ReservoirInnerRadiusRg = 1.8 * separationRg; ReservoirOuterRadiusRg = 3 * separationRg;
+            HalfExtentXZ = Math.Ceiling(ReservoirOuterRadiusRg + 2);
+            HalfExtentY = Math.Ceiling(ReservoirAspect * ReservoirOuterRadiusRg + 1);
+        }
+
         public ReducedBinaryFlowState EvaluateState(double elapsedSeconds)
         {
+            if (history == null) throw new InvalidOperationException("Read the adjustable scenario snapshot's GasState.");
             NumericalEventState numerical = history.Evaluate(elapsedSeconds);
             double time = numerical.ElapsedSeconds / GravitationalTimeSeconds;
             double aligned = numerical.SourceReferenceAlignedSeconds / GravitationalTimeSeconds;
@@ -118,6 +133,7 @@ namespace BlackHole.Staging.Simulation
         private ReducedBinaryFlowBody MakeBody(NumericalHorizonState current, NumericalHorizonState left,
             NumericalHorizonState right, double deltaSeconds, double outer)
         {
+            if (history == null) throw new InvalidOperationException("Numerical bodies require the retained history.");
             double mass = current.MassSolar / history.TotalMassSolar;
             NumericalVector3 position = Map(current.PositionMeters, 1 / GravitationalRadiusMeters);
             NumericalVector3 l = left.PositionMeters, r = right.PositionMeters;
@@ -127,7 +143,7 @@ namespace BlackHole.Staging.Simulation
                 6 * mass, outer);
         }
 
-        private ReducedBinaryFlowStream MakeStream(ReducedBinaryFlowBody body)
+        internal ReducedBinaryFlowStream MakeStream(ReducedBinaryFlowBody body)
         {
             double angle = Math.Atan2(body.PositionRg.Z, body.PositionRg.X) + .55;
             var start = new NumericalVector3(1.03 * ReservoirInnerRadiusRg * Math.Cos(angle), 0,
