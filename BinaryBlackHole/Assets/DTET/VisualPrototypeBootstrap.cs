@@ -172,13 +172,21 @@ namespace DTET.VisualPrototype
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
+            bool interactiveExhibit = Array.IndexOf(Environment.GetCommandLineArgs(), "--interactive-exhibit") >= 0;
             bool reducedExhibit = Array.IndexOf(Environment.GetCommandLineArgs(), "--reduced-exhibit") >= 0;
             bool referenceLab = Array.IndexOf(Environment.GetCommandLineArgs(), "--reference-lab") >= 0;
 #if UNITY_EDITOR
             int editorExhibit = UnityEditor.SessionState.GetInt("DTET.StartupExhibit", 0);
+            interactiveExhibit |= editorExhibit == 3;
             reducedExhibit |= editorExhibit == 2;
             referenceLab |= editorExhibit == 1;
 #endif
+            if (interactiveExhibit)
+            {
+                if (FindFirstObjectByType<InteractiveBinaryExhibit>() == null)
+                    new GameObject("DT-ET interactive suit observatory").AddComponent<InteractiveBinaryExhibit>();
+                return;
+            }
             if (reducedExhibit)
             {
                 if (FindFirstObjectByType<ReducedBinaryExhibit>() == null)

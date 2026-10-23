@@ -110,3 +110,6 @@ Console.WriteLine("PASS: Schwarzschild rays, independent quadrature, capture/esc
 ReducedBinaryFlowTests.Run();
 ExhibitQualitySkyTests.Run();
 Console.WriteLine("PASS: quality admission, bounded render budgets, synthetic sky reproducibility and PSF flux invariants");
+InteractiveBinaryScenarioTests.Run();
+InteractiveOpticsTests.Run();
+Console.WriteLine("PASS: weak lens reference, depth response, bounded polarization warp, retarded history and display-gain isolation");
