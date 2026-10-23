@@ -109,6 +109,11 @@ namespace DTET.VisualPrototype
         }
         public void Launch(ExhibitQualityProfile profile, bool forceFallback=false)
         {
+            try { LaunchInternal(profile,forceFallback); }
+            catch { ReturnToLauncher();throw; }
+        }
+        private void LaunchInternal(ExhibitQualityProfile profile, bool forceFallback)
+        {
             if(Ready) ReturnToLauncher();
             var gasShader=Resources.Load<Shader>("DTET/ReducedBinaryVolume");
             bool gasUnavailable=gasShader==null||!gasShader.isSupported;
@@ -140,7 +145,8 @@ namespace DTET.VisualPrototype
             if(SceneTarget!=null) {View.targetTexture=null;SceneTarget.Release();Destroy(SceneTarget);}
             var format=SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBHalf)?RenderTextureFormat.ARGBHalf:RenderTextureFormat.ARGB32;
             SceneTarget=new RenderTexture(width,height,24,format,RenderTextureReadWrite.Linear){name="M4 bounded scene target",filterMode=FilterMode.Bilinear,antiAliasing=1};
-            SceneTarget.Create();View.targetTexture=SceneTarget;lastScreenWidth=Screen.width;lastScreenHeight=Screen.height;
+            if(!SceneTarget.Create())throw new NotSupportedException("The bounded scene render target could not be allocated. Close other graphics applications or select a lower quality profile.");
+            View.targetTexture=SceneTarget;lastScreenWidth=Screen.width;lastScreenHeight=Screen.height;
             if(hud!=null) {var image=hud.GetComponentInChildren<RawImage>();if(image!=null)image.texture=SceneTarget;}
         }
         private Transform Marker(string name, Color color)
@@ -350,8 +356,8 @@ namespace DTET.VisualPrototype
             Destroy(gasMaterial);Destroy(markerMaterial);Destroy(sampleMaterial);Destroy(outlineMaterial);Destroy(displayMaterial);Destroy(sampleMesh);Destroy(graphTexture);
             sceneRoot=null;hud=null;View=null;sky=null;Session=null;flow=null;gasMaterial=null;sampleMesh=null;graphTexture=null;
             samplePositions=null;sampleVertices=null;sampleColors=null;TracersVisible=false;GasVisible=false;FieldFingerprint=0;TracerFingerprint=0;
-            launcher.SetActive(true);SelectProfile(SelectedProfile);
+            if(launcher!=null){launcher.SetActive(true);if(launchDetail!=null)SelectProfile(SelectedProfile);}
         }
-        private void OnDestroy(){if(Ready)ReturnToLauncher();}
+        private void OnDestroy(){ReturnToLauncher();}
     }
 }

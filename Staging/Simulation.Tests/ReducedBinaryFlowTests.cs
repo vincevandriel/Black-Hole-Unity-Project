@@ -20,7 +20,7 @@ internal static class ReducedBinaryFlowTests
         var model = new ReducedBinaryFlowModel(history);
         ReducedBinaryFlowState initial = model.EvaluateState(0), late = model.EvaluateState(model.DurationSeconds);
         NumericalHorizonState sourceA = history.Evaluate(0).BodyA!.Value;
-        Near(model.GravitationalRadiusMeters, 95242.31495424992, 1e-12, "Total mass rg has one raw-normalization conversion");
+        Near(model.GravitationalRadiusMeters, 95242.31495423306, 1e-13, "Total mass rg has one raw-normalization conversion");
         Near(initial.BodyA.PositionRg.X, sourceA.PositionMeters.X / model.GravitationalRadiusMeters, 1e-14, "Measured coordinate x mapping");
         Near(initial.BodyA.PositionRg.Y, sourceA.PositionMeters.Z / model.GravitationalRadiusMeters, 1e-14, "SXS vertical z maps to Unity y");
         Near(initial.BodyA.PositionRg.Z, sourceA.PositionMeters.Y / model.GravitationalRadiusMeters, 1e-14, "SXS orbital y maps to Unity z");

@@ -20,6 +20,7 @@ namespace DTET.VisualPrototype
         private readonly List<PerformanceWindow> performance = new List<PerformanceWindow>();
         private readonly List<ProfileMeasurement> profiles = new List<ProfileMeasurement>();
         private readonly List<GpuFieldMeasurement> gpuField = new List<GpuFieldMeasurement>();
+        private readonly List<RayConvergenceMeasurement> rayConvergence = new List<RayConvergenceMeasurement>();
         private ReducedBinaryExhibit exhibit;
         private string output;
         private bool passed = true;
@@ -38,11 +39,19 @@ namespace DTET.VisualPrototype
             public ProfileMeasurement[] profiles;
             public PerformanceWindow[] performance;
             public GpuFieldMeasurement[] gpuField;
+            public RayConvergenceMeasurement[] rayConvergence;
         }
         [Serializable] private sealed class GpuFieldMeasurement
         {
             public string label;
             public double epochSeconds, xRg, yRg, zRg, cpuDensity, gpuDensity, cpuEmission, gpuEmission, densityError, emissionError;
+        }
+        [Serializable] private sealed class RayConvergenceMeasurement
+        {
+            public string profile, view, targetFormat;
+            public int width, height, testedRaySteps, referenceRaySteps;
+            public double epochSeconds, testedIntegratedRadiance, referenceIntegratedRadiance,
+                relativeL1RadianceError, integratedFluxRelativeError, threshold;
         }
         [Serializable] private sealed class ImageMeasurement
         {
@@ -124,6 +133,7 @@ namespace DTET.VisualPrototype
                 graphicsMemoryMb = SystemInfo.graphicsMemorySize, screenWidth = Screen.width, screenHeight = Screen.height,
                 frameTimingEnabled = FrameTimingManager.IsFeatureEnabled(), checks = checks.ToArray(), images = images.ToArray(),
                 profiles = profiles.ToArray(), performance = performance.ToArray(), gpuField = gpuField.ToArray(),
+                rayConvergence = rayConvergence.ToArray(),
                 timingMethod = "Uncapped normal player frames: one coroutine yield per frame, Stopwatch wall intervals, and unique FrameTimingManager timestamps for CPU/GPU durations when available. No explicit RenderRequest, image readback, PNG encoding or file I/O occurs inside measured windows. Half-second warmup precedes each window. Hidden Windows development player renders its ordinary off-screen scene and HUD. These are observed rendering/cadence samples, not monitor presentation latency or a standalone GPU microbenchmark.",
                 scope = "Launcher and profile admission, a shared recorded binary/radiation history with an explicitly prescribed gas field, deterministic seeking, pause/free inspection, common-horizon/remnant transition, bounded render allocations, richer synthetic sky, fallback and release of per-scene resources. Process working set/private memory are separately sampled by the runner. No fluid conservation, scientific GRMHD, binary observer optics, measured gas reconstruction, laptop/headset performance or complete GPU VRAM claim."
             };
@@ -271,6 +281,7 @@ namespace DTET.VisualPrototype
                 label + " rewind across the transition restores both individual horizons");
             CheckBodies(label + " rewind before common horizon");
             exhibit.Seek(chosen);
+            if (!exhibit.FallbackActive) CheckRayConvergence(label);
             if (requested == ExhibitQualityProfile.Balanced && !forcedFallback)
             {
                 if (!exhibit.FallbackActive) CheckGpuField();
@@ -530,6 +541,96 @@ namespace DTET.VisualPrototype
                 for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null) renderers[i].enabled = enabled[i];
                 exhibit.Seek(previousTime);
             }
+        }
+
+        private void CheckRayConvergence(string label)
+        {
+            double previousTime = exhibit.Session.PlaybackTimeSeconds;
+            Camera camera = exhibit.View;
+            Vector3 position = camera.transform.position;
+            Quaternion rotation = camera.transform.rotation;
+            Color background = camera.backgroundColor;
+            bool hdr = camera.allowHDR, msaa = camera.allowMSAA;
+            var cameraData = camera.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+            bool post = cameraData != null && cameraData.renderPostProcessing;
+            Renderer[] renderers = exhibit.GetComponentsInChildren<Renderer>(true);
+            var enabled = new bool[renderers.Length];
+            Material material = exhibit.GasMaterial;
+            float previousSteps = material.GetFloat("_Steps");
+            var model = new ReducedBinaryFlowModel(exhibit.Session.Model);
+            double threshold = exhibit.Profile.EffectiveProfile == ExhibitQualityProfile.Laptop ? .20
+                : exhibit.Profile.EffectiveProfile == ExhibitQualityProfile.Balanced ? .10 : .05;
+            try
+            {
+                Check(!exhibit.SceneTarget.sRGB && (exhibit.SceneTarget.format == RenderTextureFormat.ARGBHalf
+                    || exhibit.SceneTarget.format == RenderTextureFormat.ARGBFloat),
+                    label + " ray-convergence comparisons use the native linear HDR target");
+                camera.backgroundColor = Color.black; camera.allowHDR = true; camera.allowMSAA = false;
+                if (cameraData != null) cameraData.renderPostProcessing = false;
+                for (int i = 0; i < renderers.Length; i++)
+                {
+                    enabled[i] = renderers[i].enabled;
+                    renderers[i].enabled = renderers[i].sharedMaterial == material;
+                }
+                int[] presets = { 0, 2, 1, 4, 0 };
+                string[] names = { "initial-overview", "initial-edge", "initial-above", "initial-close", "half-fade-overview" };
+                for (int i = 0; i < presets.Length; i++)
+                {
+                    double epoch = i == presets.Length - 1
+                        ? Math.Max(0, model.CommonHorizonElapsedSeconds - 60 * model.GravitationalTimeSeconds) : 0;
+                    exhibit.Seek(epoch); exhibit.SetViewPreset(presets[i]);
+                    material.SetFloat("_Steps", exhibit.Profile.RaySteps);
+                    Color[] tested = ReadNativeRadiance();
+                    material.SetFloat("_Steps", 256);
+                    Color[] reference = ReadNativeRadiance();
+                    double testSum = 0, referenceSum = 0, error = 0;
+                    bool finite = true;
+                    for (int p = 0; p < tested.Length; p++)
+                    {
+                        Color a = tested[p], b = reference[p];
+                        finite &= float.IsFinite(a.r) && float.IsFinite(a.g) && float.IsFinite(a.b)
+                            && float.IsFinite(b.r) && float.IsFinite(b.g) && float.IsFinite(b.b);
+                        testSum += a.r + a.g + a.b; referenceSum += b.r + b.g + b.b;
+                        error += Math.Abs(a.r - b.r) + Math.Abs(a.g - b.g) + Math.Abs(a.b - b.b);
+                    }
+                    double relativeL1 = referenceSum > 0 ? error / referenceSum : 1e30;
+                    double fluxError = referenceSum > 0 ? Math.Abs(testSum - referenceSum) / referenceSum : 1e30;
+                    rayConvergence.Add(new RayConvergenceMeasurement { profile = label, view = names[i],
+                        targetFormat = exhibit.SceneTarget.format + " / Linear", width = exhibit.SceneTarget.width,
+                        height = exhibit.SceneTarget.height, testedRaySteps = exhibit.Profile.RaySteps, referenceRaySteps = 256,
+                        epochSeconds = epoch, testedIntegratedRadiance = testSum, referenceIntegratedRadiance = referenceSum,
+                        relativeL1RadianceError = relativeL1, integratedFluxRelativeError = fluxError, threshold = threshold });
+                    Check(finite && referenceSum > 1e-9 && relativeL1 <= threshold && fluxError <= threshold,
+                        label + " " + names[i] + " radiance agrees with 256-ray-step numerical reference within "
+                        + (threshold * 100).ToString("0", CultureInfo.InvariantCulture) + " percent relative L1 and integrated flux");
+                }
+            }
+            finally
+            {
+                material.SetFloat("_Steps", previousSteps);
+                camera.transform.SetPositionAndRotation(position, rotation);
+                camera.backgroundColor = background; camera.allowHDR = hdr; camera.allowMSAA = msaa;
+                if (cameraData != null) cameraData.renderPostProcessing = post;
+                for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null) renderers[i].enabled = enabled[i];
+                exhibit.Seek(previousTime);
+            }
+        }
+
+        private Color[] ReadNativeRadiance()
+        {
+            RenderTexture previous = RenderTexture.active;
+            Texture2D texture = null;
+            try
+            {
+                var request = new RenderPipeline.StandardRequest { destination = exhibit.SceneTarget };
+                if (!RenderPipeline.SupportsRenderRequest(exhibit.View, request)) throw new InvalidOperationException("Ray-convergence render request is unavailable.");
+                RenderPipeline.SubmitRenderRequest(exhibit.View, request);
+                RenderTexture.active = exhibit.SceneTarget;
+                texture = new Texture2D(exhibit.SceneTarget.width, exhibit.SceneTarget.height, TextureFormat.RGBAFloat, false, true);
+                texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0); texture.Apply();
+                return texture.GetPixels();
+            }
+            finally { RenderTexture.active = previous; if (texture != null) Destroy(texture); }
         }
 
         private static Color ReadLinearFieldPixel(Camera camera)
