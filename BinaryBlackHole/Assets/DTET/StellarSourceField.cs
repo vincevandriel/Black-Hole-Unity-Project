@@ -33,6 +33,8 @@ namespace DTET.VisualPrototype
         private const float DisplayGravitationalRadius = 0.055f;
         public bool LensingEnabled { get; private set; } = true;
         public bool ShowRayPaths { get; private set; }
+        public bool ApproximationAvailable { get; private set; } = true;
+        private bool savedLensing, savedPaths;
         public int DemoImageCount { get; private set; }
         public int VisibleImageCount => visibleImages;
         public double LastUpdateMilliseconds { get; private set; }
@@ -41,7 +43,8 @@ namespace DTET.VisualPrototype
         public StellarSource DemoSource => sources.Count > 0 ? sources[0] : null;
         public IReadOnlyList<StellarSource> Sources => sources;
         public Mesh DisplayMesh => mesh;
-        public string OpticalStatus => !LensingEnabled ? "BENDING OFF / direct source images"
+        public string OpticalStatus => !ApproximationAvailable ? "SXS COORDINATE VIEW / no metric or lensing model"
+            : !LensingEnabled ? "BENDING OFF / direct source images"
             : activeLensCount == 0 ? "THIN LENS / outside supported viewing distance"
             : "APPROXIMATE THIN-LENS BENDING / no redshift";
 
@@ -50,10 +53,19 @@ namespace DTET.VisualPrototype
             bodies = new[] { first, second, remnant };
             imageStateValid = false;
         }
-        public void ToggleLensing() => LensingEnabled = !LensingEnabled;
-        public void ToggleRayPaths() => ShowRayPaths = !ShowRayPaths;
-        public void SetLensing(bool enabled) => LensingEnabled = enabled;
-        public void SetRayPaths(bool enabled) => ShowRayPaths = enabled;
+        public void ToggleLensing() => SetLensing(!LensingEnabled);
+        public void ToggleRayPaths() => SetRayPaths(!ShowRayPaths);
+        public void SetLensing(bool enabled) => LensingEnabled = ApproximationAvailable && enabled;
+        public void SetRayPaths(bool enabled) => ShowRayPaths = ApproximationAvailable && enabled;
+        public void SetApproximationAvailable(bool available)
+        {
+            if (ApproximationAvailable == available) return;
+            if (!available) { savedLensing = LensingEnabled; savedPaths = ShowRayPaths; }
+            ApproximationAvailable = available;
+            LensingEnabled = available && savedLensing;
+            ShowRayPaths = available && savedPaths;
+            imageStateValid = false;
+        }
 
         public void Initialize(Camera camera)
         {

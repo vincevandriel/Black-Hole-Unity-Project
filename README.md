@@ -1,6 +1,6 @@
 # Black-Hole-Unity-Project
 
-DT-ET learning exhibit with a **shared SI circular-inspiral model now bound to Unity**. The default physical lesson drives both bodies, source-time controls, separation/orbital-frequency readouts and a linked frequency graph. The original artistic storyboard remains selectable. Desktop inputs emulate visitor/head and wrist poses in the same world-space experience. Merger/remnant remain conceptual; gas, numerical GW150914 replay and binary strong-field optics are later milestones. See [M1 implementation and validation](Docs/PHYSICS_M1.md).
+DT-ET learning exhibit with a shared SI circular-inspiral lesson and a selectable **SXS:BBH:0305 numerical inspiral/merger/remnant replay**. Press **N** for the numerical replay, **Space** to play and **H** for controls. It supports pause, reverse, source-time seeking and free viewpoints, with apparent-horizon area proxies and a numerical radiation graph. The original artistic storyboard remains selectable. Desktop inputs emulate visitor/head and wrist poses. Scientific gas and binary strong-field optics remain later milestones. See [M2 controls and data boundaries](Docs/PHYSICS_M2.md) and the [passed M1 audit](Docs/PHYSICS_M1_AUDIT.md).
 
 ## Open the visual prototype
 

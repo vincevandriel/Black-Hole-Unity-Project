@@ -11,7 +11,7 @@ namespace DTET.VisualPrototype
     /// Desktop SI inspiral lesson with a separately selectable artistic storyboard.
     /// Merger, gas and observer optics remain outside this bounded model.
     /// </summary>
-    public sealed class VisualPrototypeBootstrap : MonoBehaviour, ILessonHudProvider
+    public sealed partial class VisualPrototypeBootstrap : MonoBehaviour, ILessonHudProvider
     {
         private static readonly Color Ink = Hex("#07101F");
         private static readonly Color Panel = Hex("#101B30");
@@ -29,7 +29,8 @@ namespace DTET.VisualPrototype
         private LineRenderer trailB;
         private HudSignalGraphic learningSignal;
         private Button reverseButton;
-        private Text modeBanner, motionNote, gasNote, storyExplanation, graphTitle, graphLegend, graphAxis, playbackCaption;
+        private Button applyStartButton;
+        private Text modeBanner, motionNote, gasNote, storyExplanation, graphTitle, graphLegend, graphAxis, playbackCaption, eventContextNote;
         private readonly SimulationSession session = new SimulationSession();
         private PhysicalSceneSnapshot physicalFrame;
         private bool physicalMode = true;
@@ -39,6 +40,7 @@ namespace DTET.VisualPrototype
         private static readonly Vector3 ExhibitCenter = new Vector3(-3.25f, 0, 0);
         private Text scenarioText;
         private Text separationText;
+        private Text separationCaption;
         private Text playbackText;
         private Text seekText;
         private Text layerBody;
@@ -54,6 +56,7 @@ namespace DTET.VisualPrototype
 
         public void FocusLensingDemo()
         {
+            if (numericalMode) return; // This independent approximate-lens demo has no SXS metric.
             playing = false;
             session.Pause();
             RefreshPhysicalState();
@@ -87,7 +90,9 @@ namespace DTET.VisualPrototype
         public bool LearningVisible => learningVisible;
         public PartnerLessonHud PartnerHud => partnerHud;
 
-        public LessonHudSnapshot CaptureHudSnapshot() => physicalMode
+        public LessonHudSnapshot CaptureHudSnapshot() => numericalMode
+            ? new LessonHudSnapshot(numericalSession)
+            : physicalMode
             ? new LessonHudSnapshot(physicalFrame ?? PhysicalSceneSnapshot.Capture(session, MetersPerDisplayUnit))
             : new LessonHudSnapshot(visualProgress, visualSpeed,
                 Mathf.Lerp(2.45f, 1.05f, visualProgress) / 2.45f, playing);
@@ -95,6 +100,13 @@ namespace DTET.VisualPrototype
         public void SetHudPlaybackRate(float rate)
         {
             if (!float.IsFinite(rate)) return;
+            if (numericalMode)
+            {
+                numericalSession.SetPlaybackRate((rate < 0 ? -1 : 1) * Math.Max(.01, Math.Min(4, Math.Abs((double)rate))));
+                playbackSlider.SetValueWithoutNotify((float)Math.Abs(numericalSession.PlaybackRate));
+                RefreshNumericalState();
+                return;
+            }
             var magnitude = Mathf.Clamp(physicalMode ? Mathf.Abs(rate) : rate, 0.1f, 4f);
             visualSpeed = physicalMode && rate < 0 ? -magnitude : magnitude;
             if (physicalMode) session.SetPlaybackRate(visualSpeed);
@@ -106,6 +118,7 @@ namespace DTET.VisualPrototype
 
         public void SetPhysicsMode(bool enabled)
         {
+            LeaveNumericalMode();
             physicalMode = enabled;
             if (reverseButton != null) reverseButton.interactable = enabled;
             session.Pause();
@@ -123,6 +136,7 @@ namespace DTET.VisualPrototype
             gasNote.text = enabled ? "Gas hidden. Enlarged silhouettes mark model positions." : "Luminous gas is artistic, not an inferred environment.";
             storyExplanation.text = enabled ? "A shared SI model drives both bodies, source time and the frequency graph. Energy loss shrinks the orbit; the dominant circular GW frequency is twice the orbital frequency." : "The paired markers follow an authored storyboard. Their orbit and gas are illustrative.";
             graphTitle.text = enabled ? "GRAPH / MODEL FREQUENCY (Hz)" : "GRAPH / ILLUSTRATIVE CHIRP";
+            eventContextNote.text = "GW150914 was detected by LIGO. This mode is a simplified teaching example.";
             graphAxis.text = enabled ? "f_GW (Hz)" : "Illustrative";
             playbackCaption.text = enabled ? "PLAYBACK RATE / SOURCE TIME" : "PLAYBACK RATE / STORY POSITION";
             if (!enabled)
@@ -137,11 +151,13 @@ namespace DTET.VisualPrototype
         private static void SetArtisticGas(Transform body, bool visible)
         {
             foreach (Transform child in body)
-                child.gameObject.SetActive(visible || child.name.StartsWith("Central silhouette", StringComparison.Ordinal));
+                child.gameObject.SetActive(!child.name.StartsWith("Numerical", StringComparison.Ordinal)
+                    && (visible || child.name.StartsWith("Central silhouette", StringComparison.Ordinal)));
         }
 
         public void ReversePlayback()
         {
+            if (numericalMode) { SetHudPlaybackRate(-(float)numericalSession.PlaybackRate); return; }
             if (!physicalMode) return;
             SetHudPlaybackRate(-(float)session.PlaybackRate);
         }
@@ -175,7 +191,12 @@ namespace DTET.VisualPrototype
         private void Update()
         {
             HandleKeyboard();
-            if (physicalMode)
+            if (numericalMode)
+            {
+                numericalSession.Tick(Time.unscaledDeltaTime);
+                RefreshNumericalState();
+            }
+            else if (physicalMode)
             {
                 session.Tick(Time.unscaledDeltaTime);
                 RefreshPhysicalState();
@@ -448,14 +469,14 @@ namespace DTET.VisualPrototype
             ButtonAt(card.transform, "C / UNEQUAL", new Vector2(300, -335), new Vector2(128, 44), Gold, () => SelectPhysicalScenario(2));
             scenarioText = TextAt(card.transform, "", 15, White, new Vector2(20, -384), new Vector2(410, 28), TextAnchor.MiddleLeft, Anchor.TopLeft);
 
-            TextAt(card.transform, "INITIAL SEPARATION / GM/c²", 14, Muted, new Vector2(20, -426), new Vector2(270, 25), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            separationCaption = TextAt(card.transform, "INITIAL SEPARATION / GM/c²", 14, Muted, new Vector2(20, -426), new Vector2(270, 25), TextAnchor.MiddleLeft, Anchor.TopLeft);
             separationSlider = SliderAt(card.transform, new Vector2(20, -458), new Vector2(410, 24), 25, 50, 30, value =>
             {
                 pendingSeparation = value;
                 separationText.text = $"Next start: {value:0} GM/c²  |  press APPLY";
             });
             separationText = TextAt(card.transform, "", 14, Cyan, new Vector2(20, -485), new Vector2(410, 25), TextAnchor.MiddleLeft, Anchor.TopLeft);
-            ButtonAt(card.transform, "APPLY START", new Vector2(295, -421), new Vector2(133, 33), Cyan, ApplyPendingSeparation);
+            applyStartButton = ButtonAt(card.transform, "APPLY START", new Vector2(295, -421), new Vector2(133, 33), Cyan, ApplyPendingSeparation);
 
             ButtonAt(card.transform, "PAUSE / PLAY", new Vector2(20, -532), new Vector2(194, 42), Cyan, TogglePlayback);
             ButtonAt(card.transform, "RESET", new Vector2(234, -532), new Vector2(194, 42), Violet, ResetPlayback);
@@ -469,7 +490,7 @@ namespace DTET.VisualPrototype
             playbackCaption = TextAt(card.transform, "PLAYBACK RATE / SOURCE TIME", 13, Muted, new Vector2(20, -670), new Vector2(410, 23), TextAnchor.MiddleLeft, Anchor.TopLeft);
             playbackSlider = SliderAt(card.transform, new Vector2(20, -697), new Vector2(410, 24), 0.1f, 4f, 1f, value =>
             {
-                SetHudPlaybackRate(physicalMode && session.PlaybackRate < 0 ? -value : value);
+                SetHudPlaybackRate((numericalMode ? numericalSession.PlaybackRate < 0 : physicalMode && session.PlaybackRate < 0) ? -value : value);
             });
             playbackText = TextAt(card.transform, "", 13, Cyan, new Vector2(20, -725), new Vector2(410, 25), TextAnchor.MiddleLeft, Anchor.TopLeft);
             TextAt(card.transform, "TUTOR  /  OFFLINE STAGING ADAPTER ONLY", 12, Gold, new Vector2(20, -765), new Vector2(410, 26), TextAnchor.MiddleLeft, Anchor.TopLeft);
@@ -477,7 +498,9 @@ namespace DTET.VisualPrototype
             ButtonAt(parent, "PHYSICS", new Vector2(42, -370), new Vector2(180, 40), Cyan, () => SetPhysicsMode(true));
             ButtonAt(parent, "STORYBOARD", new Vector2(235, -370), new Vector2(180, 40), Violet, () => SetPhysicsMode(false));
             reverseButton = ButtonAt(parent, "REVERSE", new Vector2(428, -370), new Vector2(150, 40), Gold, ReversePlayback);
-            TextAt(parent, "GW150914 was detected by LIGO. This is a simplified circular lesson.", 14, Muted, new Vector2(42, -430), new Vector2(800, 32), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            ButtonAt(parent, "SXS REPLAY / N", new Vector2(591, -370), new Vector2(190, 40), Gold, SetNumericalMode);
+            BuildNumericalNotes(parent);
+            eventContextNote = TextAt(parent, "GW150914 was detected by LIGO. This is a simplified circular lesson.", 14, Muted, new Vector2(42, -430), new Vector2(800, 32), TextAnchor.MiddleLeft, Anchor.TopLeft);
             var checkpoint = Block(parent, "One-question formative check", Hex("#142138"), Anchor.BottomLeft, new Vector2(42, 106), new Vector2(820, 150));
             TextAt(checkpoint.transform, "QUICK CHECK  /  THINK BEFORE REVEALING", 14, Cyan, new Vector2(17, -10), new Vector2(780, 26), TextAnchor.MiddleLeft, Anchor.TopLeft);
             TextAt(checkpoint.transform, "If the two bodies move closer, should the dominant GW frequency rise, fall, or stay the same?", 15, White, new Vector2(17, -38), new Vector2(780, 33), TextAnchor.MiddleLeft, Anchor.TopLeft);
@@ -512,7 +535,7 @@ namespace DTET.VisualPrototype
             TextAt(plaque.transform, "Wheel: move closer / farther   ·   F: exhibit   ·   T: information   ·   H: learning", 17, White, new Vector2(18, -77), new Vector2(724, 30), TextAnchor.MiddleLeft, Anchor.TopLeft);
             TextAt(plaque.transform, "J: lens alignment   ·   L: bending on/off   ·   G: ray guides   ·   O: input options", 16, Gold, new Vector2(18, -108), new Vector2(724, 30), TextAnchor.MiddleLeft, Anchor.TopLeft);
             TextAt(plaque.transform, "GOAL: Explain closer separation -> faster orbit -> higher GW frequency.", 16, White, new Vector2(18, -142), new Vector2(724, 30), TextAnchor.MiddleLeft, Anchor.TopLeft);
-            TextAt(plaque.transform, "H: predict, compare, explain   ·   Esc: pause   ·   Wrist: Exit / comfort options", 15, Muted, new Vector2(18, -174), new Vector2(724, 30), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            TextAt(plaque.transform, "N: numerical replay   ·   P: SI / artwork   ·   Esc: pause   ·   Wrist: Exit / options", 15, Muted, new Vector2(18, -174), new Vector2(724, 30), TextAnchor.MiddleLeft, Anchor.TopLeft);
         }
 
         public void SetLearningVisible(bool visible)
@@ -526,6 +549,13 @@ namespace DTET.VisualPrototype
         public void SeekStoryboard(float value)
         {
             if (!float.IsFinite(value)) return;
+            if (numericalMode)
+            {
+                observerPhysics.InvalidateEpoch();
+                numericalSession.Seek(Mathf.Clamp01(value) * numericalSession.Model.DurationSeconds);
+                RefreshNumericalState();
+                return;
+            }
             observerPhysics.InvalidateEpoch();
             visualProgress = Mathf.Clamp01(value);
             playing = false;
@@ -553,6 +583,7 @@ namespace DTET.VisualPrototype
 
         private void SetScenario(int value)
         {
+            if (numericalMode) { SetPhysicsMode(true); }
             observerPhysics.InvalidateEpoch();
             scenario = value;
             if (physicalMode)
@@ -584,6 +615,7 @@ namespace DTET.VisualPrototype
 
         private void ApplyPendingSeparation()
         {
+            if (numericalMode) { SeekNumericalMerger(); return; }
             observerPhysics.InvalidateEpoch();
             if (physicalMode)
             {
@@ -608,6 +640,17 @@ namespace DTET.VisualPrototype
 
         public void TogglePlayback()
         {
+            if (numericalMode)
+            {
+                if (numericalSession.IsPlaying) numericalSession.Pause();
+                else
+                {
+                    if (numericalSession.PlaybackRate > 0 && numericalSession.PlaybackTimeSeconds >= numericalSession.Model.DurationSeconds) numericalSession.Reset();
+                    numericalSession.Play();
+                }
+                RefreshNumericalState();
+                return;
+            }
             if (physicalMode)
             {
                 if (session.IsPlaying) session.Pause();
@@ -626,6 +669,13 @@ namespace DTET.VisualPrototype
 
         public void ResetPlayback()
         {
+            if (numericalMode)
+            {
+                observerPhysics.InvalidateEpoch();
+                numericalSession.Reset();
+                RefreshNumericalState();
+                return;
+            }
             if (physicalMode)
             {
                 observerPhysics.InvalidateEpoch();
@@ -669,6 +719,7 @@ namespace DTET.VisualPrototype
         {
             playing = false;
             session.Pause();
+            numericalSession?.Pause();
             Application.Quit();
             transportText.text = "Exit requested; in the Editor, use the Play toolbar to stop";
         }
@@ -682,11 +733,14 @@ namespace DTET.VisualPrototype
             {
                 playing = false;
                 session.Pause();
+                numericalSession?.Pause();
+                if (numericalMode) RefreshNumericalState();
                 RefreshPhysicalState();
                 transportText.text = "Paused with Esc; Space resumes, Exit closes the app";
             }
             if (keyboard.rKey.wasPressedThisFrame) ResetPlayback();
             if (keyboard.pKey.wasPressedThisFrame) SetPhysicsMode(!physicalMode);
+            if (keyboard.nKey.wasPressedThisFrame) SetNumericalMode();
             if (keyboard.commaKey.wasPressedThisFrame) ReversePlayback();
             if (keyboard.fKey.wasPressedThisFrame || keyboard.homeKey.wasPressedThisFrame) SetLearningVisible(false);
             if (keyboard.bKey.wasPressedThisFrame) ToggleDimView();

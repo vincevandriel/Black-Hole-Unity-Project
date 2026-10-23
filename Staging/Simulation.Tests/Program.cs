@@ -103,3 +103,4 @@ ThinLensTests.Run();
 ObserverInputSettingsTests.Run();
 StoryboardChoreographyTests.Run();
 PhysicalBindingTests.Run();
+NumericalEventTests.Run();

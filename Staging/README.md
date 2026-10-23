@@ -1,6 +1,6 @@
 # Desktop inspiral foundation (source staging)
 
-The pure model is now bound to Unity in **M1 physical mode**. Canonical C# sources live in `BinaryBlackHole/Assets/DTET/Simulation/`; the portable project here links them without copying equations. The retained artistic storyboard is a separate mode. See [current M1 guide](../Docs/PHYSICS_M1.md).
+The pure models are bound to Unity in **M1 physical mode** and **M2 numerical replay**. Canonical C# sources live in `BinaryBlackHole/Assets/DTET/Simulation/`; the portable project here links them without copying equations. The retained artistic storyboard is a separate mode. See [M1 guide](../Docs/PHYSICS_M1.md) and [M2 guide](../Docs/PHYSICS_M2.md). NumericalEventHistory validates and interpolates the retained SXS asset; NumericalEventSession provides absolute-time playback. Tests compare independent converted fixtures, units, coverage and time commands.
 
 ## Model and controls
 
