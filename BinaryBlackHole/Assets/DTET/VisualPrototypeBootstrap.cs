@@ -29,7 +29,7 @@ namespace DTET.VisualPrototype
         private LineRenderer trailB;
         private HudSignalGraphic learningSignal;
         private Button reverseButton;
-        private Text modeBanner, motionNote, gasNote, storyExplanation, graphTitle, graphLegend;
+        private Text modeBanner, motionNote, gasNote, storyExplanation, graphTitle, graphLegend, graphAxis, playbackCaption;
         private readonly SimulationSession session = new SimulationSession();
         private PhysicalSceneSnapshot physicalFrame;
         private bool physicalMode = true;
@@ -99,7 +99,8 @@ namespace DTET.VisualPrototype
             visualSpeed = physicalMode && rate < 0 ? -magnitude : magnitude;
             if (physicalMode) session.SetPlaybackRate(visualSpeed);
             playbackSlider.SetValueWithoutNotify(magnitude);
-            playbackText.text = $"{visualSpeed:0.0}x playback / frequency stays physical";
+            playbackText.text = physicalMode ? $"{visualSpeed:0.0}x playback / frequency stays physical"
+                : $"{visualSpeed:0.0}x illustrative playback";
             RefreshPhysicalState();
         }
 
@@ -122,6 +123,13 @@ namespace DTET.VisualPrototype
             gasNote.text = enabled ? "Gas hidden. Enlarged silhouettes mark model positions." : "Luminous gas is artistic, not an inferred environment.";
             storyExplanation.text = enabled ? "A shared SI model drives both bodies, source time and the frequency graph. Energy loss shrinks the orbit; the dominant circular GW frequency is twice the orbital frequency." : "The paired markers follow an authored storyboard. Their orbit and gas are illustrative.";
             graphTitle.text = enabled ? "GRAPH / MODEL FREQUENCY (Hz)" : "GRAPH / ILLUSTRATIVE CHIRP";
+            graphAxis.text = enabled ? "f_GW (Hz)" : "Illustrative";
+            playbackCaption.text = enabled ? "PLAYBACK RATE / SOURCE TIME" : "PLAYBACK RATE / STORY POSITION";
+            if (!enabled)
+            {
+                graphLegend.text = "Qualitative amplitude / story position 0–100%";
+                UpdateStoryboard();
+            }
             layerBody.text = enabled ? "Circular quadrupole decay: dr/dt = -K/r^3; f_GW = 2 f_orbit. SI units; stops at 10 GM/c². No calibrated detector strain or merger prediction. A/B: 30+30; C: 20+40 solar masses." : "Artistic orbit and graph; no physical equations drive this storyboard. Merger remains conceptual.";
             if (partnerHud != null) partnerHud.InvalidateNarration();
         }
@@ -458,7 +466,7 @@ namespace DTET.VisualPrototype
             });
             seekText = TextAt(card.transform, "Story position  0%", 13, Muted, new Vector2(20, -635), new Vector2(410, 24), TextAnchor.MiddleLeft, Anchor.TopLeft);
 
-            TextAt(card.transform, "PLAYBACK RATE / SOURCE TIME", 13, Muted, new Vector2(20, -670), new Vector2(410, 23), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            playbackCaption = TextAt(card.transform, "PLAYBACK RATE / SOURCE TIME", 13, Muted, new Vector2(20, -670), new Vector2(410, 23), TextAnchor.MiddleLeft, Anchor.TopLeft);
             playbackSlider = SliderAt(card.transform, new Vector2(20, -697), new Vector2(410, 24), 0.1f, 4f, 1f, value =>
             {
                 SetHudPlaybackRate(physicalMode && session.PlaybackRate < 0 ? -value : value);
@@ -533,7 +541,7 @@ namespace DTET.VisualPrototype
 
         private void DrawGraph(Transform parent)
         {
-            TextAt(parent, "f_GW (Hz)", 12, Muted, new Vector2(15, -38), new Vector2(90, 18), TextAnchor.MiddleLeft, Anchor.TopLeft);
+            graphAxis = TextAt(parent, "f_GW (Hz)", 12, Muted, new Vector2(15, -38), new Vector2(90, 18), TextAnchor.MiddleLeft, Anchor.TopLeft);
             var graph = new GameObject("Shared model frequency curve", typeof(RectTransform), typeof(CanvasRenderer), typeof(HudSignalGraphic));
             graph.transform.SetParent(parent, false);
             Place(graph.GetComponent<RectTransform>(), Anchor.TopLeft, new Vector2(102, -44), new Vector2(270, 62));

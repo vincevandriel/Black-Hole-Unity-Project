@@ -147,9 +147,14 @@ namespace DTET.VisualPrototype
             prototype.SetPhysicsMode(false);prototype.SeekStoryboard(.3f);
             yield return new WaitForEndOfFrame();
             Check(!prototype.CaptureHudSnapshot().PhysicalModel && DirectChild(bodyA, "Layered accretion illustration / inner").gameObject.activeSelf, "artistic mode remains available with its gas illustration");
+            CheckBoardLabels(false);
+            prototype.SetQualityCheckView(1, .3f);prototype.Observer.FocusLearning();
+            yield return Capture("artistic-graph-labels.png");
             prototype.SetHudPlaybackRate(-1);
             Check(Mathf.Approximately(prototype.CaptureHudSnapshot().PlaybackRate, .1f), "artistic lower playback bound preserved");
             prototype.SetPhysicsMode(true);
+            yield return new WaitForEndOfFrame();
+            CheckBoardLabels(true);
             CheckSync("return to physics");
             var receipt = new Receipt {
                 success = passed, modelId = PhysicalSceneSnapshot.ModelId, unityVersion = Application.unityVersion,
@@ -163,6 +168,22 @@ namespace DTET.VisualPrototype
             File.WriteAllText(Path.Combine(output, "physical-integration.json"), JsonUtility.ToJson(receipt, true));
             Debug.Log(passed ? "DTET_PHYSICS_INTEGRATION_PASS" : "DTET_PHYSICS_INTEGRATION_FAILED");
             Application.Quit(passed ? 0 : 1);
+        }
+
+        private void CheckBoardLabels(bool physical)
+        {
+            var texts = GameObject.Find("Learning controls").GetComponentsInChildren<Text>(true);
+            bool axis = false, legend = false, rate = false;
+            foreach (var text in texts)
+            {
+                if (text.text == (physical ? "f_GW (Hz)" : "Illustrative")) axis = true;
+                if (physical ? text.text.Contains(" Hz / 0–") : text.text == "Qualitative amplitude / story position 0–100%") legend = true;
+                if (text.text == (physical ? "PLAYBACK RATE / SOURCE TIME" : "PLAYBACK RATE / STORY POSITION")) rate = true;
+            }
+            Check(axis && legend && rate, (physical ? "physical" : "artistic") + " board restores matching axis, legend and time labels");
+            foreach (var graph in FindObjectsByType<HudSignalGraphic>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                Check(physical ? ReferenceEquals(graph.Model, prototype.PhysicalFrame.Model) : graph.Model == null,
+                    (physical ? "physical" : "artistic") + " graph binding restored: " + graph.name);
         }
 
         private void CheckSync(string label)
