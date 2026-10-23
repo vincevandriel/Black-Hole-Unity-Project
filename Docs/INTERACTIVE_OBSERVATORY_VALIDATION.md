@@ -2,6 +2,8 @@
 
 **Passed on 23 October 2026 for runtime revision `0f29dcaeb107490ddf0e18bc5535311056bbda05`.** This is a Windows x64 verification/development candidate. It implements the desktop M4.1 extension; it does not certify scientific GRMHD, exact binary optics, laptop performance, tracked XR or human usability.
 
+This receipt remains the evidence for that earlier runtime. The later optional generated-fluid mode and its current regression results have a separate [validation receipt](GENERATED_FLUID_VALIDATION.md).
+
 ## Source and build provenance
 
 Repository: `vincevandriel/Black-Hole-Unity-Project`, branch `physics/interactive-suit-release`, based on the existing M4 branch. No merge or force push to the default branch is required for this candidate.
@@ -62,7 +64,7 @@ Run the portable suite, build the QA player, then execute `Scripts/Test-Interact
 
 The working research receipts live in `outputs/Interactive-validation/` in the active research workspace. The package includes the full interactive receipt and runtime provenance; raw build/test logs and captures remain outside editable source.
 
-Before calling this a validated laptop/XR or scientific release, complete the explicit [device and scientific gates](FINAL_DESKTOP_SCOPE.md). Compatible gas/metric acquisition is still required for M5/M6; a higher particle count or an attractive warped image cannot substitute for it.
+Before calling this a validated laptop/XR or scientific release, complete the explicit [device and scientific gates](FINAL_DESKTOP_SCOPE.md). Compatible relativistic gas/metric fields can be generated from public resources through the [documented route](PUBLIC_SIMULATION_ROUTE.md); a private external dataset is not required. A higher particle count or an attractive warped image cannot substitute for validating that calculation.
 
 ## Published desktop candidate
 

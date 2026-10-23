@@ -15,6 +15,7 @@
 # Keep the portable staging projects, but ignore their build products.
 !Staging/Simulation/*.csproj
 !Staging/Simulation.Tests/*.csproj
+!Staging/Fluid.RefinementAudit/*.csproj
 **/bin/
 **/obj/
 .vs/

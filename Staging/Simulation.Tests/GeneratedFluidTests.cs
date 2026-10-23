@@ -61,6 +61,21 @@ internal static class GeneratedFluidTests
         Near(grid.GetCell(starCell, n / 2).SurfaceDensity, rhoStar, n >= 128 ? .08 : .22, "shock star plateau approaches exact jump solution");
         return error;
     }
+    private static double DiagonalAdvectionError(int n)
+    {
+        const double epsilon = 1e-4, duration = 1.1;
+        double average = Math.Pow(Math.Sin(Math.PI / n) / (Math.PI / n), 2);
+        var grid = new GeneratedFluidSolver(n, 1, .4, 1e-9, (x, z) =>
+        { double v = epsilon * average * Math.Sin(Math.PI * (x + z)); return new GeneratedFluidSample(1, .2 + v, .1 - v); }, GeneratedFluidBoundary.Periodic);
+        Advance(grid, duration); CheckBudget(grid.Diagnostics, "two-dimensional diagonal transverse wave");
+        double error = 0;
+        for (int z = 0; z < n; z++) for (int x = 0; x < n; x++)
+        {
+            double exact = epsilon * average * Math.Sin(Math.PI * (grid.CellCenter(x) + grid.CellCenter(z) - .3 * duration));
+            error += Math.Abs(grid.GetCell(x, z).VelocityXRgPerTg - .2 - exact) / (n * n * epsilon);
+        }
+        return error;
+    }
     public static void Run()
     {
         var uniform = new GeneratedFluidSolver(16, 1, .2, 1e-9, (x, z) => new GeneratedFluidSample(2, .1, -.07), GeneratedFluidBoundary.Periodic);
@@ -76,7 +91,9 @@ internal static class GeneratedFluidTests
             "right-moving acoustic phase/amplitude converge toward independent linearized sound solution");
         double shock64 = ShockError(64, out double star), shock128 = ShockError(128, out _);
         Check(shock128 < .8 * shock64, "nonlinear isothermal rarefaction/shock solution improves with spatial refinement");
-        Console.WriteLine($"Generated fluid PDE fixtures: advection L1 {adv32:G6}->{adv64:G6}; sound {sound32:G6}->{sound64:G6}->{sound128:G6}; shock {shock64:G6}->{shock128:G6}, rho*={star:G9}.");
+        double diagonal24 = DiagonalAdvectionError(24), diagonal48 = DiagonalAdvectionError(48);
+        Check(diagonal48 < .6 * diagonal24, "exact two-dimensional diagonal transverse wave improves under refinement");
+        Console.WriteLine($"Generated fluid PDE fixtures: advection L1 {adv32:G6}->{adv64:G6}; sound {sound32:G6}->{sound64:G6}->{sound128:G6}; shock {shock64:G6}->{shock128:G6}, rho*={star:G9}; diagonal {diagonal24:G6}->{diagonal48:G6}.");
 
         var source = new GeneratedFluidSource(2, -1, .6, 2, 3, 4);
         var forcing = new GeneratedFluidForcing(source);
@@ -140,6 +157,17 @@ internal static class GeneratedFluidTests
         Near(a.SurfaceDensity, l.SurfaceDensity + blend * (h.SurfaceDensity - l.SurfaceDensity), 1e-14, "time interpolation matches renderer primitive channels");
         history.CopyFrame(0, sigma, vx, vz); float initialCell = sigma[0]; sigma[0] = 999; history.CopyFrame(0, sigma, vx, vz);
         Near(sigma[0], initialCell, 0, "copy cannot mutate immutable history");
+        history.CopyFrame(64, sigma, vx, vz);
+        double centerX = -history.HalfExtentRg + 17.5 * history.CellWidthRg;
+        double centerZ = -history.HalfExtentRg + 62.5 * history.CellWidthRg;
+        history.TrySample(history.FrameTimes[64], centerX, centerZ, out var cell);
+        Near(cell.SurfaceDensity, sigma[62 * 96 + 17], 1e-13, "cell-center sampler equals copied independent array element");
+        Near(cell.VelocityXRgPerTg, vx[62 * 96 + 17], 1e-13, "cell-center velocity equals copied array element");
+        history.TrySample(history.FrameTimes[64], centerX + .5 * history.CellWidthRg, centerZ + .5 * history.CellWidthRg, out var midpointCell);
+        double expectedFour = .25 * ((double)sigma[62 * 96 + 17] + sigma[62 * 96 + 18] + sigma[63 * 96 + 17] + sigma[63 * 96 + 18]);
+        Near(midpointCell.SurfaceDensity, expectedFour, 1e-13, "spatial bilinear midpoint is independent four-cell arithmetic mean");
+        history.TrySample(history.FrameTimes[64], history.HalfExtentRg, history.HalfExtentRg, out var corner);
+        Near(corner.SurfaceDensity, sigma[sigma.Length - 1], 0, "outer physical corner clamps to the final cell center");
         Near(GeneratedFluidHistory.ReconstructedVolumeDensity(1, 0), 1 / (2 * Math.Sqrt(2 * Math.PI)), 1e-16, "fixed Gaussian height closure normalization");
         double verticalMass = 0, dy = .002;
         for (double y = -16 + dy / 2; y < 16; y += dy) verticalMass += GeneratedFluidHistory.ReconstructedVolumeDensity(1, y) * dy;
@@ -158,6 +186,6 @@ internal static class GeneratedFluidTests
         Check(massDifference < .12, "short generated history integrated mass agrees under doubled spatial resolution");
         Console.WriteLine($"Generated binary refinement24->48: final mass {one.Diagnostics.FinalMass:G9}->{refined.Diagnostics.FinalMass:G9}, relative difference {massDifference:G6}; no claim of full binary morphological convergence.");
         var dFinal = history.Diagnostics;
-        Console.WriteLine($"Generated default SXS history: {watch.Elapsed.TotalSeconds:F3}s, {dFinal.StepCount} steps, CFLmax={dFinal.MaxCourantNumber:G8}, M0={dFinal.InitialMass:G10}, Mf={dFinal.FinalMass:G10}, sink={dFinal.RemovedSinkMass:G9}, outflow={dFinal.NetOutflowMass:G9}, floor={dFinal.AddedFloorMass:G9}, residual={dFinal.MassBudgetResidual:G5}, vmax={dFinal.MaximumSpeed:G6}c, payload={history.MemoryBytes} bytes.");
+        Console.WriteLine($"Generated default SXS history: {watch.Elapsed.TotalSeconds:F3}s, {dFinal.StepCount} steps, CFLmax={dFinal.MaxCourantNumber:G8}, M0={dFinal.InitialMass:G10}, Mf={dFinal.FinalMass:G10}, sink={dFinal.RemovedSinkMass:G9}, outflow={dFinal.NetOutflowMass:G9}, floor={dFinal.AddedFloorMass:G9}, residual={dFinal.MassBudgetResidual:G5}, vmax={dFinal.MaximumSpeed:G6}c, fallbacks={dFinal.ReconstructionFallbackCount}, payload={history.MemoryBytes} bytes.");
     }
 }
