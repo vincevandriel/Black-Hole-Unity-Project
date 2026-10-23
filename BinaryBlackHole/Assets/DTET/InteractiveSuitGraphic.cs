@@ -25,7 +25,7 @@ namespace DTET.VisualPrototype
             // Draw the projection before the suit; instrument panels compose later above this graphic.
             if (reveal > .01f)
             {
-                float left = pinned ? -365 : 12, right = pinned ? 330 : 595;
+                float left = pinned ? -500 : 12, right = pinned ? 180 : 595;
                 Tri(mesh, new Vector2(348, -83 - rise), new Vector2(left, 555), new Vector2(right, 555),
                     new Color(.12f, .72f, .95f, .08f * reveal));
                 Line(mesh, new Vector2(340, -82 - rise), new Vector2(left, 555), 1,

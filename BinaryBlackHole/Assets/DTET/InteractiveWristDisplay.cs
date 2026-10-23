@@ -276,7 +276,8 @@ namespace DTET.VisualPrototype
         private void CycleRate()
         {
             var state = presenter.CaptureWristState(); double speed = Math.Abs(state.PlaybackRate);
-            double next = speed < .049 ? .05 : speed < .099 ? .1 : speed < .199 ? .2 : .01;
+            double next = speed < .049 ? .05 : speed < .099 ? .1 : speed < .199 ? .2
+                : speed < .499 ? .5 : speed < .999 ? 1 : speed < 1.999 ? 2 : speed < 3.999 ? 4 : .01;
             presenter.SetWristRate(state.PlaybackRate < 0 ? -next : next);
         }
         private void Update()
@@ -395,7 +396,12 @@ namespace DTET.VisualPrototype
             var handle = Box(rect, "Instrument handle", 0, 1, 13, h + 8, Cyan);
             var slider = rect.gameObject.AddComponent<Slider>(); slider.targetGraphic = handle.GetComponent<Image>();
             slider.fillRect = fill; slider.handleRect = handle; slider.minValue = min; slider.maxValue = max;
-            fill.sizeDelta = Vector2.zero; handle.sizeDelta = new Vector2(13, h + 8);
+            fill.sizeDelta = Vector2.zero;
+            // Slider stretches the cross-axis anchors from 0 to 1. Subtract the hit-area
+            // height to keep the actual handle 20px tall without shrinking that hit area.
+            handle.pivot = new Vector2(.5f, .5f);
+            handle.anchoredPosition = Vector2.zero;
+            handle.sizeDelta = new Vector2(13, 20 - (h + 10));
             slider.onValueChanged.AddListener(value => action(value)); return slider;
         }
         private static void Place(RectTransform rect, float x, float y, float w, float h)

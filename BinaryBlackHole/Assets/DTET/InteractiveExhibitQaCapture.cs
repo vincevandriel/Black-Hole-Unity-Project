@@ -222,6 +222,15 @@ namespace DTET.VisualPrototype
                 for (int i = 1; i < 5; i++) { exhibit.SetViewPreset(i); Capture("view-" + i + ".png"); }
                 exhibit.SetWristSamples(true); Capture("density-samples.png"); exhibit.SetWristSamples(false);
                 exhibit.SetWristGas(false); Capture("gas-off.png"); exhibit.SetWristGas(true);
+                exhibit.SetViewPreset(0); exhibit.Wrist.SetRaised(false, true);
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Off, 0, 0); Capture("unobstructed-optics-off.png");
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Subtle, .35f, .25f); Capture("unobstructed-optics-subtle.png");
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 1, 1); exhibit.Wrist.SetRaised(true, true);
+                Screen.SetResolution(1280, 720, FullScreenMode.Windowed);
+                yield return new WaitForSecondsRealtime(.2f);
+                exhibit.RenderFrame(); ValidatePointerTargets(); Capture("wrist-1280x720.png", width: 1280, height: 720);
+                Screen.SetResolution(1600, 900, FullScreenMode.Windowed);
+                yield return new WaitForSecondsRealtime(.2f);
                 // Same-frame optical image determinism, independent of wall time.
                 exhibit.SetViewPreset(0); exhibit.RenderFrame(); var one = ReadPixels((RenderTexture)exhibit.PresentedTexture);
                 exhibit.SeekWrist(.8); exhibit.SeekWrist(.35); exhibit.RenderFrame(); var two = ReadPixels((RenderTexture)exhibit.PresentedTexture);
@@ -407,9 +416,9 @@ namespace DTET.VisualPrototype
             }
         }
 
-        private void Capture(string name, bool launcher = false)
+        private void Capture(string name, bool launcher = false, int width = 1600, int height = 900)
         {
-            var target = new RenderTexture(1600, 900, 24, RenderTextureFormat.ARGB32); target.Create();
+            var target = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32); target.Create();
             var previous = exhibit.CaptureCamera.targetTexture; exhibit.CaptureCamera.targetTexture = target;
             if (launcher)
             {
@@ -421,8 +430,8 @@ namespace DTET.VisualPrototype
             }
             else exhibit.RenderFrame();
             var active = RenderTexture.active; RenderTexture.active = target;
-            var image = new Texture2D(1600, 900, TextureFormat.RGB24, false);
-            image.ReadPixels(new Rect(0, 0, 1600, 900), 0, 0); image.Apply();
+            var image = new Texture2D(width, height, TextureFormat.RGB24, false);
+            image.ReadPixels(new Rect(0, 0, width, height), 0, 0); image.Apply();
             File.WriteAllBytes(Path.Combine(output, name), image.EncodeToPNG()); images.Add(name);
             Destroy(image); RenderTexture.active = active; exhibit.CaptureCamera.targetTexture = previous; target.Release(); Destroy(target);
             Check(new FileInfo(Path.Combine(output, name)).Length > 10000, "capture " + name);
