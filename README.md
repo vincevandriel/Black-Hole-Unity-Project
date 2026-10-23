@@ -4,6 +4,8 @@ DT-ET learning exhibit with a shared SI circular-inspiral lesson and a selectabl
 
 ## Open the visual prototype
 
+M3 adds a separate [field and light reference laboratory](Docs/PHYSICS_M3.md). Launch a built player with `--reference-lab` for an assumed 3D emitting torus, weighted tracers and a single-Schwarzschild optical control. The packaged `START_M3_REFERENCE_LAB.cmd` supplies this option. It uses a desktop screen interface and does not attach assumed gas to the SXS event.
+
 Clone or download this repository, then open `BinaryBlackHole` in Unity Hub. The editable Unity source consists of `Assets`, `Packages` (including the lock file), and `ProjectSettings`; Unity recreates its ignored cache on first import. Generated Windows players and recordings are not stored in Git.
 
 1. Install Unity Hub and Unity Editor **6000.3.25f1 (Unity 6.3 LTS)**, then sign in and activate a valid Unity license.

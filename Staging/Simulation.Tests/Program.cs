@@ -104,3 +104,6 @@ ObserverInputSettingsTests.Run();
 StoryboardChoreographyTests.Run();
 PhysicalBindingTests.Run();
 NumericalEventTests.Run();
+ReferenceFlowTests.Run();
+SchwarzschildReferenceTests.Run();
+Console.WriteLine("PASS: Schwarzschild rays, independent quadrature, capture/escape, disk intersections and frequency shifts");
