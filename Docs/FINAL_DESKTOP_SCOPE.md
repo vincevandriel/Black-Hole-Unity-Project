@@ -1,0 +1,92 @@
+# Desktop exhibit scope and remaining scientific gates
+
+**Scope reviewed against the M4.1 source and retained research on 23 October 2026.** The desktop implementation now includes the adjustable experiment, approximate light warping and spacesuit wrist display. M5 compatible scientific gas and M6 binary observer optics remain separate milestones. This document identifies those boundaries; the release validation receipt establishes the exact tested revision, player results, measured performance and package hash.
+
+## What the desktop source implements
+
+| Feature | Implemented behavior | Meaning of the result |
+|---|---|---|
+| Representative event | Retained SXS:BBH:0305 tracks, masses/spins, common apparent-horizon transition and remnant, scaled to the declared 64.5-solar-mass source system | A fixed GW150914-inspired numerical configuration. Its mass ratio and spins remain those of the chosen simulation. |
+| Adjustable experiment | Independent 5–80-solar-mass controls, smaller/larger ratio at least 0.1, starting separation 25–50 total rg; atomic Apply/reset/pause | Leading circular quadrupole inspiral to the declared 10-rg cutoff, followed by an explicitly conceptual merger/remnant display. |
+| Common state | `InteractiveBinarySession` and immutable snapshots supply bodies, gas, signal, graph cursor and optics | Parameter changes produce a new generation; seek/reverse reproduce the selected epoch. Playback speed changes viewing pace. |
+| Three-dimensional bright gas | Analytic reservoir, mass-dependent minidisk cutoffs, bowed streams and a growing remnant ring; continuous volume emission | A prescribed educational density/temperature/velocity field. It has no evolving fluid grid or full-history gas cache. |
+| Optional particles | Deterministic weighted spatial density samples | Diagnostic samples of the continuous field; marker count does not set physical gas mass or fluid accuracy. |
+| Gravitational-wave display | Replay: raw dimensionless H22 plus separately peak-normalized display channels. Experiment: defined far-field plus/cross strain and source frequency within its validity domain | Signal kind, observer assumptions and unavailable coverage remain explicit. The graph is not an unlabelled detector trace. |
+| Approximate optics | Mass-responsive softened image lenses and separately controlled outgoing stretch/squeeze distortion, sampled from the active signal history | A bounded display approximation with coarse foreground-gas handling. Gains modify display displacement, not source evolution or strain. |
+| Free inspection | Pause, seek, reverse, move/look and overview/above/edge/below/close views, with the camera kept outside the active proxy spheres | An exterior inspection camera, without an inferred physical worldline or proper-time clock. |
+| Suit instrument | V raise/lower, animated cuff/projection presentation, waveform/frequency tabs, transport, parameter Apply, optical controls, gas/sample controls, pin/enlarge and reduced-motion option | A desktop interface rendered after the astronomical warp. Its unscaled interface animation remains responsive while event time is paused. |
+| Startup cost selection | Auto/Laptop/Balanced/High, capped scene targets, bounded ray/marker/sky costs and capability fallback | Profiles preserve source parameters and the analytic field. Capability names and allocation arithmetic are not device-performance certifications. |
+| Sky | Deterministic synthetic directions, apparent magnitudes, color cues and filtered point-source footprints | Brighter stars can appear larger through their display footprint. The sky is effectively distant for local translations and is not a measured catalogue around the event. |
+
+The implementation is described by [the scenario contract](INTERACTIVE_SCENARIO_MODEL.md), [gas equations](M4_REDUCED_FLOW_MODEL.md), [optical approximation](INTERACTIVE_OPTICS.md) and [quality/sky contract](M4_QUALITY_AND_SKY.md). M1/M2 lessons and the M3 isolated reference remain separate entry paths. `InteractiveBinaryExhibit` adapts the actual scenario to the wrist presenter; it does not create a second lesson simulation behind the interface.
+
+## Scientific boundaries of this release
+
+The retained SXS waveform and horizon histories are numerical results with their own frame and time conventions. The replay uses the documented raw-horizon versus normalized-waveform mass conversion and independently aligned reference epochs. Equal-area coordinate spheres are useful markers; their silhouettes do not reconstruct a deformed horizon, event horizon, photon ring or optical shadow. Changing a mass ratio would require a different compatible numerical solution, which is why arbitrary inputs use the separate educational mode. See [M2's data contract](Data/SXS0305/README.md).
+
+The arbitrary-mass model supplies quantitative waveform values only before its cutoff. The default observer is a local far-field model observer at `10^12 m`, inclination 60 degrees, rather than Earth or the camera. A fixed display denominator preserves mass/distance amplitude trends. Retarded visual lookup selects a supported earlier emission epoch; it does not convert that far-field strain into a near-hole spacetime metric. Unsupported history is unavailable instead of looping. The conceptual continuation adds no quantitative merger/ringdown waveform or fitted radiated mass.
+
+The gas field has specified shapes, temperature scales, gray opacity and transition envelopes. It does not solve continuity, momentum/energy equations, pressure, magnetic transport, shocks or radiation feedback. Its total relative density and emission can change with the prescribed transition; they are not calibrated kilograms or luminosities. The Roche-lobe-based adjustable truncation is a declared Newtonian geometric prescription. More samples, image pixels or ray segments improve representation within this chosen model; they cannot supply missing plasma equations.
+
+The volume renderer integrates straight rays, followed by the illustrative optical pass. That pass uses the correct weak-deflection mass/impact trend as a reference, then softens and caps the image mapping. Its small foreground-depth estimate does not resolve all overlapping emitting layers. The outgoing-wave tensor display is magnified and bounded. Neither effect integrates photon paths in the evolving binary metric. The suit, text and pointer are composed afterward so visual displacement cannot masquerade as changing graph values.
+
+The M3 Schwarzschild control supplies a separate tested isolated-hole reference. Its direct ray integration, steady opaque thin-disk assumptions and fixed low-resolution reference image do not become a spinning binary renderer by combining two copies. The initially proposed Bruneton table/beam-filtering port remains deferred; the implemented M3 reference path is documented in [M3](PHYSICS_M3.md).
+
+## What the retained research actually supplies
+
+The research library is retained outside Unity at `outputs/references/GW150914/` in the research workspace. Its `datasets.csv`, source registry, saved files, derived inspections and hashes distinguish acquired bytes from unacquired data. Large research inputs are not silently added to the player.
+
+| Evidence | Present use / status |
+|---|---|
+| GWOSC event summaries, coherent posterior sample and short H1/L1 strain files | Retained research/inference/observation inputs. The current desktop waveform view uses the representative numerical mode or the educational model; it does not reproduce the original detector-conditioning/parameter-estimation pipeline. |
+| SXS0305 Lev6 horizons and waveform; comparison horizon resolution | The licensed runtime importer and numerical replay are implemented. Import integrity and model/runtime checks do not alone establish complete NR resolution or waveform-extrapolation convergence. |
+| Khan 2018 binary disk work and other GRMHD/PIC papers | Literature and modeling references. They establish prior research and methodological requirements, not a measured GW150914 gas state or a currently imported matching fluid movie. |
+| D19 compatible gas history; D26 reusable Khan field export | Not acquired in the retained inventory. A paper or author visualization is not a reusable three-dimensional field dataset. |
+| D18 full evolving metric for this reconstruction | Not acquired in the retained inventory. The available horizon/waveform files do not contain the required spatial metric fields and derivatives. |
+| D17 Combi–Ressler implementation archive | Downloaded and statically inspected. Its external dependencies, component licenses, correspondence with the later paper revision and executable numerical validation remain unresolved. It is not the current optical backend. |
+| D21–D24 pinned ET design-noise tables | Retained forecast inputs with unresolved response/ASD-versus-PSD conventions and redistribution terms; no ET forecast is presently computed. Full ET-MDC mock frames were not acquired. |
+| Gaia documentation | Retained catalogue documentation; the current sky is synthetic. An Earth-view star catalogue would still not identify the remote event's local sky. |
+
+No measured gas/disk model was established by the study. The saved counterpart literature supports the distinction between a disputed candidate and a confirmed association; it does not justify either a measured bright disk or proof that no surrounding gas existed. The [LIGO/Virgo follow-up paper](https://arxiv.org/abs/1602.08492v4) remains an observational reference. [Khan et al.](https://arxiv.org/abs/1801.02624v2) already studied GW150914-like binaries in magnetized disks, so this exhibit does not support a first-ever scientific reconstruction claim.
+
+## M5 gate: compatible scientific gas
+
+M5 can begin with a small, inspectable, licensed export from an appropriate simulation or a separately scoped offline calculation. Its concrete admission requirements are:
+
+1. **One compatible scenario.** Pin mass ratio, spins, total-mass convention, source scale, orbit/metric, coordinates/gauge and masks. Either match the representative binary or introduce a separately named complete scenario. Aligning total mass and merger time cannot make a nonspinning Khan setup identical to the spinning SXS0305 system.
+2. **Required physical fields and closures.** Supply density, velocity convention/four-velocity, pressure/internal energy, magnetic fields when used, and electron/radiation quantities required by the chosen emission model. Record EOS, physical normalization, initial/boundary conditions, cooling/heating and the handling or neglect of gas backreaction.
+3. **Covered history and diagnostics.** Identify spatial/time extent, cadence, resolution levels, horizon/excision behavior and missing-data rules. Retain flux/conservation diagnostics and, where relevant, magnetic-divergence and shock/thermodynamic checks. A visually smooth stream is not such a diagnostic.
+4. **A usable reduction contract.** Provide an exporter, schema, units, hashes, attribution/reuse rights, size estimates and a runnable small sample. Measure reduction/interpolation error in density, velocity, optical depth, emissivity and integrated diagnostics across epochs and inclinations before deciding runtime cache sizes.
+5. **Validated Unity binding.** Import the same compatible fields into a bounded, cancellable cache; verify epoch/generation agreement, seek determinism and source-versus-rendered diagnostics. Material tracers, if supplied, need defined weights, coordinate velocities, absorption/respawn rules and checkpoints. Rewind should reconstruct stored history rather than integrate dissipative physics backward.
+
+Only that admitted dataset/model and its tested assumptions can support a scientific fluid-replay claim. A longer timeline, a higher particle count or a faster shader does not close this gate. [Fedrigo et al.'s binary GRMHD study](https://arxiv.org/abs/2309.03949v2) and the retained kinetic-accretion literature illustrate different physical models; their outputs cannot be interchanged without a compatibility analysis.
+
+## M6 gate: binary observer optics and clocks
+
+M6 needs a compatible spacetime and emission history, plus validation of what a defined observer receives. Two candidate routes remain open: a covered numerical metric export, or a separately validated approximate metric backend. The Combi–Ressler archive is a candidate for the latter, not a completed dependency.
+
+1. **Executable metric and provenance.** Supply `g_mu_nu` or lapse/shift/spatial metric, required derivatives, coordinate maps, valid domains and masks over time. For an analytic/approximate implementation, resolve source revision, dependencies and licenses, compare it with the chosen paper equations, and establish numerical fixtures. Horizon positions and far-zone h22 do not substitute for these fields.
+2. **Enough past history.** Trace rays through the covered metric and emitting gas at their appropriate earlier times. Two adjacent gas frames suffice for a single-epoch interpolation, not every long/bent light path. Bound cache/ray work and expose insufficient coverage. A frozen-spacetime/fast-light mode requires an explicit approximation label.
+3. **Observer and transfer definitions.** Specify an exterior observer family and local frame, timelike motion, emitter motion, spectral emissivity/opacity and frequency transport. Apply shifts once using the photon/observer contractions and the appropriate radiance invariant. A free camera teleport is not a physical worldline; proper-time accumulation needs defined reset/seek rules.
+4. **Independent accuracy tests.** Establish isolated-hole, weak-field, capture/escape, null-constraint, frequency-shift, static-transfer and time-dependent reference fixtures. Compare binary/remnant images and integrated spectra across ray steps, spatial/time interpolation, epochs and viewing angles. Agreement in a gas diagnostic does not establish photon-ring or optical-image accuracy.
+5. **Bounded interactive implementation.** Measure the full metric/gas/history/target working set and completed GPU work on the intended devices. A single-hole lookup table, a paper's cluster speedup or a softened screen warp is not evidence for an interactive binary backend on those devices.
+
+[Bohn et al.'s numerical-spacetime ray tracing](https://arxiv.org/abs/1410.7775v3) gives the method-level reference. [Combi and Ressler's later approximate-metric paper](https://arxiv.org/abs/2403.13308v3) is a feasibility lead; its reported gas/horizon comparisons are not a universal image-error guarantee for this exhibit. Horizon surface data, if accurate geometric horizon visualization is desired, is another input and still does not replace null-ray transfer.
+
+## Detector and hardware gates that remain distinct
+
+GW150914's actual observations are the LIGO records. A future ET comparison must be explicitly simulated. Before implementing it, choose the detector geometry, resolve the pinned curve response and ASD/PSD conventions, select coherent source parameters and a supported waveform/band, apply detector antenna patterns/delays and any redshift once, and document noise/calibration/processing assumptions. Preserve reproducible fixtures and reuse rights. The [pinned ET sensitivity repository](https://gitlab.et-gw.eu/pub/et-sensitivity-curves/-/tree/66177ccf4626c77fee243ef21367ac934b2c0ccc) is a design input, not a historic ET reading. A longer low-frequency source/waveform history also requires a validated join; the short retained NR replay cannot supply it by extrapolation.
+
+The original performance/device goals remain hardware gates, even when the software checks pass:
+
+- Run the packaged M4.1 player on the designated laptop and desktop, with optics and wrist enabled, and record exact hardware/driver, effective profile and render/display dimensions. Measure completed rendering, frame-time distribution, memory/VRAM where available, seek response and loading. Include merger, edge-on/close views, rapid navigation, repeated parameter commits and pause/rewind.
+- Check visible-window input focus, resizing, readability, motion settings and fallback behavior on those devices. Sustain the run and repeat open/close and unload/reload to detect resource growth; short sampled peaks and forced fallback on a modern GPU have narrower meanings.
+- Treat tracked XR as its own implementation and acceptance stage: headset runtime, per-eye optics/targets, tracking loss/reacquisition, recentering, controller/hand pointer, seated reach, stereo frame budget and human comfort/usability. The desktop wrist and the older pose hook do not establish these outcomes.
+
+The [M4 receipt](PHYSICS_M4_VALIDATION.md) records desktop offscreen measurements and its remaining device obligations. Those results should not be copied as M4.1 performance numbers: the new optical pass and suit interface require the current release's own measurements. No device-pass label, clean interactive Console claim, human-study result or VR certification follows solely from a source build or automated model checks.
+
+## Reading older plans and evidence notes
+
+The research library's `evidence_and_gaps.md`, `verification/*.md` and `PLAN_RESEARCH_ADDENDUM.md` record the state of the initial research pass. Phrases such as “no Unity integration” or “no working milestone” are historical research-snapshot statements. M1/M2 integration, the M3 reference and the M4 reduced desktop path have since been implemented and documented in their receipts. The acquisition gaps for compatible scientific gas, full metric data and real-device evidence remain meaningful.
+
+Likewise, [the wrist/warp plan](INTERACTIVE_WARP_AND_WRIST_PLAN.md) describes the requirements before M4.1 implementation, and [the M4 guide](PHYSICS_M4.md) correctly describes the earlier M4 player without these additions. This scope document records the implemented M4.1 source features; the current release receipt determines which integrated checks have passed. Earlier proposed two-frame field grids, large tracer counts and Bruneton-port budgets are future scientific/rendering options, not descriptions of the present analytic-field allocations.

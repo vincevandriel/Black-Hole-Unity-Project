@@ -1,6 +1,8 @@
 # M4.1 requirements: adjustable experiments, light warping and suit hologram
 
-**Requested 23 October 2026; planned, not implemented in the delivered M4 player.** This extension follows M4's reduced exhibit and does not replace the compatible scientific gas/metric work in M5/M6. The user explicitly accepts a visually convincing approximation for the optical effects, with a consistent response to mass, size and distance and live graph connections.
+**Requested 23 October 2026; implemented in the subsequent interactive desktop observatory.** This remains the original design record. See [current controls and behavior](INTERACTIVE_OBSERVATORY.md), [the release validation](INTERACTIVE_OBSERVATORY_VALIDATION.md) and [remaining scientific/device gates](FINAL_DESKTOP_SCOPE.md). The earlier M4 package does not contain this extension. M5/M6 remain separate scientific work.
+
+The delivered adapter uses its own immutable `InteractiveBinarySession` and a full-resolution illustrated suit projection, rather than embedding the old human-scale wrist rig in astronomical coordinates. The fixed replay is preserved; arbitrary masses/separation belong to the bounded educational experiment. Its far-field waveform observer is declared and fixed. Optional replay mass scaling and tracked XR were not required for this desktop release. The original requirements below preserve the reasoning and optional future directions.
 
 ## Experience and parameter controls
 
