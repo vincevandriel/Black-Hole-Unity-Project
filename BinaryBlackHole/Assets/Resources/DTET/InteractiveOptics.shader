@@ -20,6 +20,7 @@ Shader "DTET/InteractiveOptics"
             #pragma fragment Fragment
             #include "UnityCG.cginc"
             #include "ReducedBinaryFlow.hlsl"
+            #include "GeneratedFluidSampling.hlsl"
             sampler2D _MainTex,_WaveHistory;
             float4 _MainTex_TexelSize;
             float4 _CameraOrigin,_CameraRight,_CameraUp,_CameraForward;
@@ -31,6 +32,7 @@ Shader "DTET/InteractiveOptics"
             float4 _Polarization; // e1 screen xy, e2 screen xy
             float4 _SystemAngle;
             float _OpticsFixture;
+            float _GeneratedGas;
             float4 _FixtureInput,_FixtureLens;
 
             float2 Limited(float2 v,float limit) { return v*min(1,limit/max(length(v),1e-12)); }
@@ -91,12 +93,19 @@ Shader "DTET/InteractiveOptics"
                         [loop] for(int k=0;k<24;k++)
                         {
                             float distance=start+(k+.5)*ds;
-                            float2 field=SampleReducedFlow(ro+rd*distance);
+                            float3 position=ro+rd*distance;
+                            float2 field;
+                            float4 generated=0;
+                            if(_GeneratedGas>.5) {generated=SampleGeneratedFluid(position);field=float2(generated.y,generated.y);}
+                            else field=SampleReducedFlow(position);
                             float source=field.y/max(field.x,1e-12);
                             float temperature=sqrt(sqrt(max(source,0)));
                             float3 tint=lerp(float3(1,.28,.065),float3(.62,.83,1),saturate((temperature-.38)/.7));
-                            float absorbed=1-exp(-max(0,.16*field.x*ds));
-                            float contribution=trans*absorbed*source*Luma(tint)*2.5;
+                            if(_GeneratedGas>.5)tint=GeneratedFluidTint(generated.zw);
+                            float opacity=_GeneratedGas>.5?_GeneratedOpacity:.16;
+                            float exposure=_GeneratedGas>.5?_GeneratedExposure:2.5;
+                            float absorbed=1-exp(-max(0,opacity*field.x*ds));
+                            float contribution=trans*absorbed*source*Luma(tint)*exposure;
                             float depth=distance*dot(rd,_CameraForward.xyz);
                             gasLum+=contribution;depthMoment+=contribution*depth;
                             behindLum+=contribution*float3(Behind(_LensA.z,depth),Behind(_LensB.z,depth),Behind(_LensR.z,depth));

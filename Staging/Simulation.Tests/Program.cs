@@ -113,3 +113,4 @@ Console.WriteLine("PASS: quality admission, bounded render budgets, synthetic sk
 InteractiveBinaryScenarioTests.Run();
 InteractiveOpticsTests.Run();
 Console.WriteLine("PASS: weak lens reference, depth response, bounded polarization warp, retarded history and display-gain isolation");
+GeneratedFluidTests.Run();

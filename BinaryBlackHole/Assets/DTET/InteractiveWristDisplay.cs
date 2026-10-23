@@ -40,6 +40,23 @@ namespace DTET.VisualPrototype
         void LeaveWristExhibit();
     }
 
+    public struct GeneratedFluidUiState
+    {
+        public bool Supported, Generating, Ready, Selected, Covered;
+        public double Progress;
+        public string Status, Coverage, Metrics;
+    }
+
+    /// <summary>Optional fluid laboratory controls; old presentation fixtures need no solver.</summary>
+    public interface IGeneratedFluidPresenter
+    {
+        GeneratedFluidUiState CaptureGeneratedFluidState();
+        void StartGeneratedFluid();
+        void CancelGeneratedFluid();
+        void UseGeneratedFluid(bool value);
+        void SeekGeneratedFluidStart();
+    }
+
     /// <summary>
     /// Desktop suit projector composed after the astronomical target at full interface resolution.
     /// Its pose is an illustrated desktop emulation, not a tracked XR hand or physical observer.
@@ -73,6 +90,10 @@ namespace DTET.VisualPrototype
         private float reveal;
         private string localValidation;
         private float nextTextRefresh;
+        private RectTransform fluidPanel;
+        private Text fluidStatus, fluidCoverage, fluidMetrics;
+        private Button fluidSolve, fluidCancel, fluidGenerated, fluidIllustrative, fluidStart;
+        private IGeneratedFluidPresenter fluidPresenter;
 
         public bool Raised { get; private set; } = true;
         public bool Pinned { get; private set; }
@@ -94,9 +115,12 @@ namespace DTET.VisualPrototype
         {
             get
             {
+                var selected = EventSystem.current == null ? null : EventSystem.current.currentSelectedGameObject;
+                if (fluidPanel != null && fluidPanel.gameObject.activeInHierarchy
+                    && ((Mouse.current != null && RectTransformUtility.RectangleContainsScreenPoint(fluidPanel, Mouse.current.position.ReadValue(), interfaceCamera))
+                    || (selected != null && selected.activeInHierarchy && selected.transform.IsChildOf(fluidPanel)))) return true;
                 if (!Raised || reveal < .1f || panel == null) return false;
                 if (Mouse.current != null && IsScreenPointOverPanel(Mouse.current.position.ReadValue())) return true;
-                var selected = EventSystem.current == null ? null : EventSystem.current.currentSelectedGameObject;
                 return selected != null && selected.activeInHierarchy && selected.transform.IsChildOf(panel);
             }
         }
@@ -135,6 +159,8 @@ namespace DTET.VisualPrototype
             suitRect = suit.GetComponent<RectTransform>(); Place(suitRect, 960, 754, 610, 215);
             suitGraphic = suit.GetComponent<InteractiveSuitGraphic>(); suitGraphic.raycastTarget = false;
             BuildPanel(root.transform);
+            fluidPresenter = presenter as IGeneratedFluidPresenter;
+            if (fluidPresenter != null) BuildFluidPanel(root.transform);
             var open = Button(root.transform, "V  /  WRIST", 1405, 852, 164, 31, () => SetRaised(!Raised));
             openText = open.GetComponentInChildren<Text>();
             SetReducedMotion(PlayerPrefs.GetInt("DTET.Wrist.ReduceMotion", 0) == 1);
@@ -209,6 +235,37 @@ namespace DTET.VisualPrototype
             status = TextAt(panel, "", 10, Muted, 20, 682, 602, 22);
         }
 
+        private void BuildFluidPanel(Transform root)
+        {
+            Button(root, "FLUID LAB  /  SOLVE GAS", 36, 196, 300, 32,
+                () => fluidPanel.gameObject.SetActive(!fluidPanel.gameObject.activeSelf));
+            fluidPanel = Box(root, "Generated fluid laboratory", 36, 240, 392, 386, new Color(.018f, .050f, .078f, .97f));
+            TextAt(fluidPanel, "2D ISOTHERMAL FLUID", 15, Cyan, 12, 10, 368, 22);
+            TextAt(fluidPanel, "Assumed gas / Newtonian gravity / false colour", 11, Gold, 12, 34, 368, 20);
+            fluidSolve = Button(fluidPanel, "SOLVE GAS", 12, 63, 178, 30, () => fluidPresenter.StartGeneratedFluid());
+            fluidCancel = Button(fluidPanel, "CANCEL", 202, 63, 178, 30, () => fluidPresenter.CancelGeneratedFluid());
+            fluidIllustrative = Button(fluidPanel, "ILLUSTRATIVE GAS", 12, 102, 178, 30, () => fluidPresenter.UseGeneratedFluid(false));
+            fluidGenerated = Button(fluidPanel, "GENERATED FLUID", 202, 102, 178, 30, () => fluidPresenter.UseGeneratedFluid(true));
+            fluidStart = Button(fluidPanel, "GO TO COVERAGE START", 12, 141, 368, 30, () => fluidPresenter.SeekGeneratedFluidStart());
+            fluidStatus = TextAt(fluidPanel, "", 12, White, 12, 181, 368, 60);
+            fluidCoverage = TextAt(fluidPanel, "", 11, Gold, 12, 247, 368, 40);
+            fluidMetrics = TextAt(fluidPanel, "", 11, Muted, 12, 297, 368, 80);
+            fluidPanel.gameObject.SetActive(false);
+        }
+
+        private void RefreshFluidPanel()
+        {
+            if (fluidPresenter == null || fluidPanel == null) return;
+            var state = fluidPresenter.CaptureGeneratedFluidState();
+            fluidSolve.interactable = state.Supported && !state.Generating;
+            fluidCancel.interactable = state.Generating;
+            fluidIllustrative.interactable = !state.Generating;
+            fluidGenerated.interactable = fluidStart.interactable = state.Ready && !state.Generating;
+            fluidStatus.text = state.Generating ? $"SOLVING {100 * state.Progress:0.0}%\n{state.Status}" : state.Status;
+            fluidCoverage.text = state.Coverage; fluidMetrics.text = state.Metrics;
+            SetSelected(fluidGenerated, state.Selected); SetSelected(fluidIllustrative, !state.Selected);
+        }
+
         public void SetRaised(bool value, bool immediate = false)
         {
             Raised = value;
@@ -226,6 +283,8 @@ namespace DTET.VisualPrototype
         public void SetFrequencyPlot(bool value)
         { frequencyPlot = value; plottedGeneration = long.MinValue; Refresh(true); }
         public void RefreshNow() => Refresh(true);
+        public void SetFluidPanelOpen(bool value)
+        { if (fluidPanel != null) { fluidPanel.gameObject.SetActive(value); RefreshFluidPanel(); } }
         public void SetPendingExperiment(float m1, float m2, float initialSeparationRg)
         {
             if (massA == null) return;
@@ -349,6 +408,7 @@ namespace DTET.VisualPrototype
                 modeHint.text = state.ReplayMode ? "Recorded q/spins / use timeline for separation" : "5-80 solar each / q >= 0.10 / pending until Apply";
                 validation.text = localValidation ?? state.ValidationMessage ?? (pendingEdits ? "Pending inputs: APPLY & PAUSE starts a new scenario." : "Assumed gas / illustrative optics / source-frame timeline");
                 status.text = state.Status ?? "";
+                RefreshFluidPanel();
                 SetSelected(replayButton, state.ReplayMode); SetSelected(customButton, !state.ReplayMode);
                 SetSelected(signalTab, !frequencyPlot); SetSelected(frequencyTab, frequencyPlot);
                 for (int i = 0; i < opticsButtons.Length; i++) SetSelected(opticsButtons[i], i == (int)state.OpticalStyle);

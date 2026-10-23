@@ -11,7 +11,7 @@ using UnityEngine.UI;
 namespace DTET.VisualPrototype
 {
     /// <summary>Desktop experiment and recorded replay, with one model and presentation-only optics.</summary>
-    public sealed class InteractiveBinaryExhibit : MonoBehaviour, IInteractiveExhibitPresenter
+    public sealed class InteractiveBinaryExhibit : MonoBehaviour, IInteractiveExhibitPresenter, IGeneratedFluidPresenter
     {
         public bool Ready { get; private set; }
         public ExhibitQualitySettings Profile { get; private set; }
@@ -38,6 +38,14 @@ namespace DTET.VisualPrototype
         public double SampleWeight { get; private set; }
         public long PresentedGeneration { get; private set; }
         public int AutomaticOpticalFrames { get; private set; }
+        public GeneratedFluidPlayer GeneratedFluidPlayer { get; private set; }
+        public bool IsGeneratingFluid => GeneratedFluidPlayer != null && GeneratedFluidPlayer.IsGenerating;
+        public bool GeneratedFluidReady => GeneratedFluidPlayer != null && GeneratedFluidPlayer.Ready;
+        public bool GeneratedFluidActive => GeneratedFluidPlayer != null && GeneratedFluidPlayer.Selected;
+        public GeneratedFluidHistory GeneratedHistory => GeneratedFluidPlayer == null ? null : GeneratedFluidPlayer.History;
+        public Material GeneratedFluidMaterial => GeneratedFluidPlayer == null ? null : GeneratedFluidPlayer.Material;
+        public string GeneratedFluidStatus => Ready && !Profile.GasEnabled ? "Generated fluid is disabled in compatibility mode; choose a supported rendering profile."
+            : GeneratedFluidPlayer == null ? "Enter the observatory to generate fluid." : GeneratedFluidPlayer.Status;
 
         private GameObject launcher, sceneRoot, hud, sampleObject;
         private Text launchDetail, phaseLabel, statusLabel;
@@ -151,6 +159,7 @@ namespace DTET.VisualPrototype
             if (Profile.GasEnabled) BuildGas();
             BuildHud();
             Optics = sceneRoot.AddComponent<InteractiveOptics>();
+            GeneratedFluidPlayer = sceneRoot.AddComponent<GeneratedFluidPlayer>(); GeneratedFluidPlayer.Initialize(Profile.RaySteps);
             Ready = true; GasVisible = Profile.GasEnabled; SamplesVisible = false;
             Wrist = hud.AddComponent<InteractiveWristDisplay>(); Wrist.Initialize(CaptureCamera, this);
             lastGeneration = -1; lastTime = double.NaN;
@@ -237,6 +246,12 @@ namespace DTET.VisualPrototype
         public void Present()
         {
             if (!Ready) return;
+            if (GeneratedFluidPlayer != null && GeneratedFluidPlayer.Poll(Session.Model, Session.Generation))
+            {
+                Session.Seek(GeneratedHistory.StartSeconds); Session.Pause();
+                SamplesVisible = false; if (sampleRenderer != null) sampleRenderer.enabled = false;
+                GasVisible = Profile.GasEnabled; lastTime = double.NaN;
+            }
             var s = Snapshot;
             if (s.Generation != lastGeneration)
             {
@@ -248,6 +263,9 @@ namespace DTET.VisualPrototype
                     gasMaterial.SetVector("_HalfExtent", new Vector4(x, y, x, 0)); gasMaterial.SetVector("_FlowBounds", new Vector4(x, y, 0, 0));
                 }
             }
+            if (GeneratedFluidPlayer != null) GeneratedFluidPlayer.Present(s, GasVisible);
+            if (gasRenderer != null) gasRenderer.enabled = GasVisible && !GeneratedFluidActive;
+            if (sampleRenderer != null) sampleRenderer.enabled = SamplesVisible && !GeneratedFluidActive;
             if (s.ElapsedSeconds == lastTime) return;
             lastTime = s.ElapsedSeconds; PresentedGeneration = s.Generation;
             PresentBody(bodyA, s.BodyA); PresentBody(bodyB, s.BodyB); PresentBody(remnant, s.Remnant);
@@ -258,6 +276,7 @@ namespace DTET.VisualPrototype
                 gasMaterial.SetVector("_HorizonA", Horizon(s.BodyA)); gasMaterial.SetVector("_HorizonB", Horizon(s.BodyB)); gasMaterial.SetVector("_HorizonR", Horizon(s.Remnant));
             }
             SampleWeight = 0;
+            if (GeneratedFluidActive) return;
             double cell = 8 * Session.Model.HalfExtentXZ * Session.Model.HalfExtentXZ * Session.Model.HalfExtentY / samplePositions.Length;
             for (int i = 0; i < samplePositions.Length; i++)
             {
@@ -281,7 +300,7 @@ namespace DTET.VisualPrototype
         public void SetViewPreset(int index)
         {
             if (View == null || Session == null) return;
-            float r = (float)Session.Model.HalfExtentXZ;
+            float r = (float)(GeneratedFluidActive ? GeneratedHistory.HalfExtentRg : Session.Model.HalfExtentXZ);
             Vector3[] points = { new Vector3(0, r * .95f, -r * 1.8f), new Vector3(0, r * 2.05f, -.01f), new Vector3(0, r * .035f, -r * 2), new Vector3(0, -r * .95f, -r * 1.8f), new Vector3(0, 10, -23) };
             if (index < 0 || index >= points.Length) throw new ArgumentOutOfRangeException(nameof(index));
             View.transform.position = points[index]; View.transform.LookAt(Vector3.zero); MoveCamera(Vector3.zero);
@@ -305,6 +324,7 @@ namespace DTET.VisualPrototype
             if (lastWidth != Screen.width || lastHeight != Screen.height) ResizeTarget();
             if (EmulatedInputEnabled) HandleInput();
             if (!Ready) return;
+            if (IsGeneratingFluid) Session.Pause();
             Session.Tick(Time.unscaledDeltaTime); Present();
             if (Time.unscaledTimeAsDouble >= nextLabels) { RefreshLabels(); nextLabels = Time.unscaledTimeAsDouble + .1; }
         }
@@ -316,7 +336,8 @@ namespace DTET.VisualPrototype
         {
             if (!Ready) return;
             sceneImage.texture = Optics.Apply(SceneTarget, View, Session.Model, Snapshot,
-                Profile.GasEnabled && OpticalStyle != InteractiveOpticalStyle.Off, LensGain, WaveGain, GasVisible);
+                Profile.GasEnabled && OpticalStyle != InteractiveOpticalStyle.Off, LensGain, WaveGain, GasVisible,
+                GeneratedFluidActive ? GeneratedFluidPlayer : null);
         }
         public void RenderFrame()
         {
@@ -367,7 +388,7 @@ namespace DTET.VisualPrototype
         {
             if (!Ready) return;
             var s = CaptureWristState();
-            phaseLabel.text = $"{s.ScenarioLabel}  ·  {s.StageLabel}  ·  ASSUMED GAS / ILLUSTRATIVE OPTICS";
+            phaseLabel.text = $"{s.ScenarioLabel}  ·  {s.StageLabel}  ·  {(GeneratedFluidActive ? "2D ISOTHERMAL FLUID / NEWTONIAN GRAVITY" : "ASSUMED GAS / ILLUSTRATIVE OPTICS")}";
             statusLabel.text = $"V wrist · WASD + Q/E move · right-drag look · 1–5 views · Space pause · {Profile.EffectiveProfile} {SceneTarget.width}×{SceneTarget.height} · {OpticalStyle}";
         }
 
@@ -388,6 +409,7 @@ namespace DTET.VisualPrototype
                 ScenarioLabel = replay ? "GW150914-inspired / SXS0305" : "ADJUSTABLE EDUCATIONAL EXPERIMENT",
                 StageLabel = PhaseLabel(s.Phase), SignalLabel = replay ? "Normalized numerical Re(H22)" : "Leading-order h+ at D = 10^12 m, i = 60 deg",
                 Status = !Profile.GasEnabled ? "Compatibility: gas and optical distortion are disabled."
+                    : GeneratedFluidActive ? (GeneratedFluidPlayer.IsCovered ? "2D isothermal fluid / assumed gas / Newtonian gravity" : "Outside generated fluid coverage: no fluid is displayed.")
                     : Optics != null && OpticalStyle != InteractiveOpticalStyle.Off && !Optics.Active ? "Optical effect unavailable or gains zero; original scene shown."
                     : replay ? "Recorded binary; comparison-epoch alignment" : "Quantitative inspiral ends at 10 rg; merger is illustrative",
                 OpticalStyle = !Profile.GasEnabled || (Optics != null && !Optics.Active) ? InteractiveOpticalStyle.Off : OpticalStyle,
@@ -451,7 +473,7 @@ namespace DTET.VisualPrototype
             catch (ArgumentException e) { ValidationMessage = e.Message; }
         }
         public void ResetWristScenario() { if (!Ready) return; Session.Reset(); Present(); RefreshLabels(); }
-        public void SetWristPlaying(bool playing) { if (!Ready) return; if (playing) Session.Play(); else Session.Pause(); RefreshLabels(); }
+        public void SetWristPlaying(bool playing) { if (!Ready) return; if (playing && !IsGeneratingFluid) Session.Play(); else Session.Pause(); RefreshLabels(); }
         public void SeekWrist(double fraction) { if (!Ready) return; Session.Seek(Math.Max(0, Math.Min(1, fraction)) * Snapshot.DurationSeconds); Present(); RefreshLabels(); }
         public void SetWristRate(double rate) { if (!Ready) return; Session.SetPlaybackRate(rate); RefreshLabels(); }
         public void SetWristOptics(InteractiveOpticalStyle style, float lensGain, float waveGain)
@@ -460,14 +482,61 @@ namespace DTET.VisualPrototype
             OpticalStyle = style; LensGain = Mathf.Clamp(lensGain, 0, 2); WaveGain = Mathf.Clamp(waveGain, 0, 2);
             if (Ready) { RenderOptics(); RefreshLabels(); }
         }
-        public void SetWristGas(bool value) { GasVisible = value && Ready && Profile.GasEnabled; if (gasRenderer != null) gasRenderer.enabled = GasVisible; }
-        public void SetWristSamples(bool value) { SamplesVisible = value && Ready; if (sampleRenderer != null) sampleRenderer.enabled = SamplesVisible; }
+        public void SetWristGas(bool value) { GasVisible = value && Ready && Profile.GasEnabled; if (Ready) Present(); }
+        public void SetWristSamples(bool value) { SamplesVisible = value && Ready && !GeneratedFluidActive; if (sampleRenderer != null) sampleRenderer.enabled = SamplesVisible; }
         public void SetWristView(int index) => SetViewPreset(index);
         public void LeaveWristExhibit() => ReturnToLauncher();
+
+        public void StartGeneratedFluid()
+        {
+            if (!Ready || !Profile.GasEnabled) return;
+            Session.Pause(); GeneratedFluidPlayer.StartGeneration(Session.Model, Session.Generation);
+            lastTime = double.NaN; Present(); RefreshLabels();
+        }
+        public void CancelGeneratedFluid()
+        { if (GeneratedFluidPlayer == null) return; GeneratedFluidPlayer.CancelGeneration(); if (Ready) RefreshLabels(); }
+        public void UseGeneratedFluid(bool value)
+        {
+            if (!Ready || GeneratedFluidPlayer == null) return;
+            GeneratedFluidPlayer.Select(value);
+            if (GeneratedFluidActive) { SamplesVisible = false; if (sampleRenderer != null) sampleRenderer.enabled = false; }
+            lastTime = double.NaN; Present(); RefreshLabels();
+        }
+        public void SeekGeneratedFluidStart()
+        { if (!Ready || !GeneratedFluidReady) return; Session.Seek(GeneratedHistory.StartSeconds); Present(); RefreshLabels(); }
+        public GeneratedFluidUiState CaptureGeneratedFluidState()
+        {
+            var history = GeneratedHistory;
+            var state = new GeneratedFluidUiState
+            {
+                Supported = Ready && Profile.GasEnabled, Generating = IsGeneratingFluid, Ready = GeneratedFluidReady,
+                Selected = GeneratedFluidActive, Covered = GeneratedFluidPlayer != null && GeneratedFluidPlayer.IsCovered,
+                Status = GeneratedFluidStatus, Progress = GeneratedFluidPlayer == null ? 0 : GeneratedFluidPlayer.GenerationProgress,
+                Coverage = "No generated timeline. One physical grid is shared by all render profiles.",
+                Metrics = "96 × 96 cells / up to 129 cached frames / final ≤ 4000 tg\nBackground CPU solve; deterministic cached playback."
+            };
+            if (history != null)
+            {
+                bool covered = history.TryGetFrames(Snapshot.ElapsedSeconds, out int lower, out int upper, out double blend);
+                var d = covered ? history.FrameDiagnostics[lower] : history.Diagnostics;
+                var e = covered ? history.FrameDiagnostics[upper] : history.Diagnostics;
+                double Mass(double a, double b) => a + (b - a) * blend;
+                double mass = Mass(d.FinalMass, e.FinalMass), sink = Mass(d.RemovedSinkMass, e.RemovedSinkMass);
+                double outflow = Mass(d.NetOutflowMass, e.NetOutflowMass), floor = Mass(d.AddedFloorMass, e.AddedFloorMass);
+                double residual = mass - (d.InitialMass - sink - outflow + floor);
+                state.Coverage = $"COVERAGE {history.StartSeconds:0.0000} – {history.EndSeconds:0.0000} s\n{(state.Covered ? "Current epoch is covered" : "Outside coverage: generated fluid is hidden")}";
+                state.Metrics = $"{history.GridSize}² cells / {history.FrameCount} frames / {GeneratedFluidPlayer.PlaybackPayloadBytes / 1048576.0:0.0} MiB payload\n"
+                    + $"{(covered ? "At cursor" : "Run end")}: M {mass:G4} / sink {sink:G3}\n"
+                    + $"out {outflow:G3} / floor {floor:G3} / residual {residual:G3}\n"
+                    + $"{d.StepCount} steps / max CFL {d.MaxCourantNumber:0.000}";
+            }
+            return state;
+        }
 
         public void ReturnToLauncher()
         {
             Ready = false;
+            if (GeneratedFluidPlayer != null) GeneratedFluidPlayer.Release(); GeneratedFluidPlayer = null;
             if (sceneRoot != null) sceneRoot.SetActive(false);
             if (hud != null) hud.SetActive(false);
             if (SceneTarget != null) { if (View != null) View.targetTexture = null; SceneTarget.Release(); Destroy(SceneTarget); }

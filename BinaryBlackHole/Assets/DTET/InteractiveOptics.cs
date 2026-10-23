@@ -14,6 +14,7 @@ namespace DTET.VisualPrototype
         private Camera view;
         private InteractiveBinaryScenario model;
         private InteractiveBinarySnapshot snapshot;
+        private GeneratedFluidPlayer generatedFluid;
         private bool active, gasVisible = true;
         private float lensGain, waveGain;
         private double sampledTime = double.NaN;
@@ -40,11 +41,13 @@ namespace DTET.VisualPrototype
             + InteractiveOpticsReference.WaveSamples * 16;
 
         public RenderTexture Apply(RenderTexture input, Camera camera, InteractiveBinaryScenario scenario,
-            InteractiveBinarySnapshot state, bool enabled, float requestedLensGain, float requestedWaveGain, bool gasIsVisible = true)
+            InteractiveBinarySnapshot state, bool enabled, float requestedLensGain, float requestedWaveGain, bool gasIsVisible = true,
+            GeneratedFluidPlayer generatedField = null)
         {
             if (input == null || camera == null || scenario == null) throw new ArgumentNullException(nameof(input));
             if (!float.IsFinite(requestedLensGain) || !float.IsFinite(requestedWaveGain)) throw new ArgumentOutOfRangeException(nameof(requestedLensGain));
             source = input; view = camera; model = scenario; snapshot = state; gasVisible = gasIsVisible;
+            generatedFluid = generatedField;
             ScenarioGeneration = state.Generation; SnapshotTime = state.ElapsedSeconds;
             ContextVersion = state.ContextVersion;
             lensGain = Mathf.Clamp(requestedLensGain, 0, 2); waveGain = Mathf.Clamp(requestedWaveGain, 0, 2);
@@ -96,6 +99,13 @@ namespace DTET.VisualPrototype
         {
             ReducedBinaryFlowBinding.Bind(material, snapshot.GasState);
             material.SetVector("_FlowBounds", new Vector4((float)model.HalfExtentXZ, (float)model.HalfExtentY, 0, 0));
+            material.SetFloat("_GeneratedGas", generatedFluid == null ? 0 : 1);
+            if (generatedFluid != null)
+            {
+                generatedFluid.BindTo(material);
+                if (generatedFluid.History != null)
+                    material.SetVector("_FlowBounds", new Vector4((float)generatedFluid.History.HalfExtentRg, 16, 0, 0));
+            }
             material.SetVector("_HorizonA", Horizon(snapshot.BodyA));
             material.SetVector("_HorizonB", Horizon(snapshot.BodyB));
             material.SetVector("_HorizonR", Horizon(snapshot.Remnant));
@@ -193,7 +203,7 @@ namespace DTET.VisualPrototype
         private static ulong Mix(ulong h, float v) => unchecked((h ^ (uint)BitConverter.SingleToInt32Bits(v)) * 1099511628211UL);
         public void Release()
         {
-            active = false; source = null; view = null; model = null;
+            active = false; source = null; view = null; model = null; generatedFluid = null;
             if (target != null) { target.Release(); Destroy(target); } target = null;
             if (waveTexture != null) Destroy(waveTexture); waveTexture = null;
             if (material != null) Destroy(material); material = null;

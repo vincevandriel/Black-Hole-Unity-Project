@@ -62,6 +62,7 @@ namespace DTET.VisualPrototype.Editor
                 "Assets/Resources/DTET/ExhibitSky.shader",
                 "Assets/Resources/DTET/ExhibitDisplay.shader",
                 "Assets/Resources/DTET/InteractiveOptics.shader",
+                "Assets/Resources/DTET/GeneratedFluidVolume.shader",
                 "Assets/Resources/DTET/SolidSurface.shader",
                 "Assets/Resources/DTET/WristSurface.shader"
             };
