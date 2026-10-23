@@ -39,7 +39,7 @@ Shader "DTET/ExhibitSky"
                 o.visible = -directionVS.z - 0.00001;
                 float4 center = mul(UNITY_MATRIX_P, float4(directionVS, 0));
                 float heightScale = _RenderSize.y / 900.0;
-                o.sigma = max(.65, (.65 + .55 * pow(i.color.a, .25)) * heightScale);
+                o.sigma = max(.65, (.65 + .55 * sqrt(sqrt(max(i.color.a, 0)))) * heightScale);
                 o.localPixels = i.corner * (3 * o.sigma + .5);
                 // All four corners have equal W, so the fragment coordinate is linear in pixels.
                 o.position = float4(center.xy / max(.00001, center.w) + 2 * o.localPixels * _RenderSize.zw, 0, 1);
