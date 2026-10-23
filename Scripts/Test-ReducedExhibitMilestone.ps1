@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory=$true)][string]$OutputDirectory,
     [ValidateRange(2,15)][double]$BenchmarkSeconds = 3,
-    [ValidateRange(120,1200)][int]$TimeoutSeconds = 480
+    [ValidateRange(120,1200)][int]$TimeoutSeconds = 480,
+    [switch]$PerformanceOnly
 )
 $ErrorActionPreference = 'Stop'
 $dtetRepo = Split-Path -Parent $PSScriptRoot
@@ -11,7 +12,7 @@ New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $dtetOutput = (Resolve-Path -LiteralPath $OutputDirectory).Path
 $dtetLog = Join-Path $dtetOutput 'player.log'
 $dtetReceiptPath = Join-Path $dtetOutput 'reduced-exhibit-integration.json'
-$dtetEnvironmentNames = @('DTET_REDUCED_QA_PATH','DTET_REDUCED_QA_BENCHMARK_SECONDS','DTET_FIELD_QA_PATH','DTET_NUMERICAL_QA_PATH','DTET_PHYSICS_QA_PATH','DTET_CAPTURE_PATH','DTET_CAPTURE_VARIANT','DTET_VIDEO_PATH','DTET_FFMPEG_PATH')
+$dtetEnvironmentNames = @('DTET_REDUCED_QA_PATH','DTET_REDUCED_QA_BENCHMARK_SECONDS','DTET_REDUCED_PERFORMANCE_ONLY','DTET_FIELD_QA_PATH','DTET_NUMERICAL_QA_PATH','DTET_PHYSICS_QA_PATH','DTET_CAPTURE_PATH','DTET_CAPTURE_VARIANT','DTET_VIDEO_PATH','DTET_FFMPEG_PATH')
 $dtetPreviousEnvironment = @{}
 foreach ($dtetName in $dtetEnvironmentNames) { $dtetPreviousEnvironment[$dtetName] = [Environment]::GetEnvironmentVariable($dtetName, 'Process') }
 $dtetStarted = [DateTime]::UtcNow
@@ -19,6 +20,7 @@ try {
     foreach ($dtetName in $dtetEnvironmentNames) { [Environment]::SetEnvironmentVariable($dtetName, $null, 'Process') }
     [Environment]::SetEnvironmentVariable('DTET_REDUCED_QA_PATH', $dtetOutput, 'Process')
     [Environment]::SetEnvironmentVariable('DTET_REDUCED_QA_BENCHMARK_SECONDS', $BenchmarkSeconds.ToString([Globalization.CultureInfo]::InvariantCulture), 'Process')
+    if ($PerformanceOnly) { [Environment]::SetEnvironmentVariable('DTET_REDUCED_PERFORMANCE_ONLY', '1', 'Process') }
     $dtetProcess = Start-Process -FilePath $dtetPlayer -ArgumentList @('--reduced-exhibit','-screen-width','1600','-screen-height','900','-screen-fullscreen','0','-logFile',('"'+$dtetLog+'"')) -WindowStyle Hidden -PassThru
 } finally {
     foreach ($dtetName in $dtetEnvironmentNames) { [Environment]::SetEnvironmentVariable($dtetName, $dtetPreviousEnvironment[$dtetName], 'Process') }
@@ -46,9 +48,9 @@ while (!$dtetProcess.WaitForExit(250)) {
 }
 [ordered]@{
     startedUtc=$dtetStarted.ToString('o'); finishedUtc=[DateTime]::UtcNow.ToString('o');
-    processId=$dtetProcess.Id; player=$dtetPlayer; timedOut=$dtetTimedOut;
+    processId=$dtetProcess.Id; player=$dtetPlayer; timedOut=$dtetTimedOut; performanceOnly=[bool]$PerformanceOnly;
     samplingIntervalMilliseconds=250; peakSampledWorkingSetBytes=$dtetPeakWorking; peakSampledPrivateBytes=$dtetPeakPrivate;
-    scope='Windows process memory sampled every 250 ms across launcher, all profiles, fallback, seek/capture/performance and unload. Includes validation-only full-image captures and managed/native/driver-associated process allocations, but is not a dedicated GPU VRAM measurement; shorter transient peaks can be missed. Hidden development player with explicit completed off-screen rendering and a one-pixel GPU completion readback per timed frame; not native presentation FPS, laptop or headset certification.';
+    scope=('Windows process memory sampled every 250 ms. ' + $(if ($PerformanceOnly) { 'Separate steady High-requested exhibit process; no profile cycling, PNG captures or full-image readback fixtures. ' } else { 'Full integration run across launcher, all profiles, fallback, seek/capture/performance and unload, including validation-only full-image captures. ' }) + 'Includes managed/native/driver-associated process allocations, but is not a dedicated GPU VRAM measurement; shorter transient peaks can be missed. Hidden development player with explicit completed off-screen rendering and a one-pixel GPU completion readback per timed frame; not native presentation FPS, laptop or headset certification.');
     samples=$dtetMemory.ToArray()
 } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $dtetOutput 'process-memory.json') -Encoding utf8
 if ($dtetTimedOut) { throw "Owned reduced-exhibit QA process $($dtetProcess.Id) timed out. Inspect $dtetLog." }

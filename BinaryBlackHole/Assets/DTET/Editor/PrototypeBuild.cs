@@ -10,6 +10,24 @@ namespace DTET.VisualPrototype.Editor
     {
         private const string Scene = "Assets/DTET/Scenes/BinaryBlackHole_VisualStaging.unity";
 
+        [MenuItem("DT-ET/Startup Exhibit/M4 Reduced Binary")]
+        private static void SelectReducedExhibit() => SessionState.SetInt("DTET.StartupExhibit", 2);
+        [MenuItem("DT-ET/Startup Exhibit/M3 Reference Lab")]
+        private static void SelectReferenceLab() => SessionState.SetInt("DTET.StartupExhibit", 1);
+        [MenuItem("DT-ET/Startup Exhibit/M1 and M2 Lessons")]
+        private static void SelectLessons() => SessionState.SetInt("DTET.StartupExhibit", 0);
+        [MenuItem("DT-ET/Startup Exhibit/M4 Reduced Binary", true)]
+        private static bool ValidateReducedExhibit() => ValidateStartup("M4 Reduced Binary", 2);
+        [MenuItem("DT-ET/Startup Exhibit/M3 Reference Lab", true)]
+        private static bool ValidateReferenceLab() => ValidateStartup("M3 Reference Lab", 1);
+        [MenuItem("DT-ET/Startup Exhibit/M1 and M2 Lessons", true)]
+        private static bool ValidateLessons() => ValidateStartup("M1 and M2 Lessons", 0);
+        private static bool ValidateStartup(string item, int value)
+        {
+            Menu.SetChecked("DT-ET/Startup Exhibit/" + item, SessionState.GetInt("DTET.StartupExhibit", 0) == value);
+            return !EditorApplication.isPlayingOrWillChangePlaymode;
+        }
+
         [MenuItem("DT-ET/Validate Assets and Build QA Player")]
         public static void BuildQaPlayer()
         {

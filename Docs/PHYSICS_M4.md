@@ -2,6 +2,8 @@
 
 Launch a player with `--reduced-exhibit`. The entry screen offers **Auto, Laptop, Balanced and High** before loading the numerical history or allocating scene targets. The packaged launcher supplies the argument. The original M1/M2 exhibit and `--reference-lab` M3 control remain separate entry points.
 
+In Unity Editor, open the existing `BinaryBlackHole_VisualStaging` scene, choose **DT-ET > Startup Exhibit > M4 Reduced Binary**, then press Play. That menu also selects the M3 lab or original lessons. Its selection lasts for the current Editor session; standalone players use their launch arguments.
+
 The exhibit combines the retained SXS:BBH:0305 representative numerical binary, a prescribed educational gas field and a synthetic distant sky. It supports the complete retained inspiral/common-horizon/remnant interval, direct timeline seeking, pause, reverse and free exterior camera movement. The shared clock is `NumericalEventSession`: rendering quality does not change the event, source parameters, transition epoch or analytic gas field.
 
 ## Controls

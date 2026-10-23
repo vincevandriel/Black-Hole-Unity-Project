@@ -32,7 +32,7 @@ namespace DTET.VisualPrototype
 
         [Serializable] private sealed class Receipt
         {
-            public bool success, frameTimingEnabled;
+            public bool success, frameTimingEnabled, performanceOnly;
             public string unityVersion, graphicsDevice, graphicsApi, processor, operatingSystem, scope, timingMethod;
             public int systemMemoryMb, graphicsMemoryMb, screenWidth, screenHeight;
             public string[] checks;
@@ -124,20 +124,38 @@ namespace DTET.VisualPrototype
             exhibit = FindFirstObjectByType<ReducedBinaryExhibit>();
             if (exhibit == null) { Check(false, "reduced exhibit is installed by its launch option"); Application.Quit(1); yield break; }
             exhibit.EmulatedInputEnabled = false;
+            bool performanceOnly = Environment.GetEnvironmentVariable("DTET_REDUCED_PERFORMANCE_ONLY") == "1";
             Check(!exhibit.Ready && exhibit.SceneTarget == null && exhibit.RenderAllocationBytes == 0,
                 "launcher is visible before scene render allocations");
             Check(FindFirstObjectByType<VisualPrototypeBootstrap>() == null && FindFirstObjectByType<ReferenceFlowLab>() == null,
                 "reduced exhibit is isolated from the legacy and optical reference bootstraps");
-            Capture("reduced-launcher.png", true);
-            foreach (var profile in new[] { ExhibitQualityProfile.Laptop, ExhibitQualityProfile.Balanced, ExhibitQualityProfile.High })
-                yield return ValidateProfile(profile, false);
-            yield return ValidateProfile(ExhibitQualityProfile.High, true);
+            if (performanceOnly)
+            {
+                exhibit.Launch(ExhibitQualityProfile.High);
+                yield return null; yield return new WaitForEndOfFrame();
+                Check(exhibit.Ready && exhibit.SceneTarget != null, "performance-only run admits the requested High profile through capability checks");
+                if (exhibit.Ready)
+                {
+                    string label = "High requested / " + exhibit.Profile.EffectiveProfile + " admitted / steady-only";
+                    double chosen = exhibit.Session.Model.CommonHorizonElapsedSeconds * .42;
+                    foreach (string scenario in new[] { "overview-paused", "edge-paused", "merger-playback", "camera-motion", "repeated-seek" })
+                        yield return MeasurePerformance(label, scenario, chosen);
+                    exhibit.ReturnToLauncher(); yield return null; yield return null;
+                }
+            }
+            else
+            {
+                Capture("reduced-launcher.png", true);
+                foreach (var profile in new[] { ExhibitQualityProfile.Laptop, ExhibitQualityProfile.Balanced, ExhibitQualityProfile.High })
+                    yield return ValidateProfile(profile, false);
+                yield return ValidateProfile(ExhibitQualityProfile.High, true);
+            }
             Check(!exhibit.Ready && exhibit.SceneTarget == null && exhibit.RenderAllocationBytes == 0,
                 "all validation paths return to the launcher without retained scene targets");
             QualitySettings.vSyncCount = previousVsync;
             Application.targetFrameRate = previousTargetRate;
             var receipt = new Receipt {
-                success = passed, unityVersion = Application.unityVersion, graphicsDevice = SystemInfo.graphicsDeviceName,
+                success = passed, performanceOnly = performanceOnly, unityVersion = Application.unityVersion, graphicsDevice = SystemInfo.graphicsDeviceName,
                 graphicsApi = SystemInfo.graphicsDeviceType.ToString(), processor = SystemInfo.processorType,
                 operatingSystem = SystemInfo.operatingSystem, systemMemoryMb = SystemInfo.systemMemorySize,
                 graphicsMemoryMb = SystemInfo.graphicsMemorySize, screenWidth = Screen.width, screenHeight = Screen.height,
@@ -145,7 +163,9 @@ namespace DTET.VisualPrototype
                 profiles = profiles.ToArray(), performance = performance.ToArray(), gpuField = gpuField.ToArray(),
                 rayConvergence = rayConvergence.ToArray(), gpuSky = gpuSky,
                 timingMethod = "Completed off-screen frames in a hidden development player: Stopwatch wall intervals include a player-loop yield (source update), requested camera/seek work, explicit scene and full interface rendering, Canvas update and a one-pixel AsyncGPUReadback.WaitForCompletion fence. Targets and requests are allocated before the half-second rendered warmup. No PNG encoding, file I/O or full-image readback occurs inside timed windows. Per-frame one-pixel readback/fence overhead is included. FrameTimingManager CPU/GPU samples are separately retained when available; zero samples explicitly mean unavailable. This is conservative completed-frame throughput, not native presentation FPS or a standalone GPU benchmark. Earlier hidden-player loop-only timing is invalid as rendered-frame evidence.",
-                scope = "Launcher and profile admission, a shared recorded binary/radiation history with an explicitly prescribed gas field, deterministic seeking, pause/free inspection, common-horizon/remnant transition, bounded render allocations, richer synthetic sky, fallback and release of per-scene resources. Process working set/private memory are separately sampled by the runner. No fluid conservation, scientific GRMHD, binary observer optics, measured gas reconstruction, laptop/headset performance or complete GPU VRAM claim."
+                scope = performanceOnly
+                    ? "Separate steady-exhibit measurement process requesting High with normal capability admission, then five completed off-screen rendering scenarios and return to launcher. Excludes PNG captures, full-image float readback fixtures, convergence sweeps and profile cycling; each timed frame still includes its declared one-pixel completion readback. This run measures workload and process memory only, not the full integration gate, native presentation FPS, laptop/headset performance or complete GPU VRAM."
+                    : "Launcher and profile admission, a shared recorded binary/radiation history with an explicitly prescribed gas field, deterministic seeking, pause/free inspection, common-horizon/remnant transition, bounded render allocations, richer synthetic sky, fallback and release of per-scene resources. Process working set/private memory are separately sampled by the runner. No fluid conservation, scientific GRMHD, binary observer optics, measured gas reconstruction, laptop/headset performance or complete GPU VRAM claim."
             };
             File.WriteAllText(Path.Combine(output, "reduced-exhibit-integration.json"), JsonUtility.ToJson(receipt, true));
             Debug.Log(passed ? "DTET_REDUCED_EXHIBIT_INTEGRATION_PASS" : "DTET_REDUCED_EXHIBIT_INTEGRATION_FAILED");
@@ -656,8 +676,8 @@ namespace DTET.VisualPrototype
             Material material = exhibit.GasMaterial;
             float previousSteps = material.GetFloat("_Steps");
             var model = new ReducedBinaryFlowModel(exhibit.Session.Model);
-            double threshold = exhibit.Profile.EffectiveProfile == ExhibitQualityProfile.Laptop ? .20
-                : exhibit.Profile.EffectiveProfile == ExhibitQualityProfile.Balanced ? .10 : .05;
+            double threshold = exhibit.Profile.EffectiveProfile == ExhibitQualityProfile.Laptop ? .02
+                : exhibit.Profile.EffectiveProfile == ExhibitQualityProfile.Balanced ? .01 : .005;
             try
             {
                 Check(!exhibit.SceneTarget.sRGB && (exhibit.SceneTarget.format == RenderTextureFormat.ARGBHalf
@@ -700,7 +720,7 @@ namespace DTET.VisualPrototype
                         relativeL1RadianceError = relativeL1, integratedFluxRelativeError = fluxError, threshold = threshold });
                     Check(finite && referenceSum > 1e-9 && relativeL1 <= threshold && fluxError <= threshold,
                         label + " " + names[i] + " radiance agrees with 256-ray-step numerical reference within "
-                        + (threshold * 100).ToString("0", CultureInfo.InvariantCulture) + " percent relative L1 and integrated flux");
+                        + (threshold * 100).ToString("0.#", CultureInfo.InvariantCulture) + " percent relative L1 and integrated flux");
                 }
             }
             finally
