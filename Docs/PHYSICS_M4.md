@@ -47,6 +47,8 @@ Each scene owns its target, materials, sample mesh, sky mesh and graph texture. 
 
 ## Validation and remaining gates
 
+The requested follow-on [M4.1 adjustable experiments, illustrative light warping and holographic wrist display](INTERACTIVE_WARP_AND_WRIST_PLAN.md) is recorded separately. Those features are planned and are not included in the validated M4 player described here.
+
 See the [M4 validation receipt](PHYSICS_M4_VALIDATION.md) for the tested revision, results, package hash and remaining device gates.
 
 Run the portable suite, build the development QA player, then run:
