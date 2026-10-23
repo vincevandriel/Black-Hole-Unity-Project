@@ -22,6 +22,8 @@ namespace DTET.VisualPrototype
         private int uploadedLower = -1, uploadedUpper = -1;
         private Text status, detail, modeTitle, opticsNote;
         private Slider timeline;
+        private Slider opacitySlider;
+        private Button playButton, reverseButton, resetButton, rateButton, tracersButton, countButton;
         private Font font;
         private Texture2D opticalTexture;
         private Color32[] opticalPixels;
@@ -129,7 +131,7 @@ namespace DTET.VisualPrototype
         public void SetOpacity(float value)
         {
             if(!float.IsFinite(value)||value<0||value>8) throw new ArgumentOutOfRangeException(nameof(value));
-            OpacityScale=value;volumeMaterial.SetFloat("_OpacityScale",value);RefreshLabels();
+            OpacityScale=value;volumeMaterial.SetFloat("_OpacityScale",value);opacitySlider?.SetValueWithoutNotify(value);RefreshLabels();
         }
         public void SetTracers(bool visible) { TracersVisible=visible;tracerRenderer.enabled=visible&&!OpticalMode;RefreshLabels(); }
         public void SetTracerCount(int count)
@@ -171,6 +173,9 @@ namespace DTET.VisualPrototype
         public void SetOpticalMode(bool enabled)
         {
             Playing=false;OpticalMode=enabled;volumeRenderer.enabled=!enabled;tracerRenderer.enabled=!enabled&&TracersVisible;
+            timeline.interactable=opacitySlider.interactable=!enabled;
+            playButton.interactable=reverseButton.interactable=resetButton.interactable=rateButton.interactable=!enabled;
+            tracersButton.interactable=countButton.interactable=!enabled;
             opticalImage.gameObject.SetActive(enabled);if(enabled) InvalidateOptical();RefreshLabels();
         }
         private void InvalidateOptical()
@@ -228,10 +233,13 @@ namespace DTET.VisualPrototype
             var k=Keyboard.current;var m=Mouse.current;
             if(k!=null)
             {
-                if(k.spaceKey.wasPressedThisFrame) SetPlaying(!Playing);
-                if(k.rKey.wasPressedThisFrame) Seek(0);
-                if(k.commaKey.wasPressedThisFrame) SetRate(-PlaybackRate);
-                if(k.tKey.wasPressedThisFrame) SetTracers(!TracersVisible);
+                if(!OpticalMode)
+                {
+                    if(k.spaceKey.wasPressedThisFrame) SetPlaying(!Playing);
+                    if(k.rKey.wasPressedThisFrame) Seek(0);
+                    if(k.commaKey.wasPressedThisFrame) SetRate(-PlaybackRate);
+                    if(k.tKey.wasPressedThisFrame) SetTracers(!TracersVisible);
+                }
                 if(k.oKey.wasPressedThisFrame) SetOpticalMode(!OpticalMode);
                 if(k.digit1Key.wasPressedThisFrame) SetViewPreset(0);
                 if(k.digit2Key.wasPressedThisFrame) SetViewPreset(1);
@@ -265,10 +273,10 @@ namespace DTET.VisualPrototype
             Label(root.transform,"ISOLATED REFERENCE",15,38,143,250,26,accent);
             Button(root.transform,"FLOW INSPECTION",38,182,242,36,()=>SetOpticalMode(false));
             Button(root.transform,"SCHWARZSCHILD / O",38,226,242,36,()=>SetOpticalMode(true));
-            Button(root.transform,"TRACERS / T",38,280,242,36,()=>SetTracers(!TracersVisible));
-            Button(root.transform,"256 / 1024 MARKERS",38,324,242,36,()=>SetTracerCount(TracerCount==256?1024:256));
+            tracersButton=Button(root.transform,"TRACERS / T",38,280,242,36,()=>SetTracers(!TracersVisible));
+            countButton=Button(root.transform,"256 / 1024 MARKERS",38,324,242,36,()=>SetTracerCount(TracerCount==256?1024:256));
             Label(root.transform,"GRAY OPACITY / ASSUMED",13,38,375,242,25,muted);
-            MakeSlider(root.transform,38,408,242,0,4,1,x=>SetOpacity(x));
+            opacitySlider=MakeSlider(root.transform,38,408,242,0,4,1,x=>SetOpacity(x));
             Button(root.transform,"ABOVE / 2",38,458,116,36,()=>SetViewPreset(1));
             Button(root.transform,"EDGE / 3",162,458,118,36,()=>SetViewPreset(2));
             Button(root.transform,"OVERVIEW / 1",38,502,116,36,()=>SetViewPreset(0));
@@ -276,11 +284,11 @@ namespace DTET.VisualPrototype
             Button(root.transform,"EXIT LAB",38,566,242,36,()=>Application.Quit());
             Panel(root.transform,0,710,1600,190,new Color(.025f,.045f,.075f,.95f));
             status=Label(root.transform,"",18,32,723,1490,30,Color.white);
-            Button(root.transform,"PLAY / PAUSE",32,767,145,34,()=>SetPlaying(!Playing));
-            Button(root.transform,"REVERSE",188,767,110,34,()=>SetRate(-PlaybackRate));
-            Button(root.transform,"RESET",310,767,90,34,()=>Seek(0));
+            playButton=Button(root.transform,"PLAY / PAUSE",32,767,145,34,()=>SetPlaying(!Playing));
+            reverseButton=Button(root.transform,"REVERSE",188,767,110,34,()=>SetRate(-PlaybackRate));
+            resetButton=Button(root.transform,"RESET",310,767,90,34,()=>Seek(0));
             timeline=MakeSlider(root.transform,430,775,900,0,1024,0,x=>Seek(x));
-            Button(root.transform,"RATE",1360,767,170,34,()=>SetRate(Math.Sign(PlaybackRate)*(Math.Abs(PlaybackRate)==64?16:Math.Abs(PlaybackRate)==16?256:64)));
+            rateButton=Button(root.transform,"RATE",1360,767,170,34,()=>SetRate(Math.Sign(PlaybackRate)*(Math.Abs(PlaybackRate)==64?16:Math.Abs(PlaybackRate)==16?256:64)));
             detail=Label(root.transform,"",14,32,815,1510,38,muted);
             opticsNote=Label(root.transform,"",14,32,858,1510,30,accent);
         }
@@ -304,16 +312,18 @@ namespace DTET.VisualPrototype
             var go=new GameObject("Label",typeof(RectTransform),typeof(CanvasRenderer),typeof(Text));go.transform.SetParent(parent,false);Place(go,x,y,w,h);
             var t=go.GetComponent<Text>();t.font=font;t.fontSize=size;t.color=color;t.text=text;t.raycastTarget=false;t.verticalOverflow=VerticalWrapMode.Overflow;return t;
         }
-        private void Button(Transform parent,string text,float x,float y,float w,float h,Action action)
+        private Button Button(Transform parent,string text,float x,float y,float w,float h,Action action)
         {
             var go=Panel(parent,x,y,w,h,new Color(.08f,.14f,.21f));var b=go.AddComponent<Button>();b.targetGraphic=go.GetComponent<Image>();
-            var t=Label(go.transform,text,13,0,0,w,h,accent);t.alignment=TextAnchor.MiddleCenter;b.onClick.AddListener(()=>action());
+            var t=Label(go.transform,text,13,0,0,w,h,accent);t.alignment=TextAnchor.MiddleCenter;b.onClick.AddListener(()=>action());return b;
         }
         private Slider MakeSlider(Transform parent,float x,float y,float w,float min,float max,float value,Action<float> action)
         {
             var go=Panel(parent,x,y,w,15,new Color(.16f,.22f,.3f));var s=go.AddComponent<Slider>();
             var fill=Panel(go.transform,0,0,w,15,accent).GetComponent<RectTransform>();s.fillRect=fill;
             var handle=Panel(go.transform,0,-3,13,21,Color.white).GetComponent<RectTransform>();s.handleRect=handle;s.targetGraphic=handle.GetComponent<Image>();
+            fill.sizeDelta=Vector2.zero;fill.anchoredPosition=Vector2.zero;fill.pivot=new Vector2(.5f,.5f);
+            handle.sizeDelta=new Vector2(13,6);handle.anchoredPosition=Vector2.zero;handle.pivot=new Vector2(.5f,.5f);
             s.minValue=min;s.maxValue=max;s.SetValueWithoutNotify(value);s.onValueChanged.AddListener(v=>action(v));return s;
         }
         private static void Place(GameObject go,float x,float y,float w,float h)

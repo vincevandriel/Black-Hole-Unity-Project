@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
@@ -91,13 +92,27 @@ namespace DTET.VisualPrototype
             foreach (var canvas in lab.GetComponentsInChildren<Canvas>(true))
                 cameraHud |= canvas.isActiveAndEnabled && canvas.renderMode == RenderMode.ScreenSpaceCamera && canvas.worldCamera == lab.View;
             Check(cameraHud, "laboratory controls are rendered through the reference camera");
-            yield return new WaitForEndOfFrame();
-            CaptureScreen("field-lab-controls.png");
-            Check(images[images.Count - 1].centralMean > .001,
-                "the integrated reference camera presents a nonblack laboratory view");
             lab.SetOpticalMode(false);
             lab.SetPlaying(false);
             lab.SetRate(64);
+            Slider timeSlider = FindSlider(1024), opacitySlider = FindSlider(4);
+            lab.SetPlaying(true);
+            timeSlider.value = 128;
+            opacitySlider.value = .5f;
+            Canvas.ForceUpdateCanvases();
+            yield return new WaitForEndOfFrame();
+            Check(lab.TimeTg == 128 && !lab.Playing,
+                "timeline slider selects reference time 128 and pauses playback");
+            Check(SliderFillMatchesTrack(timeSlider),
+                "timeline fill width matches its normalized value within one layout pixel");
+            Check(lab.OpacityScale == .5f,
+                "opacity slider updates the transfer opacity multiplier");
+            Check(SliderFillMatchesTrack(opacitySlider),
+                "opacity fill width matches its normalized value within one layout pixel");
+            CaptureScreen("field-lab-controls.png");
+            Check(images[images.Count - 1].centralMean > .001,
+                "the integrated reference camera presents a nonblack laboratory view");
+            opacitySlider.value = 1;
             lab.Seek(256);
             yield return new WaitForEndOfFrame();
             Check(lab.TimeTg == 256 && !lab.Playing && lab.PlaybackRate == 64,
@@ -224,6 +239,7 @@ namespace DTET.VisualPrototype
             lab.SetTracers(false);
             lab.SetOpticalMode(true);
             Check(lab.OpticalMode, "isolated-hole observer reference is independently selectable");
+            Check(SlidersInteractable(false), "steady observer reference disables time and volume-opacity sliders");
             yield return WaitForOptical("first observer reference");
             if (lab.OpticalReady)
             {
@@ -249,6 +265,7 @@ namespace DTET.VisualPrototype
             yield return new WaitForEndOfFrame();
             Check(!lab.OpticalMode && lab.FieldFingerprint == fieldAt256,
                 "leaving observer reference restores the same coordinate field state");
+            Check(SlidersInteractable(true), "returning to coordinate flow restores interactive sliders");
             ObserveCache();
             var receipt = new Receipt {
                 success = passed, unityVersion = Application.unityVersion,
@@ -269,6 +286,29 @@ namespace DTET.VisualPrototype
             float deadline = Time.realtimeSinceStartup + 30;
             while (!lab.OpticalReady && Time.realtimeSinceStartup < deadline) yield return null;
             Check(lab.OpticalReady, label + " completes within thirty seconds");
+        }
+
+        private Slider FindSlider(float maximum)
+        {
+            foreach (var slider in lab.GetComponentsInChildren<Slider>(true))
+                if (slider.minValue == 0 && slider.maxValue == maximum) return slider;
+            throw new InvalidOperationException("Missing reference slider with maximum " + maximum);
+        }
+
+        private bool SlidersInteractable(bool expected)
+        {
+            Slider[] sliders = lab.GetComponentsInChildren<Slider>(true);
+            if (sliders.Length != 2) return false;
+            foreach (var slider in sliders) if (slider.interactable != expected) return false;
+            return true;
+        }
+
+        private static bool SliderFillMatchesTrack(Slider slider)
+        {
+            Canvas.ForceUpdateCanvases();
+            if (slider.fillRect == null || !(slider.fillRect.parent is RectTransform track)) return false;
+            float expected = track.rect.width * slider.normalizedValue;
+            return track.rect.width > 0 && Math.Abs(slider.fillRect.rect.width - expected) <= 1;
         }
 
         private void CheckGpuConstantSlab()
