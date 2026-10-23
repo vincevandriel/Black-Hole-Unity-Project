@@ -61,7 +61,9 @@ namespace DTET.VisualPrototype
         {
             if (!active || source == null || target == null || material == null || view == null) return source;
             BindCamera();
-            Graphics.Blit(source, target, material);
+            var previousTarget = RenderTexture.active;
+            try { Graphics.Blit(source, target, material); }
+            finally { RenderTexture.active = previousTarget; }
             return target;
         }
 

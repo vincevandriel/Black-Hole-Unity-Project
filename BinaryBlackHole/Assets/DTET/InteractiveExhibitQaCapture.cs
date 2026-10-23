@@ -7,6 +7,8 @@ using System.IO;
 using BlackHole.Staging.Simulation;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace DTET.VisualPrototype
@@ -186,6 +188,36 @@ namespace DTET.VisualPrototype
             exhibit.Wrist.SetReducedMotion(false);
             if (profile == ExhibitQualityProfile.Balanced && !fallback)
             {
+                int callbacks = exhibit.AutomaticOpticalFrames;
+                var automaticRequest = new RenderPipeline.StandardRequest { destination = exhibit.SceneTarget };
+                RenderPipeline.SubmitRenderRequest(exhibit.View, automaticRequest);
+                Check(exhibit.AutomaticOpticalFrames == callbacks + 1 && ReferenceEquals(exhibit.PresentedTexture, exhibit.Optics.Output),
+                    "normal end-camera callback composes the astronomical target");
+                int uploads = exhibit.Optics.WaveUploadCount;
+                exhibit.RenderFrame(); exhibit.RenderFrame();
+                Check(exhibit.Optics.WaveUploadCount == uploads, "paused rendering reuses the waveform texture");
+                exhibit.SetWristPlaying(true); yield return null;
+                Check(exhibit.Wrist.PresentedSourceTime == exhibit.Snapshot.ElapsedSeconds,
+                    "normal update order presents the same live scene and wrist epoch");
+                exhibit.SetWristPlaying(false); exhibit.SeekWrist(.35); exhibit.RenderFrame();
+                ValidatePointerTargets();
+                Check(exhibit.Optics.ScenarioGeneration == exhibit.Snapshot.Generation && exhibit.Optics.SnapshotTime == exhibit.Snapshot.ElapsedSeconds,
+                    "optics shares the active scenario generation and event time");
+                exhibit.Wrist.SetPendingExperiment(8, 80, 50); exhibit.Wrist.ApplyExperiment(); exhibit.Wrist.RefreshNow();
+                Check(exhibit.Wrist.HasDenseCycles, "long high-cycle experiment uses a labelled envelope band");
+                bool envelopeBounds = true;
+                for (int i = 0; i < 96; i++)
+                {
+                    double fraction = i / 96.0;
+                    double? signal = exhibit.SampleWristGraph(fraction, false), envelope = exhibit.SampleWristEnvelope(fraction);
+                    envelopeBounds &= !signal.HasValue || (envelope.HasValue && Math.Abs(signal.Value) <= envelope.Value + 1e-20);
+                }
+                Check(envelopeBounds, "phase-independent graph envelope bounds the instantaneous strain");
+                exhibit.Wrist.SetPendingExperiment(80, 80, 25); exhibit.Wrist.ApplyExperiment();
+                double nearCutoff = exhibit.Session.Model.CutoffTimeSeconds * .999999 / exhibit.Snapshot.DurationSeconds;
+                Check(exhibit.SampleWristEnvelope(nearCutoff) < exhibit.CaptureWristState().WaveformAxisMaximum,
+                    "fixed strain axis contains the largest admitted mass envelope");
+                exhibit.Wrist.SetPendingExperiment(35, 30, 30); exhibit.Wrist.ApplyExperiment(); exhibit.SeekWrist(.35); exhibit.RenderFrame();
                 ValidateGpuFixtures();
                 for (int i = 1; i < 5; i++) { exhibit.SetViewPreset(i); Capture("view-" + i + ".png"); }
                 exhibit.SetWristSamples(true); Capture("density-samples.png"); exhibit.SetWristSamples(false);
@@ -198,6 +230,10 @@ namespace DTET.VisualPrototype
             foreach (var scenario in new[] { "replay-paused", "experiment-playback", "camera-motion", "repeated-seek" }) yield return Measure(scenario);
             exhibit.ReturnToLauncher(); yield return null; yield return null;
             Check(exhibit.SceneTarget == null && exhibit.Wrist == null && exhibit.Optics == null, prefix + " returning releases owned resources");
+            bool noOwnedTargets = true;
+            foreach (var texture in Resources.FindObjectsOfTypeAll<RenderTexture>())
+                if (texture.name == "Bounded interactive scene" || texture.name == "Capped astronomical optics") noOwnedTargets = false;
+            Check(noOwnedTargets, prefix + " no owned astronomical render targets survive unload");
         }
 
         private IEnumerator Measure(string scenario)
@@ -209,6 +245,9 @@ namespace DTET.VisualPrototype
             var target = new RenderTexture(1600, 900, 24, RenderTextureFormat.ARGB32) { name = "QA completed interface target" }; target.Create();
             var pixel = new RenderTexture(1, 1, 0, RenderTextureFormat.ARGB32); pixel.Create();
             var previous = exhibit.CaptureCamera.targetTexture; exhibit.CaptureCamera.targetTexture = target;
+            var previousActive = RenderTexture.active;
+            bool sceneEnabled = exhibit.View.enabled, interfaceEnabled = exhibit.CaptureCamera.enabled;
+            exhibit.View.enabled = false; exhibit.CaptureCamera.enabled = false;
             var values = new List<double>(10000); int completed = 0, index = 0;
             var watch = Stopwatch.StartNew(); double warm = .5;
             while (watch.Elapsed.TotalSeconds < warm) { exhibit.RenderFrame(); Graphics.Blit(target, pixel); var read = AsyncGPUReadback.Request(pixel); read.WaitForCompletion(); yield return null; }
@@ -224,6 +263,8 @@ namespace DTET.VisualPrototype
                 double now = watch.Elapsed.TotalSeconds; values.Add((now - before) * 1000); before = now; index++;
             }
             exhibit.SetWristPlaying(false); exhibit.CaptureCamera.targetTexture = previous;
+            RenderTexture.active = previousActive;
+            exhibit.View.enabled = sceneEnabled; exhibit.CaptureCamera.enabled = interfaceEnabled;
             target.Release(); pixel.Release(); Destroy(target); Destroy(pixel);
             values.Sort(); double sum = 0; foreach (double value in values) sum += value;
             windows.Add(new Window { profile = exhibit.Profile.EffectiveProfile + (exhibit.Profile.GasEnabled ? "" : " compatibility"), scenario = scenario,
@@ -233,6 +274,42 @@ namespace DTET.VisualPrototype
         }
         private static double Quantile(List<double> v, double q)
         { double p = (v.Count - 1) * q; int lo = (int)p; return v[lo] + (v[Math.Min(v.Count - 1, lo + 1)] - v[lo]) * (p - lo); }
+
+        private void ValidatePointerTargets()
+        {
+            RectTransform panel = null;
+            foreach (var rect in exhibit.Wrist.GetComponentsInChildren<RectTransform>(true))
+                if (rect.name == "Projected instrument panel") panel = rect;
+            bool inside = panel != null;
+            if (panel != null)
+            {
+                var corners = new Vector3[4]; panel.GetWorldCorners(corners);
+                foreach (var corner in corners)
+                {
+                    Vector2 p = RectTransformUtility.WorldToScreenPoint(exhibit.CaptureCamera, corner);
+                    inside &= p.x >= -1 && p.x <= Screen.width + 1 && p.y >= -1 && p.y <= Screen.height + 1;
+                }
+            }
+            Check(inside, "all wrist panel corners are inside the viewport");
+            Button frequency = null;
+            foreach (var button in exhibit.Wrist.GetComponentsInChildren<Button>(true))
+                if (button.GetComponentInChildren<Text>().text == "FREQUENCY") frequency = button;
+            if (frequency == null) { Check(false, "frequency pointer target exists"); return; }
+            var rect = (RectTransform)frequency.transform;
+            Vector2 point = RectTransformUtility.WorldToScreenPoint(exhibit.CaptureCamera, rect.TransformPoint(rect.rect.center));
+            var pointer = new PointerEventData(EventSystem.current) { position = point, button = PointerEventData.InputButton.Left };
+            var hits = new List<RaycastResult>(); EventSystem.current.RaycastAll(pointer, hits);
+            bool hit = hits.Count > 0 && hits[0].gameObject.GetComponentInParent<Button>() == frequency;
+            Check(hit && exhibit.Wrist.IsScreenPointOverPanel(point), "screen-space raycast reaches the frequency button above the scene");
+            if (hit) ExecuteEvents.Execute(frequency.gameObject, pointer, ExecuteEvents.pointerClickHandler);
+            Check(exhibit.Wrist.FrequencyPlot, "pointer dispatch selects the frequency graph");
+            EventSystem.current.SetSelectedGameObject(frequency.gameObject);
+            Check(exhibit.Wrist.InputFocused, "selected wrist control captures keyboard focus");
+            exhibit.Wrist.SetRaised(false, true);
+            Check(!exhibit.Wrist.InputFocused, "lowering the wrist releases flight input immediately");
+            EventSystem.current.SetSelectedGameObject(null);
+            exhibit.Wrist.SetRaised(true, true); exhibit.Wrist.SetFrequencyPlot(false);
+        }
 
         private void ValidateGpuFixtures()
         {

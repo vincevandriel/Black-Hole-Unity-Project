@@ -44,6 +44,7 @@ namespace DTET.VisualPrototype
     /// Desktop suit projector composed after the astronomical target at full interface resolution.
     /// Its pose is an illustrated desktop emulation, not a tracked XR hand or physical observer.
     /// </summary>
+    [DefaultExecutionOrder(200)]
     public sealed class InteractiveWristDisplay : MonoBehaviour
     {
         private static readonly Color Cyan = new Color(.35f, .91f, 1f);
@@ -93,11 +94,14 @@ namespace DTET.VisualPrototype
         {
             get
             {
-                if (!Raised || reveal < .1f || panel == null || Mouse.current == null) return false;
-                return RectTransformUtility.RectangleContainsScreenPoint(panel,
-                    Mouse.current.position.ReadValue(), interfaceCamera);
+                if (!Raised || reveal < .1f || panel == null) return false;
+                if (Mouse.current != null && IsScreenPointOverPanel(Mouse.current.position.ReadValue())) return true;
+                var selected = EventSystem.current == null ? null : EventSystem.current.currentSelectedGameObject;
+                return selected != null && selected.activeInHierarchy && selected.transform.IsChildOf(panel);
             }
         }
+        public bool IsScreenPointOverPanel(Vector2 screenPoint) => Raised && reveal >= .1f && panel != null
+            && RectTransformUtility.RectangleContainsScreenPoint(panel, screenPoint, interfaceCamera);
 
         public void Initialize(Camera presentationCamera, IInteractiveExhibitPresenter source)
         {
@@ -109,10 +113,17 @@ namespace DTET.VisualPrototype
             var root = new GameObject("Suit hologram / full resolution presentation", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             root.transform.SetParent(transform, false);
             root.layer = 5;
+            // This canvas is nested under M4.1's full-screen HUD. A newly created RectTransform
+            // otherwise keeps Unity's centered 100x100 default, shifting every instrument offscreen.
+            var canvasRect = root.GetComponent<RectTransform>();
+            canvasRect.anchorMin = Vector2.zero; canvasRect.anchorMax = Vector2.one;
+            canvasRect.offsetMin = canvasRect.offsetMax = Vector2.zero;
+            canvasRect.localScale = Vector3.one; canvasRect.localRotation = Quaternion.identity;
             canvas = root.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceCamera;
             canvas.worldCamera = interfaceCamera;
             canvas.planeDistance = .08f;
+            canvas.overrideSorting = true;
             canvas.sortingOrder = 40;
             var scaler = root.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -281,8 +292,8 @@ namespace DTET.VisualPrototype
         {
             if (panel == null) return;
             float t = reveal * reveal * (3 - 2 * reveal);
-            panel.anchoredPosition = Pinned ? new Vector2(445, -103 - (1 - t) * 50) : new Vector2(930, -108 - (1 - t) * 80);
-            float scale = Pinned ? 1.025f : 1;
+            panel.anchoredPosition = Pinned ? new Vector2(458, -95 - (1 - t) * 40) : new Vector2(930, -108 - (1 - t) * 80);
+            float scale = Pinned ? 1.07f : 1;
             panel.localScale = new Vector3(scale, scale * Mathf.Lerp(.86f, 1, t), 1);
             projectionGroup.alpha = t;
             projectionGroup.interactable = Raised && t > .9f;
@@ -319,7 +330,7 @@ namespace DTET.VisualPrototype
             {
                 nextTextRefresh = Time.unscaledTime + .075f;
                 scenario.text = state.ScenarioLabel ?? "BINARY OBSERVATORY";
-                stateLine.text = $"{state.StageLabel}    /    {(state.Playing ? "PLAYING" : "PAUSED")}    /    V opens the suit instrument";
+                stateLine.text = $"{state.StageLabel}  /  {(state.Playing ? "PLAYING" : "PAUSED")}  /  click sky or lower wrist for flight";
                 measurements.text = $"M1 {state.Mass1Solar:0.0}    M2 {state.Mass2Solar:0.0} solar    |    a {state.SeparationRg:0.00} rg / {state.SeparationKm:0.0} km\nCAMERA DISTANCE  {state.CameraDistanceRg:0.0} total rg   /   independent inspection position";
                 signalTitle.text = frequencyPlot ? "MODEL FREQUENCY / Hz" : state.SignalLabel ?? "ACTIVE WAVEFORM";
                 signalUnits.text = frequencyPlot ? $"{plot.AxisMaximum:0.#} Hz" : $"+/- {plot.AxisMaximum:G3}";

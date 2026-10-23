@@ -28,8 +28,8 @@ namespace DTET.VisualPrototype
         public bool GasVisible { get; private set; }
         public bool SamplesVisible { get; private set; }
         public InteractiveOpticalStyle OpticalStyle { get; private set; } = InteractiveOpticalStyle.Subtle;
-        public float LensGain { get; private set; } = .7f;
-        public float WaveGain { get; private set; } = .35f;
+        public float LensGain { get; private set; } = .35f;
+        public float WaveGain { get; private set; } = .25f;
         public Transform BodyATransform => bodyA;
         public Transform BodyBTransform => bodyB;
         public Transform RemnantTransform => remnant;
@@ -37,6 +37,7 @@ namespace DTET.VisualPrototype
         public string ValidationMessage { get; private set; } = "";
         public double SampleWeight { get; private set; }
         public long PresentedGeneration { get; private set; }
+        public int AutomaticOpticalFrames { get; private set; }
 
         private GameObject launcher, sceneRoot, hud, sampleObject;
         private Text launchDetail, phaseLabel, statusLabel;
@@ -309,7 +310,7 @@ namespace DTET.VisualPrototype
         }
         private void AfterSceneRender(ScriptableRenderContext context, Camera camera)
         {
-            if (Ready && !manualRendering && camera == View) RenderOptics();
+            if (Ready && !manualRendering && camera == View) { RenderOptics(); AutomaticOpticalFrames++; }
         }
         public void RenderOptics()
         {
@@ -386,9 +387,12 @@ namespace DTET.VisualPrototype
                 FrequencyHz = signal.FrequencyHertz.GetValueOrDefault(), Signal = value.GetValueOrDefault(),
                 ScenarioLabel = replay ? "GW150914-inspired / SXS0305" : "ADJUSTABLE EDUCATIONAL EXPERIMENT",
                 StageLabel = PhaseLabel(s.Phase), SignalLabel = replay ? "Normalized numerical Re(H22)" : "Leading-order h+ at D = 10^12 m, i = 60 deg",
-                Status = replay ? "Recorded binary; comparison-epoch alignment" : "Quantitative inspiral ends at 10 rg; merger is illustrative",
-                OpticalStyle = OpticalStyle, LensGain = LensGain, WaveGain = WaveGain,
-                CameraDistanceRg = View.transform.position.magnitude, WaveformAxisMaximum = replay ? 1 : 1e-8,
+                Status = !Profile.GasEnabled ? "Compatibility: gas and optical distortion are disabled."
+                    : Optics != null && OpticalStyle != InteractiveOpticalStyle.Off && !Optics.Active ? "Optical effect unavailable or gains zero; original scene shown."
+                    : replay ? "Recorded binary; comparison-epoch alignment" : "Quantitative inspiral ends at 10 rg; merger is illustrative",
+                OpticalStyle = !Profile.GasEnabled || (Optics != null && !Optics.Active) ? InteractiveOpticalStyle.Off : OpticalStyle,
+                LensGain = LensGain, WaveGain = WaveGain,
+                CameraDistanceRg = View.transform.position.magnitude, WaveformAxisMaximum = replay ? 1 : 2e-8,
                 FrequencyAxisMaximum = replay ? 500 : 250, SignalUnitLabel = replay ? "Re(H22) / peak |H22|" : "strain (local far-field model)", ValidationMessage = ValidationMessage
             };
         }
