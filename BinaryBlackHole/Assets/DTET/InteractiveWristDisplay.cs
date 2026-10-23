@@ -26,6 +26,7 @@ namespace DTET.VisualPrototype
     {
         InteractiveWristState CaptureWristState();
         double? SampleWristGraph(double normalizedTime, bool frequency);
+        double? SampleWristEnvelope(double normalizedTime);
         void SelectWristScenario(bool replay);
         void ApplyWristExperiment(double mass1Solar, double mass2Solar, double separationRg);
         void ResetWristScenario();
@@ -80,6 +81,8 @@ namespace DTET.VisualPrototype
         public string TitleText => scenario == null ? "" : scenario.text;
         public string StatusText => status == null ? "" : status.text;
         public bool FrequencyPlot => frequencyPlot;
+        public int DenseCycleBins => plot == null ? 0 : plot.DenseCycleBins;
+        public bool HasDenseCycles => DenseCycleBins > 0;
         public double PresentedSourceTime => lastState.SourceTimeSeconds;
         public long PresentedGeneration => lastState.Generation;
         public string ValidationText => validation == null ? localValidation ?? "" : validation.text;
@@ -299,10 +302,12 @@ namespace DTET.VisualPrototype
             if (plottedGeneration != state.Generation)
             {
                 double max = frequencyPlot ? state.FrequencyAxisMaximum : state.WaveformAxisMaximum;
-                plot.Rebuild(presenter, frequencyPlot, max > 0 ? max : 1);
+                plot.Rebuild(presenter, frequencyPlot, max > 0 ? max : 1, state.DurationSeconds);
                 plottedGeneration = state.Generation;
             }
-            plot.SetProgress((float)state.Progress);
+            plot.SetProgress((float)state.Progress, frequencyPlot
+                ? (state.FrequencyAvailable ? (double?)state.FrequencyHz : null)
+                : (state.SignalAvailable ? (double?)state.Signal : null));
             refreshing = true;
             timeline.SetValueWithoutNotify((float)state.Progress);
             if (generationChanged && !pendingEdits)
@@ -320,7 +325,7 @@ namespace DTET.VisualPrototype
                 signalUnits.text = frequencyPlot ? $"{plot.AxisMaximum:0.#} Hz" : $"+/- {plot.AxisMaximum:G3}";
                 graphValues.text = frequencyPlot
                     ? (state.FrequencyAvailable ? $"NOW {state.FrequencyHz:0.00} Hz  |  fixed axis; unavailable regions are gaps" : "Frequency unavailable at this epoch; no invented continuation")
-                    : (state.SignalAvailable ? $"NOW {state.Signal:G4} {state.SignalUnitLabel}  |  fixed signal axis" : "Signal unavailable at this comparison epoch; gray gaps mark coverage");
+                    : (state.SignalAvailable ? $"NOW {state.Signal:G4}  |  {(plot.DenseCycleBins > 0 ? "dense cycles: amplitude envelope band" : "fixed signal axis / resolved trace")}" : "Signal unavailable at this comparison epoch; gray gaps mark coverage");
                 timeText.text = $"SOURCE t {state.SourceTimeSeconds:0.0000} s   /   {(state.Progress * 100):0.0}%   /   {state.PlaybackRate:+0.00;-0.00;0}x   /   {state.DurationSeconds:0.000} s record";
                 playText.text = state.Playing ? "PAUSE" : "PLAY"; rateText.text = $"{Math.Abs(state.PlaybackRate):0.00}x";
                 gasText.text = state.GasEnabled ? "GAS ON" : "GAS OFF";

@@ -9,30 +9,58 @@ namespace DTET.VisualPrototype
     {
         private const int Count = 768;
         private readonly float[] samples = new float[Count];
+        private readonly float[] envelopes = new float[Count];
+        private readonly bool[] dense = new bool[Count - 1];
         private bool frequency;
         private float progress;
+        private float cursorValue = float.NaN;
         public double AxisMaximum { get; private set; } = 1;
         public int AvailableSamples { get; private set; }
+        public int DenseCycleBins { get; private set; }
+        public int DenseBinCount => DenseCycleBins;
         public bool HasCoverage => AvailableSamples > 0;
 
-        public void Rebuild(IInteractiveExhibitPresenter source, bool frequencySeries, double axisMaximum)
+        public void Rebuild(IInteractiveExhibitPresenter source, bool frequencySeries, double axisMaximum, double durationSeconds)
         {
             frequency = frequencySeries;
             AxisMaximum = axisMaximum > 0 && !double.IsInfinity(axisMaximum) && !double.IsNaN(axisMaximum) ? axisMaximum : 1;
             AvailableSamples = 0;
+            DenseCycleBins = 0;
             for (int i = 0; i < Count; i++)
             {
                 double? value = source.SampleWristGraph(i / (double)(Count - 1), frequency);
                 if (!value.HasValue || double.IsNaN(value.Value) || double.IsInfinity(value.Value)) samples[i] = float.NaN;
                 else { samples[i] = (float)(value.Value / AxisMaximum); AvailableSamples++; }
+                double? envelope = frequency ? null : source.SampleWristEnvelope(i / (double)(Count - 1));
+                envelopes[i] = Finite(envelope) ? (float)(Math.Abs(envelope.Value) / AxisMaximum) : float.NaN;
+            }
+            // A conservative local sampling guard: use the greatest supplied frequency at both
+            // ends and the midpoint, with a 50% safety margin. The admitted model chirps smoothly
+            // within valid coverage. Missing/ambiguous frequency also selects an envelope; no
+            // oscillatory phase is invented by joining under-resolved uniform-time samples.
+            double binSeconds = Math.Max(0, durationSeconds) / (Count - 1);
+            for (int i = 0; i < Count - 1; i++)
+            {
+                dense[i] = false;
+                if (frequency || float.IsNaN(samples[i]) || float.IsNaN(samples[i + 1])) continue;
+                double? f0 = source.SampleWristGraph(i / (double)(Count - 1), true);
+                double? fm = source.SampleWristGraph((i + .5) / (Count - 1), true);
+                double? f1 = source.SampleWristGraph((i + 1.0) / (Count - 1), true);
+                bool ambiguous = !Finite(f0) || !Finite(fm) || !Finite(f1);
+                double maximum = Math.Max(Math.Abs(f0.GetValueOrDefault()), Math.Max(Math.Abs(fm.GetValueOrDefault()), Math.Abs(f1.GetValueOrDefault())));
+                dense[i] = ambiguous || maximum * 1.5 * binSeconds >= .30;
+                if (dense[i]) DenseCycleBins++;
             }
             SetVerticesDirty();
         }
-        public void SetProgress(float value)
+        private static bool Finite(double? value) => value.HasValue && !double.IsNaN(value.Value) && !double.IsInfinity(value.Value);
+        public void SetProgress(float value, double? currentValue)
         {
             value = Mathf.Clamp01(value);
-            if (Mathf.Abs(value - progress) < .00001f) return;
+            float normalized = Finite(currentValue) ? (float)(currentValue.Value / AxisMaximum) : float.NaN;
+            if (Mathf.Abs(value - progress) < .00001f && normalized.Equals(cursorValue)) return;
             progress = value;
+            cursorValue = normalized;
             SetVerticesDirty();
         }
         protected override void OnPopulateMesh(VertexHelper mesh)
@@ -61,20 +89,41 @@ namespace DTET.VisualPrototype
                     Quad(mesh, new Vector2(x, rect.yMin), new Vector2(nx + .4f, rect.yMax), new Color(.39f, .44f, .49f, .12f));
                     continue;
                 }
+                if (dense[i])
+                {
+                    if (float.IsNaN(envelopes[i]) || float.IsNaN(envelopes[i + 1])) continue;
+                    // This is a model-provided phase-independent amplitude envelope, not a
+                    // min/max estimate from a few oscillatory samples. The band is labelled.
+                    float e0 = Mathf.Clamp01(envelopes[i]), e1 = Mathf.Clamp01(envelopes[i + 1]);
+                    float y0 = rect.height * .48f * e0, y1 = rect.height * .48f * e1;
+                    var bandColor = next <= progress ? new Color(signal.r, signal.g, signal.b, .28f) : new Color(future.r, future.g, future.b, .14f);
+                    Band(mesh, x, nx, rect.center.y, y0, y1, bandColor);
+                    Stroke(mesh, new Vector2(x, rect.center.y + y0), new Vector2(nx, rect.center.y + y1), 1, next <= progress ? signal : future);
+                    Stroke(mesh, new Vector2(x, rect.center.y - y0), new Vector2(nx, rect.center.y - y1), 1, next <= progress ? signal : future);
+                    continue;
+                }
                 Stroke(mesh, new Vector2(x, Y(rect, samples[i])), new Vector2(nx, Y(rect, samples[i + 1])), 1.55f, next <= progress ? signal : future);
             }
             float cursor = rect.xMin + rect.width * progress;
             Stroke(mesh, new Vector2(cursor, rect.yMin), new Vector2(cursor, rect.yMax), 1.2f, new Color(1, .77f, .42f, .95f));
-            int index = Mathf.Clamp(Mathf.RoundToInt(progress * (Count - 1)), 0, Count - 1);
-            if (!float.IsNaN(samples[index]))
+            if (!float.IsNaN(cursorValue))
             {
-                float y = Y(rect, samples[index]);
+                float y = Y(rect, cursorValue);
                 Quad(mesh, new Vector2(cursor - 2.5f, y - 2.5f), new Vector2(cursor + 2.5f, y + 2.5f), new Color(1, .88f, .60f));
             }
         }
         private float Y(Rect rect, float normalized)
             => frequency ? Mathf.Lerp(rect.yMin, rect.yMax, Mathf.Clamp01(normalized))
                 : rect.center.y + Mathf.Clamp(normalized, -1, 1) * rect.height * .48f;
+        private static void Band(VertexHelper mesh, float x, float nx, float center, float left, float right, Color color)
+        {
+            int index = mesh.currentVertCount;
+            mesh.AddVert(new Vector2(x, center - left), color, Vector2.zero);
+            mesh.AddVert(new Vector2(x, center + left), color, Vector2.zero);
+            mesh.AddVert(new Vector2(nx, center + right), color, Vector2.zero);
+            mesh.AddVert(new Vector2(nx, center - right), color, Vector2.zero);
+            mesh.AddTriangle(index, index + 1, index + 2); mesh.AddTriangle(index, index + 2, index + 3);
+        }
         private static void Quad(VertexHelper mesh, Vector2 min, Vector2 max, Color color)
         {
             int index = mesh.currentVertCount;

@@ -257,15 +257,7 @@ namespace DTET.VisualPrototype
                     InteractiveOpticsReference.WaveOffset(.2f, .4f, signal.x, signal.y, 2, out double x, out double y);
                     FixtureRead("wave plus/cross " + signal, x, y, optics, target, image, 2e-6);
                 }
-                var gas = exhibit.GasMaterial;
-                foreach (Vector3 p in new[] { new Vector3((float)(exhibit.Snapshot.GasState.ReservoirInnerRadiusRg * 1.3), 0, 0),
-                    V(exhibit.Snapshot.GasState.BodyA.PositionRg) + new Vector3(5, 0, 0), new Vector3(1000, 0, 0) })
-                {
-                    var field = exhibit.Session.Model.SampleGas(exhibit.Snapshot.GasState, p.x, p.y, p.z);
-                    gas.SetFloat("_FieldTest", 1); gas.SetVector("_FieldPoint", p);
-                    FixtureRead("adjustable gas " + p, field.RelativeDensity, field.BolometricEmission, gas, target, image, 3e-4);
-                }
-                gas.SetFloat("_FieldTest", 0);
+                ValidateGasFixtures();
             }
             finally { RenderTexture.active = active; Destroy(optics); Destroy(image); target.Release(); Destroy(target); }
         }
@@ -273,16 +265,84 @@ namespace DTET.VisualPrototype
         {
             Graphics.Blit(Texture2D.blackTexture, target, material); RenderTexture.active = target;
             image.ReadPixels(new Rect(0, 0, 1, 1), 0, 0); image.Apply(); var measured = image.GetPixel(0, 0);
+            RecordFixture(label, x, y, measured, tolerance);
+        }
+        private void RecordFixture(string label, double x, double y, Color measured, double tolerance)
+        {
             double error = Math.Max(Math.Abs(measured.r - x), Math.Abs(measured.g - y));
             fixtures.Add(new Fixture { label = label, expectedX = x, expectedY = y, measuredX = measured.r, measuredY = measured.g, absoluteError = error });
             Check(double.IsFinite(error) && error <= tolerance, "GPU/reference " + label);
+        }
+
+        private void ValidateGasFixtures()
+        {
+            const int side = 65;
+            Material gas = exhibit.GasMaterial;
+            if (gas == null) throw new InvalidOperationException("The adjustable gas fixture requires an active gas material.");
+            float previousTest = gas.GetFloat("_FieldTest"); Vector4 previousPoint = gas.GetVector("_FieldPoint");
+            Renderer[] renderers = exhibit.GetComponentsInChildren<Renderer>(true);
+            var enabled = new bool[renderers.Length];
+            for (int i = 0; i < renderers.Length; i++) enabled[i] = renderers[i].enabled;
+            RenderTexture previous = RenderTexture.active;
+            RenderTexture target = null; Texture2D image = null; GameObject cameraObject = null;
+            try
+            {
+                target = new RenderTexture(side, side, 24, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+                if (!target.Create()) throw new InvalidOperationException("Could not allocate the linear gas fixture target.");
+                image = new Texture2D(side, side, TextureFormat.RGBAFloat, false, true);
+                // The volume is a world-space, front-culled cube. A fullscreen blit would not
+                // exercise its actual vertex/culling path. A dedicated camera also avoids the
+                // exhibit's normal endCameraRendering optical composite callback.
+                cameraObject = new GameObject("QA adjustable gas fixture camera");
+                Camera camera = cameraObject.AddComponent<Camera>(); camera.CopyFrom(exhibit.View);
+                camera.enabled = false; camera.targetTexture = null; camera.aspect = 1;
+                camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = Color.black;
+                camera.allowHDR = true; camera.allowMSAA = false;
+                cameraObject.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>().renderPostProcessing = false;
+                camera.transform.position = new Vector3(0, (float)exhibit.Session.Model.HalfExtentY * 2,
+                    (float)-exhibit.Session.Model.HalfExtentXZ * 2);
+                camera.transform.LookAt(Vector3.zero);
+                for (int i = 0; i < renderers.Length; i++) renderers[i].enabled = renderers[i].sharedMaterial == gas;
+                gas.SetFloat("_FieldTest", 1);
+                foreach (Vector3 point in new[] { new Vector3((float)(exhibit.Snapshot.GasState.ReservoirInnerRadiusRg * 1.3), 0, 0),
+                    V(exhibit.Snapshot.GasState.BodyA.PositionRg) + new Vector3(5, 0, 0), new Vector3(1000, 0, 0) })
+                {
+                    var expected = exhibit.Session.Model.SampleGas(exhibit.Snapshot.GasState, point.x, point.y, point.z);
+                    gas.SetVector("_FieldPoint", point);
+                    var request = new RenderPipeline.StandardRequest { destination = target };
+                    if (!RenderPipeline.SupportsRenderRequest(camera, request))
+                        throw new InvalidOperationException("URP gas fixture render requests are unavailable.");
+                    RenderPipeline.SubmitRenderRequest(camera, request);
+                    RenderTexture.active = target;
+                    image.ReadPixels(new Rect(0, 0, side, side), 0, 0); image.Apply();
+                    RecordFixture("adjustable gas " + point, expected.RelativeDensity, expected.NormalizedBolometricEmission,
+                        image.GetPixel(side / 2, side / 2), 3e-4);
+                }
+            }
+            finally
+            {
+                gas.SetFloat("_FieldTest", previousTest); gas.SetVector("_FieldPoint", previousPoint);
+                for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null) renderers[i].enabled = enabled[i];
+                RenderTexture.active = previous;
+                if (cameraObject != null) Destroy(cameraObject);
+                if (image != null) Destroy(image);
+                if (target != null) { target.Release(); Destroy(target); }
+            }
         }
 
         private void Capture(string name, bool launcher = false)
         {
             var target = new RenderTexture(1600, 900, 24, RenderTextureFormat.ARGB32); target.Create();
             var previous = exhibit.CaptureCamera.targetTexture; exhibit.CaptureCamera.targetTexture = target;
-            if (launcher) { Canvas.ForceUpdateCanvases(); exhibit.CaptureCamera.Render(); } else exhibit.RenderFrame();
+            if (launcher)
+            {
+                Canvas.ForceUpdateCanvases();
+                var request = new RenderPipeline.StandardRequest { destination = target };
+                if (!RenderPipeline.SupportsRenderRequest(exhibit.CaptureCamera, request))
+                    throw new InvalidOperationException("URP launcher capture requests are unavailable.");
+                RenderPipeline.SubmitRenderRequest(exhibit.CaptureCamera, request);
+            }
+            else exhibit.RenderFrame();
             var active = RenderTexture.active; RenderTexture.active = target;
             var image = new Texture2D(1600, 900, TextureFormat.RGB24, false);
             image.ReadPixels(new Rect(0, 0, 1600, 900), 0, 0); image.Apply();

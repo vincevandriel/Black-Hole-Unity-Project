@@ -52,6 +52,8 @@ namespace DTET.VisualPrototype
         private long lastGeneration = -1;
         private double lastTime = double.NaN, nextLabels;
         private bool disposed, manualRendering;
+        private readonly RenderPipeline.StandardRequest sceneRequest = new RenderPipeline.StandardRequest();
+        private readonly RenderPipeline.StandardRequest interfaceRequest = new RenderPipeline.StandardRequest();
         private static readonly Color Gold = new Color(1, .72f, .35f);
 
         private void Awake()
@@ -320,7 +322,19 @@ namespace DTET.VisualPrototype
             if (!Ready) return;
             Present(); RefreshLabels(); Wrist.RefreshNow(); Canvas.ForceUpdateCanvases();
             manualRendering = true;
-            try { View.Render(); RenderOptics(); CaptureCamera.Render(); }
+            try
+            {
+                sceneRequest.destination = SceneTarget;
+                if (!RenderPipeline.SupportsRenderRequest(View, sceneRequest)) throw new NotSupportedException("Astronomical render requests are unavailable.");
+                RenderPipeline.SubmitRenderRequest(View, sceneRequest);
+                RenderOptics();
+                if (CaptureCamera.targetTexture != null)
+                {
+                    interfaceRequest.destination = CaptureCamera.targetTexture;
+                    if (!RenderPipeline.SupportsRenderRequest(CaptureCamera, interfaceRequest)) throw new NotSupportedException("Interface render requests are unavailable.");
+                    RenderPipeline.SubmitRenderRequest(CaptureCamera, interfaceRequest);
+                }
+            }
             finally { manualRendering = false; }
         }
         private void HandleInput()
@@ -395,6 +409,22 @@ namespace DTET.VisualPrototype
             var s = Session.Model.Evaluate(Math.Max(0, Math.Min(1, fraction)) * Snapshot.DurationSeconds);
             if (frequency) return s.Signal.FrequencyHertz;
             return s.Mode.ToString().Contains("Replay") ? s.Signal.NormalizedRealH22 : s.Signal.HPlus;
+        }
+        public double? SampleWristEnvelope(double fraction)
+        {
+            if (!Ready) return null;
+            var signal = Session.Model.EvaluateSignal(Math.Max(0, Math.Min(1, fraction)) * Snapshot.DurationSeconds);
+            if (!signal.IsAvailable) return null;
+            if (signal.NormalizedRealH22.HasValue && signal.NormalizedImaginaryH22.HasValue)
+            {
+                double re = signal.NormalizedRealH22.Value, im = signal.NormalizedImaginaryH22.Value;
+                return Math.Sqrt(re * re + im * im);
+            }
+            if (!signal.StrainEnvelope.HasValue) return null;
+            double inclination = Math.Cos(signal.InclinationRadians), polarization = 2 * signal.PolarizationRadians;
+            double a = .5 * (1 + inclination * inclination) * Math.Cos(polarization);
+            double b = inclination * Math.Sin(polarization);
+            return signal.StrainEnvelope.Value * Math.Sqrt(a * a + b * b);
         }
         public void SelectWristScenario(bool replay)
         {
