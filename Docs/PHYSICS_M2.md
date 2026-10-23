@@ -40,4 +40,4 @@ Build the development player using `DTET.VisualPrototype.Editor.PrototypeBuild.B
 ./Scripts/Capture-PrototypeAudit.ps1 -OutputDirectory C:/temp/dtet-art-regression -Variants Graph
 ```
 
-The numerical harness is opt-in through `DTET_NUMERICAL_QA_PATH`; ordinary player sessions do not run it. Runtime evidence and fresh-clone/package validation will be recorded in the milestone validation receipt after the gate runs. Portable tests alone do not prove rendered integration, laptop performance, tracked XR, clean interactive Editor Console status or human usability.
+The numerical harness is opt-in through `DTET_NUMERICAL_QA_PATH`; ordinary player sessions do not run it. The [passed validation receipt](PHYSICS_M2_VALIDATION.md) records the fresh-clone build, reproducible data check, 42 numerical runtime checks, 50 M1 regression checks, nine artistic/input groups and verified Windows package. Portable tests alone do not prove rendered integration, laptop performance, tracked XR, clean interactive Editor Console status or human usability.
