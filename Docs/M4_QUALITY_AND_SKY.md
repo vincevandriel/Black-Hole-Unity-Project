@@ -6,11 +6,13 @@ M4 chooses a rendering budget before constructing the reduced binary exhibit. Ev
 
 `ExhibitQuality.Resolve` is a pure decision function with explicit reported capabilities. The Unity launcher supplies `SystemInfo` values and can deliberately request the unsupported-shader path for its diagnostic QA. The result preserves both the requested and effective profile and supplies a readable reason.
 
-| Effective profile | Gas ray steps | Render scale | Maximum scene target | Sky sources | Tracers | Render/mesh allowance |
+| Effective profile | Base gas ray segments | Render scale | Maximum scene target | Sky sources | Density samples | Render/mesh allowance |
 | --- | ---: | ---: | --- | ---: | ---: | ---: |
 | Laptop | 64 | 0.5 | 640 x 360 | 1,024 | 256 | 8,028,160 bytes |
 | Balanced | 96 | 0.75 | 800 x 450 | 2,048 | 768 | 12,961,792 bytes |
 | High | 144 | 1.0 | 1,120 x 630 | 4,096 | 2,048 | 25,724,928 bytes |
+
+The inner-flow region receives four midpoint subsegments per base segment; actual work is between one and four times the listed base count. This reduces narrow-disk/stream banding without changing the field model. The capped target and retained bright star prefix are independent of this refinement.
 
 These are initial budgets, not measured laptop or high-end frame-rate guarantees. The lower-resolution scene is presented under a full-resolution interface. `RenderDimensions` chooses the lesser of the requested scale and both maximum dimensions, preserves the display aspect to even-pixel rounding, and never enlarges the source display.
 

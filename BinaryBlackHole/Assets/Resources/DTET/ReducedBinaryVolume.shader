@@ -6,6 +6,7 @@ Shader "DTET/ReducedBinaryVolume"
         _Exposure("False colour exposure",Float)=2.5
         _Opacity("Assumed gray opacity per rg",Float)=.16
         [HideInInspector] _FieldTest("CPU/GPU field fixture",Float)=0
+        [HideInInspector] _FieldPoint("CPU/GPU fixture location",Vector)=(0,0,0,0)
     }
     SubShader
     {
@@ -52,13 +53,23 @@ Shader "DTET/ReducedBinaryVolume"
                 float opacity=0;float3 radiance=0;
                 [loop]for(int k=0;k<count;k++)
                 {
-                    float3 p=ro+rd*(start+(k+.5)*ds);
-                    float2 field=SampleReducedFlow(p);
-                    float source=field.y/max(field.x,1e-12);
-                    float temperature=sqrt(sqrt(max(source,0)));
-                    float3 tint=lerp(float3(1,.28,.065),float3(.62,.83,1),saturate((temperature-.38)/.7));
-                    float absorb=Absorbed(max(0,_Opacity*field.x*ds));
-                    radiance+=(1-opacity)*absorb*source*tint;opacity+=(1-opacity)*absorb;
+                    float midpoint=start+(k+.5)*ds;
+                    float3 centre=ro+rd*midpoint;
+                    // Narrow inner disks and streams need finer quadrature than the broad reservoir.
+                    // Expand by one base segment so crossing a region boundary cannot skip refinement.
+                    float cavity=_FlowReservoir.x+3+ds;
+                    int subdivisions=(dot(centre.xz,centre.xz)<cavity*cavity && abs(centre.y)<6+ds)?4:1;
+                    float subDs=ds/subdivisions;
+                    [loop]for(int j=0;j<subdivisions;j++)
+                    {
+                        float3 p=ro+rd*(midpoint-.5*ds+(j+.5)*subDs);
+                        float2 field=SampleReducedFlow(p);
+                        float source=field.y/max(field.x,1e-12);
+                        float temperature=sqrt(sqrt(max(source,0)));
+                        float3 tint=lerp(float3(1,.28,.065),float3(.62,.83,1),saturate((temperature-.38)/.7));
+                        float absorb=Absorbed(max(0,_Opacity*field.x*subDs));
+                        radiance+=(1-opacity)*absorb*source*tint;opacity+=(1-opacity)*absorb;
+                    }
                 }
                 // Linear premultiplied radiance; the display applies one final exposure map
                 // after gas absorption has attenuated the background sky.

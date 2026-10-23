@@ -104,7 +104,7 @@ namespace DTET.VisualPrototype
         {
             SelectedProfile=profile; var settings=ExhibitQuality.Resolve(profile,Capabilities(false));
             launchDetail.text=$"SELECTED  {profile.ToString().ToUpperInvariant()}  →  {settings.EffectiveProfile}\n"
-                +$"Scene up to {settings.MaxRenderWidth} × {settings.MaxRenderHeight}  ·  {settings.RaySteps} gas samples per ray  ·  {settings.StarCount:N0} sky sources\n"
+                +$"Scene up to {settings.MaxRenderWidth} × {settings.MaxRenderHeight}  ·  {settings.RaySteps} base ray segments + inner refinement  ·  {settings.StarCount:N0} sky sources\n"
                 +settings.Reason;
         }
         public void Launch(ExhibitQualityProfile profile, bool forceFallback=false)
@@ -221,6 +221,7 @@ namespace DTET.VisualPrototype
             for(int i=1;i<=48;i++)
             {var value=flow.Sample(FieldState,(Radical(i,2)*2-1)*flow.HalfExtentXZ,(Radical(i,3)*2-1)*flow.HalfExtentY,(Radical(i,5)*2-1)*flow.HalfExtentXZ);hash=Mix(hash,(float)value.RelativeDensity);}
             FieldFingerprint=hash;timeline.SetValueWithoutNotify((float)(time/Session.Model.DurationSeconds));
+            RefreshGraphCursor();
         }
         private static ulong Mix(ulong hash,float value)=>unchecked((hash^(uint)BitConverter.SingleToInt32Bits(value))*1099511628211UL);
         private void PresentMarker(Transform target,NumericalHorizonState? horizon)
@@ -344,8 +345,12 @@ namespace DTET.VisualPrototype
                 +(s.SeparationMeters.HasValue?$"Separation {s.SeparationMeters.Value/1000:0.0} km  ·  ":"")+"Horizon spheres show equal-area proxies. Gas and sky are assumed; radiation is a numerical mode.";
             sampleLabel.text=TracersVisible?$"{TracerCount:N0} weighted locations\nDiagnostic samples, not parcels":"Optional field sampling overlay";
             radiationLabel.text=s.Radiation.HasValue?$"Re(H22)/peak = {s.Radiation.Value.RealH22/Session.Model.WaveformPeakAmplitude:+0.000;-0.000;0.000}\nEpoch alignment only; not detector strain":"RADIATION OUTSIDE RECORDED COVERAGE\nGray part of plot: no extrapolation";
+            RefreshGraphCursor();
+        }
+        private void RefreshGraphCursor()
+        {
             graphCursor.rectTransform.anchoredPosition=new Vector2(1110+(float)(450*Session.PlaybackTimeSeconds/Session.Model.DurationSeconds),-173);
-            graphCursor.color=s.Radiation.HasValue?Gold:ReducedExhibitUi.Muted;
+            graphCursor.color=State.Radiation.HasValue?Gold:ReducedExhibitUi.Muted;
         }
         public void ReturnToLauncher()
         {

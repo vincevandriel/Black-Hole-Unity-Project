@@ -12,7 +12,7 @@ using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Opt-in M4 player checks; explicit captures never run inside performance windows.</summary>
+    /// <summary>Opt-in M4 checks; completed off-screen rendering is timed separately from PNG captures.</summary>
     internal sealed class ReducedExhibitQaCapture : MonoBehaviour
     {
         private readonly List<string> checks = new List<string>();
@@ -21,6 +21,7 @@ namespace DTET.VisualPrototype
         private readonly List<ProfileMeasurement> profiles = new List<ProfileMeasurement>();
         private readonly List<GpuFieldMeasurement> gpuField = new List<GpuFieldMeasurement>();
         private readonly List<RayConvergenceMeasurement> rayConvergence = new List<RayConvergenceMeasurement>();
+        private GpuSkyMeasurement gpuSky;
         private ReducedBinaryExhibit exhibit;
         private string output;
         private bool passed = true;
@@ -40,6 +41,7 @@ namespace DTET.VisualPrototype
             public PerformanceWindow[] performance;
             public GpuFieldMeasurement[] gpuField;
             public RayConvergenceMeasurement[] rayConvergence;
+            public GpuSkyMeasurement gpuSky;
         }
         [Serializable] private sealed class GpuFieldMeasurement
         {
@@ -52,6 +54,14 @@ namespace DTET.VisualPrototype
             public int width, height, testedRaySteps, referenceRaySteps;
             public double epochSeconds, testedIntegratedRadiance, referenceIntegratedRadiance,
                 relativeL1RadianceError, integratedFluxRelativeError, threshold;
+        }
+        [Serializable] private sealed class GpuSkyMeasurement
+        {
+            public int starIndex, width, height;
+            public double expectedRed, expectedGreen, expectedBlue, measuredRed, measuredGreen, measuredBlue,
+                maximumRelativeChannelError, maximumRelativeIntegratedFluxError,
+                translationMeanAbsoluteDifference, rotationMeanAbsoluteDifference;
+            public string method;
         }
         [Serializable] private sealed class ImageMeasurement
         {
@@ -69,9 +79,9 @@ namespace DTET.VisualPrototype
         }
         [Serializable] private sealed class PerformanceWindow
         {
-            public string profile, scenario;
+            public string profile, scenario, method, frameTimingStatus;
             public bool fallback, frameTimingEnabled;
-            public int renderWidth, renderHeight, measuredFrames;
+            public int renderWidth, renderHeight, interfaceWidth, interfaceHeight, measuredFrames, successfulCompletionReadbacks;
             public double elapsedSeconds;
             public Distribution wallFrameMilliseconds, unityCpuFrameMilliseconds, unityGpuFrameMilliseconds;
         }
@@ -133,8 +143,8 @@ namespace DTET.VisualPrototype
                 graphicsMemoryMb = SystemInfo.graphicsMemorySize, screenWidth = Screen.width, screenHeight = Screen.height,
                 frameTimingEnabled = FrameTimingManager.IsFeatureEnabled(), checks = checks.ToArray(), images = images.ToArray(),
                 profiles = profiles.ToArray(), performance = performance.ToArray(), gpuField = gpuField.ToArray(),
-                rayConvergence = rayConvergence.ToArray(),
-                timingMethod = "Uncapped normal player frames: one coroutine yield per frame, Stopwatch wall intervals, and unique FrameTimingManager timestamps for CPU/GPU durations when available. No explicit RenderRequest, image readback, PNG encoding or file I/O occurs inside measured windows. Half-second warmup precedes each window. Hidden Windows development player renders its ordinary off-screen scene and HUD. These are observed rendering/cadence samples, not monitor presentation latency or a standalone GPU microbenchmark.",
+                rayConvergence = rayConvergence.ToArray(), gpuSky = gpuSky,
+                timingMethod = "Completed off-screen frames in a hidden development player: Stopwatch wall intervals include a player-loop yield (source update), requested camera/seek work, explicit scene and full interface rendering, Canvas update and a one-pixel AsyncGPUReadback.WaitForCompletion fence. Targets and requests are allocated before the half-second rendered warmup. No PNG encoding, file I/O or full-image readback occurs inside timed windows. Per-frame one-pixel readback/fence overhead is included. FrameTimingManager CPU/GPU samples are separately retained when available; zero samples explicitly mean unavailable. This is conservative completed-frame throughput, not native presentation FPS or a standalone GPU benchmark. Earlier hidden-player loop-only timing is invalid as rendered-frame evidence.",
                 scope = "Launcher and profile admission, a shared recorded binary/radiation history with an explicitly prescribed gas field, deterministic seeking, pause/free inspection, common-horizon/remnant transition, bounded render allocations, richer synthetic sky, fallback and release of per-scene resources. Process working set/private memory are separately sampled by the runner. No fluid conservation, scientific GRMHD, binary observer optics, measured gas reconstruction, laptop/headset performance or complete GPU VRAM claim."
             };
             File.WriteAllText(Path.Combine(output, "reduced-exhibit-integration.json"), JsonUtility.ToJson(receipt, true));
@@ -316,42 +326,86 @@ namespace DTET.VisualPrototype
             exhibit.SetPlaying(false); exhibit.SetTracers(false); exhibit.SetViewPreset(scenario == "edge-paused" ? 2 : 0);
             exhibit.Seek(scenario == "merger-playback" ? Math.Max(0, exhibit.Session.Model.CommonHorizonElapsedSeconds - .01) : chosen);
             if (scenario == "merger-playback") { exhibit.SetRate(.01); exhibit.SetPlaying(true); }
-            yield return new WaitForSecondsRealtime(.5f);
+            Check(SystemInfo.supportsAsyncGPUReadback, label + " " + scenario + " supports a GPU completion readback");
+            if (!SystemInfo.supportsAsyncGPUReadback) yield break;
+            var fullInterfaceTarget = RenderTexture.GetTemporary(Screen.width, Screen.height, 24, RenderTextureFormat.ARGB32);
+            var sceneRequest = new RenderPipeline.StandardRequest { destination = exhibit.SceneTarget };
+            var interfaceRequest = new RenderPipeline.StandardRequest { destination = fullInterfaceTarget };
+            if (!RenderPipeline.SupportsRenderRequest(exhibit.View, sceneRequest)
+                || !RenderPipeline.SupportsRenderRequest(exhibit.CaptureCamera, interfaceRequest))
+            {
+                RenderTexture.ReleaseTemporary(fullInterfaceTarget);
+                throw new InvalidOperationException("Completed-frame benchmark render requests are unavailable.");
+            }
             var wall = new List<double>(2048); var cpu = new List<double>(2048); var gpu = new List<double>(2048);
             var timing = new FrameTiming[1];
             ulong lastTimestamp = 0;
-            var clock = Stopwatch.StartNew();
-            double previous = clock.Elapsed.TotalMilliseconds;
-            int frames = 0;
+            int frames = 0, completions = 0;
             Vector3 origin = exhibit.View.transform.position;
-            while (clock.Elapsed.TotalSeconds < benchmarkSeconds)
+            var clock = new Stopwatch();
+            try
             {
-                if (scenario == "camera-motion")
+                var warmup = Stopwatch.StartNew();
+                while (warmup.Elapsed.TotalSeconds < .5)
                 {
-                    double phase = clock.Elapsed.TotalSeconds * 3;
-                    Vector3 desired = origin + new Vector3((float)Math.Sin(phase) * 4, (float)Math.Cos(phase * .7) * 2, 0);
-                    exhibit.MoveCamera(desired - exhibit.View.transform.position);
+                    yield return null;
+                    CompleteOffscreenFrame(sceneRequest, interfaceRequest, fullInterfaceTarget);
                 }
-                else if (scenario == "repeated-seek")
-                    exhibit.Seek(((frames * 397) % 1023 + .25) / 1024 * exhibit.Session.Model.DurationSeconds);
-                FrameTimingManager.CaptureFrameTimings();
-                yield return null;
-                double now = clock.Elapsed.TotalMilliseconds;
-                wall.Add(now - previous); previous = now; frames++;
-                if (FrameTimingManager.GetLatestTimings(1, timing) > 0 && timing[0].frameStartTimestamp != lastTimestamp)
+                clock.Start();
+                double previous = clock.Elapsed.TotalMilliseconds;
+                while (clock.Elapsed.TotalSeconds < benchmarkSeconds)
                 {
-                    lastTimestamp = timing[0].frameStartTimestamp;
-                    if (FinitePositive(timing[0].cpuFrameTime)) cpu.Add(timing[0].cpuFrameTime);
-                    if (FinitePositive(timing[0].gpuFrameTime)) gpu.Add(timing[0].gpuFrameTime);
+                    // Include the ordinary player Update that advances playback. A hidden window
+                    // may suppress its automatic render, so both cameras are explicitly rendered.
+                    FrameTimingManager.CaptureFrameTimings();
+                    yield return null;
+                    if (scenario == "camera-motion")
+                    {
+                        double phase = clock.Elapsed.TotalSeconds * 3;
+                        Vector3 desired = origin + new Vector3((float)Math.Sin(phase) * 4, (float)Math.Cos(phase * .7) * 2, 0);
+                        exhibit.MoveCamera(desired - exhibit.View.transform.position);
+                    }
+                    else if (scenario == "repeated-seek")
+                        exhibit.Seek(((frames * 397) % 1023 + .25) / 1024 * exhibit.Session.Model.DurationSeconds);
+                    CompleteOffscreenFrame(sceneRequest, interfaceRequest, fullInterfaceTarget); completions++;
+                    double now = clock.Elapsed.TotalMilliseconds;
+                    wall.Add(now - previous); previous = now; frames++;
+                    if (FrameTimingManager.GetLatestTimings(1, timing) > 0 && timing[0].frameStartTimestamp != lastTimestamp)
+                    {
+                        lastTimestamp = timing[0].frameStartTimestamp;
+                        if (FinitePositive(timing[0].cpuFrameTime)) cpu.Add(timing[0].cpuFrameTime);
+                        if (FinitePositive(timing[0].gpuFrameTime)) gpu.Add(timing[0].gpuFrameTime);
+                    }
                 }
+                clock.Stop();
+                performance.Add(new PerformanceWindow { profile = label, scenario = scenario, fallback = exhibit.FallbackActive,
+                    frameTimingEnabled = FrameTimingManager.IsFeatureEnabled(), renderWidth = exhibit.SceneTarget.width,
+                    renderHeight = exhibit.SceneTarget.height, interfaceWidth = fullInterfaceTarget.width, interfaceHeight = fullInterfaceTarget.height,
+                    measuredFrames = frames, successfulCompletionReadbacks = completions, elapsedSeconds = clock.Elapsed.TotalSeconds,
+                    method = "Completed off-screen scene plus full interface render, including player update and one-pixel GPU completion readback; not native presentation FPS.",
+                    frameTimingStatus = cpu.Count > 0 && gpu.Count > 0 ? "Unity CPU and GPU frame-timing samples available."
+                        : "Unity frame-timing samples unavailable or incomplete; use the separately completed off-screen frame timings.",
+                    wallFrameMilliseconds = Summarize(wall), unityCpuFrameMilliseconds = Summarize(cpu), unityGpuFrameMilliseconds = Summarize(gpu) });
+                Check(frames >= 5 && completions == frames && wall.TrueForAll(FinitePositive),
+                    label + " " + scenario + " supplies finite timings for completed off-screen frames");
             }
-            clock.Stop();
-            performance.Add(new PerformanceWindow { profile = label, scenario = scenario, fallback = exhibit.FallbackActive,
-                frameTimingEnabled = FrameTimingManager.IsFeatureEnabled(), renderWidth = exhibit.SceneTarget.width,
-                renderHeight = exhibit.SceneTarget.height, measuredFrames = frames, elapsedSeconds = clock.Elapsed.TotalSeconds,
-                wallFrameMilliseconds = Summarize(wall), unityCpuFrameMilliseconds = Summarize(cpu), unityGpuFrameMilliseconds = Summarize(gpu) });
-            Check(frames >= 5 && wall.TrueForAll(FinitePositive), label + " " + scenario + " supplies finite natural-frame timing samples");
-            exhibit.SetPlaying(false);
+            finally
+            {
+                exhibit.SetPlaying(false);
+                RenderTexture.ReleaseTemporary(fullInterfaceTarget);
+            }
+        }
+
+        private void CompleteOffscreenFrame(RenderPipeline.StandardRequest sceneRequest,
+            RenderPipeline.StandardRequest interfaceRequest, RenderTexture fullInterfaceTarget)
+        {
+            Canvas.ForceUpdateCanvases();
+            RenderPipeline.SubmitRenderRequest(exhibit.View, sceneRequest);
+            RenderPipeline.SubmitRenderRequest(exhibit.CaptureCamera, interfaceRequest);
+            var readback = AsyncGPUReadback.Request(fullInterfaceTarget, 0, 0, 1, 0, 1, 0, 1, TextureFormat.RGBA32);
+            readback.WaitForCompletion();
+            if (!readback.done || readback.hasError)
+                throw new InvalidOperationException("Completed-frame benchmark GPU readback did not complete successfully.");
         }
 
         private static bool FinitePositive(double value) => double.IsFinite(value) && value > 0;
@@ -431,6 +485,10 @@ namespace DTET.VisualPrototype
             var enabled = new bool[renderers.Length];
             Vector3 position = exhibit.View.transform.position;
             Quaternion rotation = exhibit.View.transform.rotation;
+            Color background = exhibit.View.backgroundColor;
+            bool hdr = exhibit.View.allowHDR, msaa = exhibit.View.allowMSAA;
+            var cameraData = exhibit.View.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+            bool post = cameraData != null && cameraData.renderPostProcessing;
             try
             {
                 for (int i = 0; i < renderers.Length; i++)
@@ -442,22 +500,62 @@ namespace DTET.VisualPrototype
                     bool skyDraw = drawMaterial != null && drawMaterial.shader != null && drawMaterial.shader.name == "DTET/ExhibitSky";
                     if (!skyDraw) renderers[i].enabled = false;
                 }
-                Color32[] before = ReadNativeScene("reduced-synthetic-sky.png");
+                // A deterministic bright reference avoids depending on whether an arbitrary
+                // overview happens to contain a bright star. Point directly at catalogue entry 0.
+                SyntheticSkyStar star = SyntheticSkyCatalog.Star(0);
+                var direction = new Vector3((float)star.X, (float)star.Y, (float)star.Z);
+                exhibit.View.transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
+                exhibit.View.backgroundColor = Color.black;
+                exhibit.View.allowHDR = true; exhibit.View.allowMSAA = false;
+                if (cameraData != null) cameraData.renderPostProcessing = false;
+                Quaternion referenceRotation = exhibit.View.transform.rotation;
+                Color[] before = ReadNativeRadiance();
+                ReadNativeScene("reduced-synthetic-sky.png");
                 exhibit.View.transform.position = position + new Vector3(2, 1, -3);
-                Color32[] translated = ReadNativeScene(null);
-                exhibit.View.transform.rotation = rotation * Quaternion.Euler(0, 23, 0);
-                Color32[] rotated = ReadNativeScene(null);
-                int luminous = 0;
-                foreach (Color32 pixel in before) if (pixel.r > 40 || pixel.g > 40 || pixel.b > 40) luminous++;
-                Check(luminous > 8, "actual GPU synthetic sky contains resolved luminous point-spread samples");
-                Check(MeanDifference(before, translated) < .00001,
+                Color[] translated = ReadNativeRadiance();
+                exhibit.View.transform.rotation = referenceRotation * Quaternion.Euler(0, 23, 0);
+                Color[] rotated = ReadNativeRadiance();
+                int width = exhibit.SceneTarget.width, height = exhibit.SceneTarget.height;
+                // Admitted dimensions are even: the central star is between the four central
+                // pixels, making the selected pixel center (+0.5,+0.5) from its projected center.
+                double sigma = SyntheticSkyCatalog.PsfSigmaPixels(star.RelativeFlux, height);
+                double flux = SyntheticSkyCatalog.IntegratedDisplayFlux(star.RelativeFlux, height)
+                    * SyntheticSkyCatalog.PsfPixelMass(.5, .5, sigma);
+                Color measured = before[(height / 2) * width + width / 2];
+                double er = star.Red * flux, eg = star.Green * flux, eb = star.Blue * flux;
+                double relativeError = Math.Max(Math.Abs(measured.r - er) / er,
+                    Math.Max(Math.Abs(measured.g - eg) / eg, Math.Abs(measured.b - eb) / eb));
+                int extent = (int)Math.Ceiling(3 * sigma + .5);
+                double sumR = 0, sumG = 0, sumB = 0;
+                for (int y = height / 2 - extent; y < height / 2 + extent; y++)
+                    for (int x = width / 2 - extent; x < width / 2 + extent; x++)
+                    { Color p = before[y * width + x]; sumR += p.r; sumG += p.g; sumB += p.b; }
+                double integrated = SyntheticSkyCatalog.IntegratedDisplayFlux(star.RelativeFlux, height);
+                double integratedError = Math.Max(Math.Abs(sumR - star.Red * integrated) / (star.Red * integrated),
+                    Math.Max(Math.Abs(sumG - star.Green * integrated) / (star.Green * integrated),
+                        Math.Abs(sumB - star.Blue * integrated) / (star.Blue * integrated)));
+                double translationDifference = MeanDifference(before, translated), rotationDifference = MeanDifference(before, rotated);
+                gpuSky = new GpuSkyMeasurement { starIndex = 0, width = width, height = height,
+                    expectedRed = er, expectedGreen = eg, expectedBlue = eb, measuredRed = measured.r, measuredGreen = measured.g, measuredBlue = measured.b,
+                    maximumRelativeChannelError = relativeError, maximumRelativeIntegratedFluxError = integratedError,
+                    translationMeanAbsoluteDifference = translationDifference,
+                    rotationMeanAbsoluteDifference = rotationDifference,
+                    method = "Sky-only native linear HDR image with black background, aimed at synthetic catalogue star 0. Central pixel prediction uses integrated Gaussian PSF at (+0.5,+0.5) pixels for the even target dimensions, normalized catalogue colour and resolution-scaled flux. Relative channel tolerance 0.5 percent includes float projection and half-float target rounding." };
+                Check(double.IsFinite(relativeError) && relativeError < .005,
+                    "actual GPU bright-star central radiance matches the integrated PSF prediction within 0.5 percent");
+                Check(double.IsFinite(integratedError) && integratedError < .01,
+                    "actual GPU isolated bright-star kernel preserves integrated RGB flux within one percent");
+                Check(translationDifference < .00001,
                     "actual GPU distant-star image is invariant under camera translation at fixed orientation");
-                Check(MeanDifference(before, rotated) > .00001,
+                Check(rotationDifference > .00001,
                     "actual GPU distant-star directions respond to camera rotation");
             }
             finally
             {
                 exhibit.View.transform.SetPositionAndRotation(position, rotation);
+                exhibit.View.backgroundColor = background;
+                exhibit.View.allowHDR = hdr; exhibit.View.allowMSAA = msaa;
+                if (cameraData != null) cameraData.renderPostProcessing = post;
                 for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null) renderers[i].enabled = enabled[i];
             }
         }
@@ -688,6 +786,14 @@ namespace DTET.VisualPrototype
             for (int i = 0; i < left.Length; i++)
                 sum += Math.Abs(left[i].r - right[i].r) + Math.Abs(left[i].g - right[i].g) + Math.Abs(left[i].b - right[i].b);
             return sum / (left.Length * 3.0 * 255);
+        }
+        private static double MeanDifference(Color[] left, Color[] right)
+        {
+            if (left.Length != right.Length) return double.PositiveInfinity;
+            double sum = 0;
+            for (int i = 0; i < left.Length; i++)
+                sum += Math.Abs(left[i].r - right[i].r) + Math.Abs(left[i].g - right[i].g) + Math.Abs(left[i].b - right[i].b);
+            return sum / (left.Length * 3.0);
         }
 
         private Color32[] Capture(string file, bool includeInterface)

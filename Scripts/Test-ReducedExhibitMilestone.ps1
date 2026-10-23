@@ -48,7 +48,7 @@ while (!$dtetProcess.WaitForExit(250)) {
     startedUtc=$dtetStarted.ToString('o'); finishedUtc=[DateTime]::UtcNow.ToString('o');
     processId=$dtetProcess.Id; player=$dtetPlayer; timedOut=$dtetTimedOut;
     samplingIntervalMilliseconds=250; peakSampledWorkingSetBytes=$dtetPeakWorking; peakSampledPrivateBytes=$dtetPeakPrivate;
-    scope='Windows process memory sampled every 250 ms across launcher, all profiles, fallback, seek/capture/performance and unload. Includes managed/native/driver-associated process allocations, but is not a dedicated GPU VRAM measurement; shorter transient peaks can be missed. Hidden development player with normal off-screen rendering; not laptop or headset certification.';
+    scope='Windows process memory sampled every 250 ms across launcher, all profiles, fallback, seek/capture/performance and unload. Includes validation-only full-image captures and managed/native/driver-associated process allocations, but is not a dedicated GPU VRAM measurement; shorter transient peaks can be missed. Hidden development player with explicit completed off-screen rendering and a one-pixel GPU completion readback per timed frame; not native presentation FPS, laptop or headset certification.';
     samples=$dtetMemory.ToArray()
 } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $dtetOutput 'process-memory.json') -Encoding utf8
 if ($dtetTimedOut) { throw "Owned reduced-exhibit QA process $($dtetProcess.Id) timed out. Inspect $dtetLog." }
@@ -65,4 +65,4 @@ foreach ($dtetImage in $dtetReceipt.images) {
 }
 if ($dtetMemory.Count -lt 4 -or $dtetPeakWorking -le 0 -or $dtetPeakPrivate -le 0) { throw 'Process memory sampling did not collect a usable trace.' }
 Write-Output "PASS reduced-exhibit player integration: $($dtetReceipt.checks.Count) checks; $($dtetReceipt.graphicsDevice); $dtetReceiptPath"
-Write-Output "Measured process peaks: working set $dtetPeakWorking bytes, private bytes $dtetPeakPrivate; $($dtetReceipt.performance.Count) natural-frame windows."
+Write-Output "Measured process peaks: working set $dtetPeakWorking bytes, private bytes $dtetPeakPrivate; $($dtetReceipt.performance.Count) completed off-screen frame windows."
