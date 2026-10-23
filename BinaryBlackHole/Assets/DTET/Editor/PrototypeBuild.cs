@@ -34,6 +34,10 @@ namespace DTET.VisualPrototype.Editor
                 "Assets/Resources/DTET/Starfield.shader",
                 "Assets/Resources/DTET/ReferenceVolume.shader",
                 "Assets/Resources/DTET/ReferenceTracer.shader",
+                "Assets/Resources/DTET/ReducedBinaryVolume.shader",
+                "Assets/Resources/DTET/ReducedDensitySamples.shader",
+                "Assets/Resources/DTET/ExhibitSky.shader",
+                "Assets/Resources/DTET/ExhibitDisplay.shader",
                 "Assets/Resources/DTET/SolidSurface.shader",
                 "Assets/Resources/DTET/WristSurface.shader"
             };

@@ -172,6 +172,12 @@ namespace DTET.VisualPrototype
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "--reduced-exhibit") >= 0)
+            {
+                if (FindFirstObjectByType<ReducedBinaryExhibit>() == null)
+                    new GameObject("DT-ET reduced binary exhibit").AddComponent<ReducedBinaryExhibit>();
+                return;
+            }
             if (Array.IndexOf(Environment.GetCommandLineArgs(), "--reference-lab") >= 0)
             {
                 if (FindFirstObjectByType<ReferenceFlowLab>() == null)
