@@ -4,5 +4,9 @@
     <LangVersion>8.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../BinaryBlackHole/Assets/DTET/Simulation/*.cs" />
+  </ItemGroup>
 </Project>

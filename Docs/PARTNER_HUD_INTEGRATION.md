@@ -1,5 +1,7 @@
 # Partner HUD reconstruction
 
+**M1 update:** [the shared SI lesson](PHYSICS_M1.md) is now the default mode. Historical storyboard-only descriptions below apply to the separately retained artistic mode. Current physical readouts, graph and playback use one session; merger and clocks remain outside this milestone.
+
 The supplied `InspiralDemo_Build.zip` contains a Windows player made with Unity 6000.5.10f1, not an editable Unity source project. Its scene serialization (`My project1_Data/level0`) and `Assembly-CSharp.dll` metadata were inspected read-only. No compiled partner assembly, newer-Editor project, or external art was imported. This implementation remains on **6000.3.25f1 / Unity 6.3 LTS**, URP 17.3.0, Input System 1.17.0, UGUI 2.0.0.
 
 ## What was carried across

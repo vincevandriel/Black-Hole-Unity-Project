@@ -18,7 +18,7 @@ foreach ($dtetVariant in $Variants) {
     $env:DTET_CAPTURE_PATH = $dtetImage
     $env:DTET_CAPTURE_VARIANT = $dtetVariant
     try {
-        $dtetProcess = Start-Process -FilePath $dtetPlayer -ArgumentList @('-screen-width','1600','-screen-height','900','-screen-fullscreen','0','-logFile',('"'+$dtetLog+'"')) -PassThru
+        $dtetProcess = Start-Process -FilePath $dtetPlayer -ArgumentList @('-screen-width','1600','-screen-height','900','-screen-fullscreen','0','-logFile',('"'+$dtetLog+'"')) -WindowStyle Hidden -PassThru
     } finally {
         Remove-Item Env:\DTET_CAPTURE_PATH,Env:\DTET_CAPTURE_VARIANT -ErrorAction SilentlyContinue
     }

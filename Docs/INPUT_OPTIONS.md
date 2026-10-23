@@ -1,5 +1,7 @@
 # Visitor input options
 
+**M1 update:** [the shared SI lesson](PHYSICS_M1.md) is now the default mode. Historical storyboard-only descriptions below apply to the separately retained artistic mode. Current physical readouts, graph and playback use one session; merger and clocks remain outside this milestone.
+
 Open `Assets/DTET/Scenes/BinaryBlackHole_VisualStaging.unity` in Unity 6000.3.25f1 and press Play, or run `Builds/VisualQA/BinaryBlackHole_VisualQA.exe`.
 
 Press **O** to raise the wrist and open **Input options**. Alternatively press V and click **OPTIONS / O** on the wrist. Two independent sliders adjust:

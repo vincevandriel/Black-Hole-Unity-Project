@@ -1,0 +1,6 @@
+{
+  "name": "DTET.Simulation",
+  "rootNamespace": "BlackHole.Staging.Simulation",
+  "autoReferenced": true,
+  "noEngineReferences": true
+}

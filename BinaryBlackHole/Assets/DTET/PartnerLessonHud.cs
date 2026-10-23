@@ -27,7 +27,10 @@ namespace DTET.VisualPrototype
         private ExhibitCameraRig observerRig;
         private GameObject wristControls, inputOptions;
         private Slider lookSlider, scrollSlider;
-        private Text lookValue, scrollValue;
+        private Text lookValue, scrollValue, separationLabel, timeLabel, honestyLabel, signalTitle, signalSubtitle, signalLegend;
+        private bool lastPhysicalMode;
+        private long lastScenarioVersion = -1;
+        public void InvalidateNarration() { lastStage = -1; lastScenarioVersion = -1; }
         public bool OptionsOpen => inputOptions != null && inputOptions.activeSelf;
         private HudSignalGraphic signal;
         private HudProgressGraphic ring;
@@ -49,27 +52,27 @@ namespace DTET.VisualPrototype
             rounded = CreateRoundedSprite();
             var readout = WorldCard("Partner readout card", new Vector3(-7.3f, 1.2f, 0), new Vector2(266, 354));
             Label(readout, "LESSON READOUTS", 13, Accent, 18, 12, 230, 24);
-            Label(readout, "SEPARATION (VISUAL)", 12, Muted, 18, 48, 230, 20);
+            separationLabel = Label(readout, "SEPARATION (VISUAL)", 12, Muted, 18, 48, 230, 20);
             separation = Label(readout, "", 29, White, 18, 70, 230, 36);
             Label(readout, "ORBITS PER SECOND", 12, Muted, 18, 113, 230, 20);
             orbits = Label(readout, "", 24, White, 18, 136, 230, 34);
             Label(readout, "WAVE FREQUENCY", 12, Muted, 18, 177, 230, 20);
             frequency = Label(readout, "", 24, Accent, 18, 200, 230, 34);
-            Label(readout, "PLAYBACK LEFT / NOT PHYSICAL TIME", 11, Muted, 18, 241, 230, 20);
+            timeLabel = Label(readout, "PLAYBACK LEFT / NOT PHYSICAL TIME", 11, Muted, 18, 241, 230, 20);
             remaining = Label(readout, "", 26, White, 18, 264, 230, 34);
             var honesty = Box(readout, "Readout honesty pill", new Vector2(14, -310), new Vector2(238, 30), new Color(1, 1, 1, 0.07f));
-            Label(honesty, "No orbital physics · approximate optics", 12, Warning, 4, 2, 230, 26, TextAnchor.MiddleCenter);
+            honestyLabel = Label(honesty, "No orbital physics · approximate optics", 12, Warning, 4, 2, 230, 26, TextAnchor.MiddleCenter);
 
             var chirp = WorldCard("Partner chirp card", new Vector3(1.3f, 2.1f, 0), new Vector2(400, 216));
-            Label(chirp, "Detector-like signal, not a picture", 17, White, 18, 12, 364, 30);
-            Label(chirp, "QUALITATIVE CHIRP · NO Hz OR STRAIN DATA", 11, Warning, 18, 47, 364, 23);
+            signalTitle = Label(chirp, "Detector-like signal, not a picture", 17, White, 18, 12, 364, 30);
+            signalSubtitle = Label(chirp, "QUALITATIVE CHIRP · NO Hz OR STRAIN DATA", 11, Warning, 18, 47, 364, 23);
             var graph = new GameObject("Illustrative chirp waveform", typeof(RectTransform), typeof(CanvasRenderer), typeof(HudSignalGraphic));
             graph.transform.SetParent(chirp, false);
             Place(graph.GetComponent<RectTransform>(), new Vector2(18, -79), new Vector2(364, 92));
             signal = graph.GetComponent<HudSignalGraphic>();
             signal.color = Accent;
             signal.raycastTarget = false;
-            Label(chirp, "Height scaled to fit · illustrative waveform", 11, Muted, 18, 176, 300, 26);
+            signalLegend = Label(chirp, "Height scaled to fit · illustrative waveform", 11, Muted, 18, 176, 300, 26);
             Label(chirp, "time →", 12, Muted, 317, 176, 65, 26, TextAnchor.MiddleRight);
 
             var bubble = WorldCard("Partner tutor bubble", new Vector3(1.3f, 0.8f, 0), new Vector2(400, 172));
@@ -229,13 +232,21 @@ namespace DTET.VisualPrototype
         {
             if (provider == null) return;
             var snapshot = provider.CaptureHudSnapshot();
+            separationLabel.text = snapshot.PhysicalModel ? "CENTRE SEPARATION / MODEL" : "SEPARATION (VISUAL)";
+            timeLabel.text = snapshot.PhysicalModel ? "SOURCE TIME / SECONDS" : "PLAYBACK LEFT / NOT PHYSICAL TIME";
+            honestyLabel.text = snapshot.PhysicalModel ? "SI inspiral · optics approximate" : "No orbital physics · approximate optics";
+            signalTitle.text = snapshot.PhysicalModel ? "Model GW frequency / Hz" : "Detector-like signal, not a picture";
+            signalSubtitle.text = snapshot.PhysicalModel ? "CIRCULAR MODEL / NOT DETECTOR STRAIN" : "QUALITATIVE CHIRP / NO Hz OR STRAIN DATA";
+            signal.SetModel(snapshot.Physics?.Model);
+            signalLegend.text = snapshot.PhysicalModel ? $"0–{signal.MaximumFrequencyHz:0.0} Hz / {snapshot.Physics.Model.CutoffTimeSeconds:0.0} source s" : "Height scaled to fit / illustrative waveform";
             separation.fontSize = snapshot.ConceptualEndpoint ? 22 : 29;
             separation.text = snapshot.ConceptualEndpoint ? "Conceptual remnant"
                 : snapshot.SeparationKm.HasValue ? $"{snapshot.SeparationKm.Value:0} km"
                 : $"{snapshot.VisualSeparationRatio * 100f:0}% of start";
             orbits.text = snapshot.OrbitsPerSecond.HasValue ? $"{snapshot.OrbitsPerSecond.Value:0.0}" : "Not connected";
             frequency.text = snapshot.WaveFrequencyHz.HasValue ? $"{snapshot.WaveFrequencyHz.Value:0.0} Hz" : "Not connected";
-            remaining.text = $"{snapshot.PlaybackSecondsLeft:0.0} s{(snapshot.Playing ? "" : " / paused")}";
+            remaining.text = snapshot.PhysicalModel ? $"{snapshot.Physics.State.PhysicalTimeSeconds:0.000} s"
+                : $"{snapshot.PlaybackSecondsLeft:0.0} s{(snapshot.Playing ? "" : " / paused")}";
             playLabel.text = snapshot.Progress >= 1f ? "PLAY" : snapshot.Playing ? "PAUSE" : "PLAY";
             speedLabel.text = $"{snapshot.PlaybackRate:0.#}×";
             status.text = $"{snapshot.Progress * 100f:0}% · V lowers wrist";
@@ -257,14 +268,25 @@ namespace DTET.VisualPrototype
                     ? "Clock physics not connected.\nApproximate bending adds no clock rate."
                     : clocks.Fidelity + " · " + clocks.ModelId;
             }
-            signal.SetProgress(snapshot.Progress);
+            signal.SetProgress(snapshot.PhysicalModel ? (float)snapshot.Physics.GraphProgress : snapshot.Progress);
             ring.SetProgress(snapshot.Progress);
             var stage = snapshot.ConceptualEndpoint ? 2 : snapshot.Progress < 0.5f ? 0 : 1;
             for (var i = 0; i < stageChips.Length; i++) stageChips[i].color = i == stage
                 ? new Color(Accent.r, Accent.g, Accent.b, 0.35f) : new Color(1, 1, 1, 0.1f);
             // Local scripted narration only. Never sends a snapshot to a network provider.
             var narrationStage = snapshot.ConceptualEndpoint ? 4 : Mathf.Min(3, Mathf.FloorToInt(snapshot.Progress * 4f));
-            if (narrationStage == lastStage) return;
+            if (snapshot.PhysicalModel)
+            {
+                if (narrationStage == lastStage && lastPhysicalMode && lastScenarioVersion == snapshot.Physics.ScenarioVersion) return;
+                lastStage = narrationStage;
+                lastPhysicalMode = true;
+                lastScenarioVersion = snapshot.Physics.ScenarioVersion;
+                tutor.text = snapshot.ConceptualEndpoint ? "The circular model reached its cutoff. This marker is a conceptual endpoint; merger and ringdown await numerical replay."
+                    : "The SI model drives both bodies and this graph. Smaller separation raises orbital frequency; the dominant circular GW frequency is twice that. Pause or rewind to compare.";
+                return;
+            }
+            if (narrationStage == lastStage && !lastPhysicalMode) return;
+            lastPhysicalMode = false;
             lastStage = narrationStage;
             tutor.text = narrationStage == 0 ? "Two illustrated black holes share a centre. Move around the exhibit, or pause to inspect them."
                 : narrationStage == 1 ? "A real inspiral loses orbital energy as gravitational waves. These moving markers are only a storyboard."
@@ -275,8 +297,9 @@ namespace DTET.VisualPrototype
 
         private void CycleSpeed()
         {
-            var current = provider.CaptureHudSnapshot().PlaybackRate;
-            provider.SetHudPlaybackRate(current < 0.99f ? 1f : current < 1.99f ? 2f : 0.5f);
+            var currentRate = provider.CaptureHudSnapshot().PlaybackRate;
+            var current = Mathf.Abs(currentRate);
+            provider.SetHudPlaybackRate((currentRate < 0 ? -1 : 1) * (current < 0.99f ? 1f : current < 1.99f ? 2f : 0.5f));
             Refresh();
         }
 

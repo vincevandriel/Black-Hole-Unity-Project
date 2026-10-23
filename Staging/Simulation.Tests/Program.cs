@@ -102,3 +102,4 @@ AdmObserverTests.Run();
 ThinLensTests.Run();
 ObserverInputSettingsTests.Run();
 StoryboardChoreographyTests.Run();
+PhysicalBindingTests.Run();

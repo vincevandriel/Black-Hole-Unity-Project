@@ -43,6 +43,7 @@ namespace DTET.VisualPrototype
                 // Captures exercise deterministic defaults without overwriting the visitor's preferences.
                 prototype.Observer.PersistInputSettings = false;
                 prototype.Observer.ResetInputSensitivities();
+                prototype.SetPhysicsMode(false); // Deliberately audit the retained artistic mode here.
                 prototype.SetLearningVisible(true);
                 CheckUiCommands();
                 CheckObservationCommands(prototype);
@@ -137,7 +138,7 @@ namespace DTET.VisualPrototype
             yield return new WaitForEndOfFrame();
             var path = Environment.GetEnvironmentVariable("DTET_CAPTURE_PATH");
             var captureStarted = DateTime.UtcNow;
-            ScreenCapture.CaptureScreenshot(path);
+            DevelopmentFrameCapture.WritePng(Camera.main, path);
             yield return new WaitForSecondsRealtime(2f);
             if (!File.Exists(path) || File.GetLastWriteTimeUtc(path) < captureStarted || new FileInfo(path).Length == 0)
             {

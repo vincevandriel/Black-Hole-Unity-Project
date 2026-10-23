@@ -1,12 +1,27 @@
+using BlackHole.Staging.Simulation;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Qualitative increasing-frequency artwork; never represents detector strain or Hz.</summary>
+    /// <summary>Shared model frequency curve in physical mode; qualitative artwork in storyboard mode. Neither is detector strain.</summary>
     public sealed class HudSignalGraphic : MaskableGraphic
     {
         private float progress;
+        private CircularInspiral model;
+        private IReadOnlyList<FrequencyGraphPoint> samples;
+        public double MaximumFrequencyHz { get; private set; }
+        public CircularInspiral Model => model;
+
+        public void SetModel(CircularInspiral value)
+        {
+            if (ReferenceEquals(model, value)) return;
+            model = value;
+            samples = value == null ? null : FrequencyGraph.Sample(value, value.CutoffTimeSeconds, 192);
+            MaximumFrequencyHz = samples == null ? 0 : samples[samples.Count - 1].GravitationalWaveFrequencyHertz;
+            SetVerticesDirty();
+        }
         public void SetProgress(float value)
         {
             if (Mathf.Approximately(progress, value)) return;
@@ -19,7 +34,21 @@ namespace DTET.VisualPrototype
             mesh.Clear();
             var rect = rectTransform.rect;
             var muted = new Color(color.r, color.g, color.b, 0.19f);
-            Stroke(mesh, new Vector2(rect.xMin, rect.center.y), new Vector2(rect.xMax, rect.center.y), 1, muted);
+            float zeroY = model == null ? rect.center.y : rect.yMin;
+            Stroke(mesh, new Vector2(rect.xMin, zeroY), new Vector2(rect.xMax, zeroY), 1, muted);
+            if (this.samples != null)
+            {
+                for (int i = 0; i < this.samples.Count - 1; i++)
+                {
+                    float x = i / (float)(this.samples.Count - 1), nextX = (i + 1) / (float)(this.samples.Count - 1);
+                    var a = new Vector2(rect.xMin + x * rect.width, rect.yMin + (float)(this.samples[i].GravitationalWaveFrequencyHertz / MaximumFrequencyHz) * rect.height * 0.94f);
+                    var b = new Vector2(rect.xMin + nextX * rect.width, rect.yMin + (float)(this.samples[i + 1].GravitationalWaveFrequencyHertz / MaximumFrequencyHz) * rect.height * 0.94f);
+                    Stroke(mesh, a, b, 1.8f, nextX <= progress ? color : muted);
+                }
+                var cursor = Mathf.Lerp(rect.xMin, rect.xMax, progress);
+                Stroke(mesh, new Vector2(cursor, rect.yMin), new Vector2(cursor, rect.yMax), 1.5f, new Color(0.95f, 0.70f, 0.36f));
+                return;
+            }
             const int samples = 400;
             for (var i = 0; i < samples; i++)
             {
