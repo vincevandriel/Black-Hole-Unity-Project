@@ -32,6 +32,8 @@ namespace DTET.VisualPrototype.Editor
                 "Assets/Resources/DTET/ConceptualAccretion.shader",
                 "Assets/Resources/DTET/GlowLine.shader",
                 "Assets/Resources/DTET/Starfield.shader",
+                "Assets/Resources/DTET/ReferenceVolume.shader",
+                "Assets/Resources/DTET/ReferenceTracer.shader",
                 "Assets/Resources/DTET/SolidSurface.shader",
                 "Assets/Resources/DTET/WristSurface.shader"
             };

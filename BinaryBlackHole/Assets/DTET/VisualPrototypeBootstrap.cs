@@ -172,6 +172,12 @@ namespace DTET.VisualPrototype
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "--reference-lab") >= 0)
+            {
+                if (FindFirstObjectByType<ReferenceFlowLab>() == null)
+                    new GameObject("DT-ET isolated field reference lab").AddComponent<ReferenceFlowLab>();
+                return;
+            }
             if (FindFirstObjectByType<VisualPrototypeBootstrap>() != null) return;
             var root = new GameObject("DT-ET Storyboard / approximate thin-lens optics");
             DontDestroyOnLoad(root);
