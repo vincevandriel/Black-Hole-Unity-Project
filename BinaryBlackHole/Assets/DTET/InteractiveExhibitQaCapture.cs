@@ -278,8 +278,8 @@ namespace DTET.VisualPrototype
         private void ValidatePointerTargets()
         {
             RectTransform panel = null;
-            foreach (var rect in exhibit.Wrist.GetComponentsInChildren<RectTransform>(true))
-                if (rect.name == "Projected instrument panel") panel = rect;
+            foreach (var childRect in exhibit.Wrist.GetComponentsInChildren<RectTransform>(true))
+                if (childRect.name == "Projected instrument panel") panel = childRect;
             bool inside = panel != null;
             if (panel != null)
             {
