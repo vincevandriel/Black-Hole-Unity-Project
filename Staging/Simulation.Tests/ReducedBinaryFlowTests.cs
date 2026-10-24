@@ -29,6 +29,10 @@ internal static class ReducedBinaryFlowTests
         Check(late.BinaryWeight == 0 && late.RemnantWeight == 1 && late.IsCommonHorizon,
             "Retained endpoint selects fully developed assumed remnant ring");
         Near(initial.ReservoirInnerRadiusRg, 1.8 * model.InitialSeparationRg, 1e-14, "Fixed cavity set by initial separation");
+        Near(initial.BodyA.InnerRadiusRg, 1.25 * initial.BodyA.HorizonRadiusRg, 1e-14,
+            "Assumed emitting plunge remains outside the retained horizon proxy");
+        Check(initial.BodyA.OuterRadiusRg + initial.BodyB.OuterRadiusRg < initial.SeparationRg,
+            "Tidal outer radii do not expand to force overlapping minidisks");
         Near(model.EvaluateState(-1).TimeTg, 0, 0, "Time clamps to recorded start");
         Near(model.EvaluateState(model.DurationSeconds + 1).TimeTg, late.TimeTg, 1e-14, "Time clamps to recorded endpoint");
         Reject(() => model.EvaluateState(double.NaN), "Nonfinite epoch");
@@ -55,6 +59,7 @@ internal static class ReducedBinaryFlowTests
         ReducedBinaryFlowSample streamMid = model.Sample(initial, streamX, streamY, streamZ);
         Near(streamMid.RelativeDensity, .9, 1e-12, "Independent parabolic stream center fixture");
         Near(streamMid.NormalizedBolometricEmission, .9 * Math.Pow(.65, 4), 1e-12, "Stream emissivity fixture");
+        CheckStreamClosure(model);
         double remnantRadius = .5 * (late.Remnant.InnerRadiusRg + late.Remnant.OuterRadiusRg);
         ReducedBinaryFlowSample remnant = model.Sample(late, late.Remnant.PositionRg.X + remnantRadius,
             late.Remnant.PositionRg.Y, late.Remnant.PositionRg.Z);
@@ -106,13 +111,24 @@ internal static class ReducedBinaryFlowTests
         Check(GC.GetAllocatedBytesForCurrentThread() == beforeAllocation && accumulated > 0,
             "Pure absolute state reconstruction and sampling allocate no per-seek storage");
 
-        // The transition is an explicitly prescribed C1 envelope, not gas evolution from a solver.
+        // C1 prescribed transition; no fluid evolution.
         double epsilon = 1e-4 * model.GravitationalTimeSeconds;
         var pre = model.EvaluateState(model.CommonHorizonElapsedSeconds - epsilon);
         var common = model.EvaluateState(model.CommonHorizonElapsedSeconds);
         var post = model.EvaluateState(model.CommonHorizonElapsedSeconds + epsilon);
         Check(pre.BinaryWeight < 3e-12 && common.BinaryWeight == 0 && common.RemnantWeight == 0
-            && post.RemnantWeight < 2e-12, "Binary fade and remnant rise have zero value and slope at common horizon");
+            && post.RemnantWeight < 2e-12 && common.TransitionWeight == 1,
+            "Shared transition gas bridges zero individual/remnant weights at common horizon");
+        foreach (double aligned in new[] { -600.0, -300.0, -120.0, -1.0, 0.0, 1.0, 80.0, 160.0 })
+        {
+            var state = model.EvaluateState(model.CommonHorizonElapsedSeconds + aligned * model.GravitationalTimeSeconds);
+            double integratedEmission = 0;
+            // Sample the central plane independently of camera rays.
+            for (int z = -64; z <= 64; z++)
+            for (int x = -64; x <= 64; x++)
+                integratedEmission += model.Sample(state, x * .25, 0, z * .25).NormalizedBolometricEmission * .0625;
+            Check(integratedEmission > .25, "Central gas emits through late inspiral/common horizon/remnant: " + aligned);
+        }
         for (int i = 0; i < 512; ++i)
         {
             double x = (2 * RadicalInverse(i + 1, 2) - 1) * model.HalfExtentXZ;
@@ -122,9 +138,8 @@ internal static class ReducedBinaryFlowTests
             Check(difference < 1e-6, "No field jump when numerical individual horizons switch to common horizon");
         }
 
-        // Independent cylindrical/elliptical volume integrals compare complete Cartesian grids.
-        // The ring angular contrast integrates to zero. Stream coordinate Jacobian is chord length;
-        // the across-stream integral of (1-v^2-h^2)^2 is pi*width*height/3.
+        // Independent volume integrals: ring contrast averages to zero; stream Jacobian is chord length.
+        // The stream cross section integrates to pi*width*height/3.
         double maximumCoarseMassError = 0, maximumFineMassError = 0;
         double maximumCoarseEmissionError = 0, maximumFineEmissionError = 0;
         foreach (ReducedBinaryFlowState state in new[] { initial, common, late })
@@ -142,7 +157,7 @@ internal static class ReducedBinaryFlowTests
             maximumFineEmissionError = Math.Max(maximumFineEmissionError, Math.Abs(fineEmission / expectedEmission - 1));
             Console.WriteLine($"M4 field integral t={state.ElapsedSeconds:R}: unmasked component mass={expectedMass:R}, emission={expectedEmission:R}; 96 mass={coarseMass:R}, emission={coarseEmission:R}; 192 mass={fineMass:R}, emission={fineEmission:R}");
         }
-        // Error for an individual shifted compact feature is not strictly monotone under midpoint refinement.
+        // Shifted compact-feature midpoint errors need not decrease monotonically.
         Check(maximumFineMassError < maximumCoarseMassError && maximumFineEmissionError < maximumCoarseEmissionError,
             "Spatial refinement improves worst-epoch mass and emission error without changing the source field");
         Console.WriteLine("PASS M4 reduced binary field, SXS binding, deterministic seeks, bounded support, merger continuity and integral refinement");
@@ -159,13 +174,73 @@ internal static class ReducedBinaryFlowTests
         }
         var remnant = RingIntegrals(s.Remnant.InnerRadiusRg, s.Remnant.OuterRadiusRg, .24, 2 * s.RemnantWeight, 1.1);
         total.mass += remnant.mass; total.emission += remnant.emission;
-        foreach (ReducedBinaryFlowStream stream in new[] { s.StreamA, s.StreamB })
+        var transition = RingIntegrals(ReducedBinaryFlowModel.TransitionInnerRadiusRg,
+            ReducedBinaryFlowModel.TransitionOuterRadiusRg, .24, 1.5 * s.TransitionWeight, 1.1);
+        total.mass += transition.mass; total.emission += transition.emission;
+        foreach (var (stream, body) in new[] { (s.StreamA, s.BodyA), (s.StreamB, s.BodyB) })
         {
-            double factor = .9 * s.BinaryWeight * Math.Sqrt(stream.ChordLengthSquaredRg2) * Math.PI * 1.4 * .8 / 3;
+            double viability = ReducedBinaryFlowModel.SmoothStep(body.OuterRadiusRg - body.InnerRadiusRg);
+            double factor = .9 * s.BinaryWeight * viability * Math.Sqrt(stream.ChordLengthSquaredRg2) * Math.PI * 1.4 * .8 / 3;
             total.mass += factor * 8 / 15;
             total.emission += factor * Simpson(u => 16 * u * u * (1 - u) * (1 - u) * Math.Pow(.4 + .5 * u, 4), 0, 1);
         }
         return total;
+    }
+
+    private static void CheckStreamClosure(ReducedBinaryFlowModel model)
+    {
+        const double epsilon = .001;
+        foreach (bool primary in new[] { true, false })
+        {
+            double nearClosed = 0, nearOpen = 0;
+            foreach (double width in new[] { 1.1, 1, 1 - epsilon, .75, .5, .25, epsilon, 0, -epsilon })
+            {
+                double lo = 0, hi = model.CommonHorizonElapsedSeconds - .001 * model.GravitationalTimeSeconds;
+                for (int i = 0; i < 64; i++)
+                {
+                    double middle = .5 * (lo + hi);
+                    var candidate = model.EvaluateState(middle);
+                    var disk = primary ? candidate.BodyA : candidate.BodyB;
+                    if (disk.OuterRadiusRg - disk.InnerRadiusRg > width) lo = middle; else hi = middle;
+                }
+                var state = model.EvaluateState(hi);
+                var body = primary ? state.BodyA : state.BodyB;
+                var stream = primary ? state.StreamA : state.StreamB;
+                Check(Math.Abs(body.OuterRadiusRg - body.InnerRadiusRg - width) < 1e-11 && state.BinaryWeight > 0,
+                    "Retained disk reaches the requested width before its binary envelope vanishes");
+                // The quarter-chord point stays outside the shared transition ring as the disk closes.
+                double x = .75 * stream.StartRg.X + .25 * stream.EndRg.X + 1.875 * stream.BowNormal.X;
+                double y = .75 * stream.StartRg.Y + .25 * stream.EndRg.Y;
+                double z = .75 * stream.StartRg.Z + .25 * stream.EndRg.Z + 1.875 * stream.BowNormal.Z;
+                double radius = Math.Sqrt(x * x + z * z);
+                Check(radius > 16 && radius < state.ReservoirInnerRadiusRg,
+                    "Stream fixture excludes transition and reservoir rings");
+                var sample = model.Sample(state, x, y, z);
+                double s = Math.Clamp(width, 0, 1), viability = s * s * (3 - 2 * s);
+                double expected = .50625 * state.BinaryWeight * viability;
+                Near(sample.RelativeDensity, expected, 1e-8, "Isolated stream follows its disk-width taper");
+                Near(sample.NormalizedBolometricEmission, expected * Math.Pow(.525, 4), 1e-8,
+                    "Stream emission shares the density taper");
+                if (width > 0)
+                {
+                    double dx = stream.EndRg.X - stream.StartRg.X + 5 * stream.BowNormal.X;
+                    double dy = stream.EndRg.Y - stream.StartRg.Y;
+                    double dz = stream.EndRg.Z - stream.StartRg.Z + 5 * stream.BowNormal.Z;
+                    double length = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+                    Near(sample.VelocityXOverC, .1525 * dx / length, 1e-9, "Taper preserves stream tangent speed x");
+                    Near(sample.VelocityYOverC, .1525 * dy / length, 1e-9, "Taper preserves stream tangent speed y");
+                    Near(sample.VelocityZOverC, .1525 * dz / length, 1e-9, "Taper preserves stream tangent speed z");
+                    if (width == epsilon) nearClosed = sample.RelativeDensity / (.50625 * state.BinaryWeight);
+                    if (width == 1 - epsilon) nearOpen = sample.RelativeDensity / (.50625 * state.BinaryWeight);
+                }
+                else Check(sample.RelativeDensity == 0 && sample.NormalizedBolometricEmission == 0
+                    && sample.VelocityXOverC == 0 && sample.VelocityYOverC == 0 && sample.VelocityZOverC == 0
+                    && sample.TemperatureKelvin == 0, "Closed disk has no residual stream or invalid empty-field velocity");
+            }
+            Check(nearClosed / epsilon < .004 && (1 - nearOpen) / epsilon < .004,
+                "Stream taper approaches both endpoints with vanishing first derivative");
+        }
+        Console.WriteLine("PASS disk-linked stream closure, smooth endpoints, emission and prescribed velocity");
     }
 
     private static (double mass, double emission) RingIntegrals(double a, double b, double aspect, double strength, double temperature)

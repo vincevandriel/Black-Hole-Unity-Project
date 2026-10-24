@@ -36,7 +36,7 @@ namespace DTET.VisualPrototype
         }
         [Serializable] private sealed class Receipt
         {
-            public bool success, performanceOnly;
+            public bool success, performanceOnly, previewOnly;
             public string unityVersion, graphicsDevice, graphicsApi, processor, scope, timingMethod;
             public string[] checks, images;
             public Window[] performance;
@@ -68,15 +68,29 @@ namespace DTET.VisualPrototype
                 benchmarkSeconds = Math.Max(2, Math.Min(15, seconds));
             QualitySettings.vSyncCount = 0; Application.targetFrameRate = -1;
             yield return new WaitForSecondsRealtime(.75f);
+            // Warm up the hidden player's windowed surface before measuring automatic frames.
+            Screen.SetResolution(1280, 720, FullScreenMode.Windowed);
+            yield return new WaitForSecondsRealtime(.2f);
+            Screen.SetResolution(1600, 900, FullScreenMode.Windowed);
+            yield return new WaitForSecondsRealtime(.2f);
             exhibit = FindFirstObjectByType<InteractiveBinaryExhibit>();
             if (exhibit == null) { Check(false, "interactive launch installs the new exhibit"); Application.Quit(1); yield break; }
             exhibit.EmulatedInputEnabled = false;
+            exhibit.LegacyGasForQa = true;
             Check(!exhibit.Ready && exhibit.SceneTarget == null, "quality launcher precedes scene allocation");
             Check(FindFirstObjectByType<ReducedBinaryExhibit>() == null && FindFirstObjectByType<ReferenceFlowLab>() == null && FindFirstObjectByType<VisualPrototypeBootstrap>() == null,
                 "interactive entry does not instantiate a competing simulation");
             bool performanceOnly = Environment.GetEnvironmentVariable("DTET_INTERACTIVE_PERFORMANCE_ONLY") == "1";
+            bool previewOnly = Environment.GetEnvironmentVariable("DTET_WAVE_PREVIEW_ONLY") == "1";
             if (!performanceOnly) Capture("launcher.png", true);
-            if (performanceOnly)
+            if (previewOnly)
+            {
+                exhibit.Launch(ExhibitQualityProfile.Balanced); yield return null;
+                ValidateOutgoingWaves();
+                yield return CaptureOutgoingWaveSequence();
+                exhibit.ReturnToLauncher(); yield return null; yield return null;
+            }
+            else if (performanceOnly)
             {
                 exhibit.Launch(ExhibitQualityProfile.High); yield return null;
                 exhibit.Wrist.SetRaised(true, true); exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 1, 1);
@@ -94,11 +108,11 @@ namespace DTET.VisualPrototype
                 "all paths release scene, session, optics and wrist references");
             var receipt = new Receipt
             {
-                success = passed, performanceOnly = performanceOnly, unityVersion = Application.unityVersion,
+                success = passed, performanceOnly = performanceOnly, previewOnly = previewOnly, unityVersion = Application.unityVersion,
                 graphicsDevice = SystemInfo.graphicsDeviceName, graphicsApi = SystemInfo.graphicsDeviceType.ToString(), processor = SystemInfo.processorType,
                 checks = checks.ToArray(), images = images.ToArray(), performance = windows.ToArray(), gpuFixtures = fixtures.ToArray(),
                 scope = "Desktop recorded replay and bounded adjustable educational experiment, prescribed gas, illustrative lens/wave warp and emulated holographic wrist. No scientific GRMHD, exact binary metric, headset, human usability or laptop certification.",
-                timingMethod = "Completed offscreen scene, optical composite and full interface. Stopwatch includes player-loop yield and one-pixel GPU readback completion fence. No PNG/full-image readback or file writes inside windows. Not native presentation FPS or standalone GPU timing."
+                timingMethod = "Completed offscreen scene with source-level stellar optics and full interface. Stopwatch includes player-loop yield and one-pixel GPU readback completion fence. No PNG/full-image readback or file writes inside windows. Not native presentation FPS or standalone GPU timing."
             };
             File.WriteAllText(Path.Combine(output, "interactive-exhibit-integration.json"), JsonUtility.ToJson(receipt, true));
             Debug.Log(passed ? "DTET_INTERACTIVE_EXHIBIT_INTEGRATION_PASS" : "DTET_INTERACTIVE_EXHIBIT_INTEGRATION_FAILED");
@@ -111,6 +125,13 @@ namespace DTET.VisualPrototype
             string prefix = fallback ? "compatibility" : profile.ToString().ToLowerInvariant();
             Check(exhibit.Ready && exhibit.Session != null && exhibit.View != null && exhibit.Wrist != null, prefix + " loads all exhibit bindings");
             Check(!exhibit.Session.IsPlaying && exhibit.Snapshot.ElapsedSeconds == 0, prefix + " starts paused at the recorded beginning");
+            Check(!exhibit.Wrist.Raised, prefix + " initial binary view is unobstructed by the wrist");
+            if (profile == ExhibitQualityProfile.Laptop && !fallback)
+                Check(exhibit.LensGain == .35f && exhibit.WaveGain == 1.3f,
+                    "first launch enables the declared mass and wave display gains");
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+            if (!fallback) yield return ValidateAutomaticAccretion(prefix);
+            if (!fallback) Capture(prefix + "-first-view.png");
             exhibit.Wrist.SetRaised(true, true); exhibit.Wrist.RefreshNow();
             Check(exhibit.Wrist.PresentedGeneration == exhibit.Snapshot.Generation, prefix + " wrist shares the scenario generation");
             Check(exhibit.BodyATransform.gameObject.activeSelf && exhibit.BodyBTransform.gameObject.activeSelf, prefix + " numerical binary proxies are visible");
@@ -128,13 +149,29 @@ namespace DTET.VisualPrototype
             Check(sampled.HasValue == state.SignalAvailable && (!sampled.HasValue || Math.Abs(sampled.Value - state.Signal) < 1e-10), prefix + " numerical graph matches readout at the cursor");
             exhibit.SetWristOptics(InteractiveOpticalStyle.Off, 1, 1); exhibit.RenderFrame();
             Check(ReferenceEquals(exhibit.PresentedTexture, exhibit.SceneTarget), prefix + " optical off directly presents the original target");
+            var originalStarlight = ReadPixels(exhibit.SceneTarget);
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 1, 1); exhibit.RenderFrame();
             exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 0); exhibit.RenderFrame();
-            Check(ReferenceEquals(exhibit.PresentedTexture, exhibit.SceneTarget), prefix + " zero gains are an exact bypass");
+            Check(ReferenceEquals(exhibit.PresentedTexture, exhibit.SceneTarget) && !exhibit.Optics.Active
+                && PixelDifference(originalStarlight, ReadPixels(exhibit.SceneTarget)) < 1e-6,
+                prefix + " zero gains after active bending restore the actual optical-off stellar image");
+            exhibit.Wrist.SetOpticalStyle(InteractiveOpticalStyle.Off);
+            exhibit.ToggleStellarBending(); exhibit.RenderFrame();
+            Check(exhibit.LensGain == .35f && exhibit.WaveGain == 1.3f
+                && exhibit.OpticalStyle == InteractiveOpticalStyle.Enhanced && exhibit.Optics.Active == exhibit.Profile.GasEnabled,
+                prefix + " transport bending restores visible defaults after wrist Off");
+            exhibit.ToggleStellarBending(); exhibit.RenderFrame();
+            Check(exhibit.OpticalStyle == InteractiveOpticalStyle.Off && !exhibit.Optics.Active
+                && exhibit.Snapshot.ElapsedSeconds == before.ElapsedSeconds
+                && PixelDifference(originalStarlight, ReadPixels(exhibit.SceneTarget)) < 1e-6,
+                prefix + " transport bending Off restores source image without seeking");
             double sameSignal = exhibit.CaptureWristState().Signal;
             exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 1, 1); exhibit.RenderFrame();
+            if (profile == ExhibitQualityProfile.Balanced && !fallback) ValidateWaveHistoryReadback("recorded replay");
             Check(exhibit.CaptureWristState().Signal == sameSignal && exhibit.Snapshot.ElapsedSeconds == before.ElapsedSeconds,
                 prefix + " optical gain leaves event and signal unchanged");
-            if (!fallback) Check(!ReferenceEquals(exhibit.PresentedTexture, exhibit.SceneTarget), prefix + " enabled optics uses the owned composite target");
+            if (!fallback) Check(ReferenceEquals(exhibit.PresentedTexture, exhibit.SceneTarget) && exhibit.Optics.Active,
+                prefix + " enabled stellar optics updates active uniforms without a duplicate scene target");
             else Check(ReferenceEquals(exhibit.PresentedTexture, exhibit.SceneTarget), prefix + " forced compatibility bypasses distortion");
             Capture(prefix + "-replay.png");
             var expectedPosition = exhibit.BodyATransform.position;
@@ -167,6 +204,10 @@ namespace DTET.VisualPrototype
             Check(sampled.HasValue && Math.Abs(sampled.Value - state.FrequencyHz) < 1e-9 && state.FrequencyAvailable,
                 prefix + " frequency plot matches the bounded physical model");
             Check(state.SignalAvailable && !state.ReplayMode && state.SignalUnitLabel.Contains("strain"), prefix + " experiment and replay signals have distinct labels");
+            if (profile == ExhibitQualityProfile.Balanced && !fallback)
+            {
+                exhibit.RenderFrame(); ValidateWaveHistoryReadback("adjustable physical signal");
+            }
             exhibit.Wrist.SetFrequencyPlot(false); exhibit.SetViewPreset(0); Capture(prefix + "-experiment.png");
             exhibit.SeekWrist(exhibit.Session.Model.CutoffTimeSeconds / exhibit.Snapshot.DurationSeconds);
             Check(!exhibit.CaptureWristState().SignalAvailable && !exhibit.CaptureWristState().FrequencyAvailable,
@@ -192,7 +233,7 @@ namespace DTET.VisualPrototype
                 var automaticRequest = new RenderPipeline.StandardRequest { destination = exhibit.SceneTarget };
                 RenderPipeline.SubmitRenderRequest(exhibit.View, automaticRequest);
                 Check(exhibit.AutomaticOpticalFrames == callbacks + 1 && ReferenceEquals(exhibit.PresentedTexture, exhibit.Optics.Output),
-                    "normal end-camera callback composes the astronomical target");
+                    "explicit render request invokes the shared end-camera callback");
                 int uploads = exhibit.Optics.WaveUploadCount;
                 exhibit.RenderFrame(); exhibit.RenderFrame();
                 Check(exhibit.Optics.WaveUploadCount == uploads, "paused rendering reuses the waveform texture");
@@ -235,6 +276,20 @@ namespace DTET.VisualPrototype
                 exhibit.SetViewPreset(0); exhibit.RenderFrame(); var one = ReadPixels((RenderTexture)exhibit.PresentedTexture);
                 exhibit.SeekWrist(.8); exhibit.SeekWrist(.35); exhibit.RenderFrame(); var two = ReadPixels((RenderTexture)exhibit.PresentedTexture);
                 Check(PixelDifference(one, two) < 1e-6, "rewind restores the same optical image without a shader clock");
+                ValidateVisibleScene();
+                ValidateStellarLight();
+                ValidateOutgoingWaves();
+                if (Environment.GetEnvironmentVariable("DTET_STAR_MOVIE") == "1") yield return CaptureStellarSequence();
+                if (Environment.GetEnvironmentVariable("DTET_DISK_MOVIE") == "1") yield return CaptureAccretionSequence();
+                if (Environment.GetEnvironmentVariable("DTET_OUTGOING_WAVE_MOVIE") == "1") yield return CaptureOutgoingWaveSequence();
+                if (Environment.GetEnvironmentVariable("DTET_VISUAL_MOVIE") == "1") yield return CaptureMergerSequence();
+            }
+            if (!fallback)
+            {
+                ValidateDiscoveryViews(prefix);
+                ValidateSmoothMerger(prefix);
+                if (profile == ExhibitQualityProfile.Balanced && Environment.GetEnvironmentVariable("DTET_DISCOVERY_MOVIE") == "1")
+                    yield return CaptureDiscoverySequence();
             }
             foreach (var scenario in new[] { "replay-paused", "experiment-playback", "camera-motion", "repeated-seek" }) yield return Measure(scenario);
             exhibit.ReturnToLauncher(); yield return null; yield return null;
@@ -243,6 +298,929 @@ namespace DTET.VisualPrototype
             foreach (var texture in Resources.FindObjectsOfTypeAll<RenderTexture>())
                 if (texture.name == "Bounded interactive scene" || texture.name == "Capped astronomical optics") noOwnedTargets = false;
             Check(noOwnedTargets, prefix + " no owned astronomical render targets survive unload");
+            bool noSurfaceMeshes = true, noSurfaceMaterials = true;
+            foreach (var mesh in Resources.FindObjectsOfTypeAll<Mesh>())
+                if (mesh.name == "Immutable illustrative strain grid" || mesh.name == "Bounded merger surface ray box") noSurfaceMeshes = false;
+            foreach (var material in Resources.FindObjectsOfTypeAll<Material>())
+                if (material.name == "Illustrative retarded strain / cyan positive, amber negative"
+                    || material.name == "Opaque illustrative common-horizon transition") noSurfaceMaterials = false;
+            Check(noSurfaceMeshes && noSurfaceMaterials && exhibit.WaveSurface == null && exhibit.MergerSurface == null,
+                prefix + " wave and merger meshes, materials and components are released on unload");
+        }
+
+        internal static double SilhouetteDifference(Color32[] a, Color32[] b, out int union)
+        {
+            int changed = 0; union = 0;
+            for (int i = 0; i < a.Length; i++)
+            {
+                bool first = a[i].r < 20 && a[i].g < 20 && a[i].b < 20;
+                bool second = b[i].r < 20 && b[i].g < 20 && b[i].b < 20;
+                if (first || second) union++;
+                if (first != second) changed++;
+            }
+            return union == 0 ? 1 : (double)changed / union;
+        }
+
+        private void ValidateSmoothMerger(string profile)
+        {
+            Color background = exhibit.View.backgroundColor;
+            float opacity = exhibit.GasMaterial.GetFloat("_Opacity");
+            try
+            {
+                exhibit.ShowAccretionView(); exhibit.SetWristSamples(false);
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Off, 0, 0);
+                exhibit.BackgroundStarsVisible = false; exhibit.View.backgroundColor = Color.white;
+                foreach (bool replay in new[] { true, false })
+                {
+                    exhibit.SelectWristScenario(replay); exhibit.SetWristGas(false);
+                    var model = exhibit.Session.Model;
+                    double merger = model.MergerTimeSeconds, tg = model.GravitationalTimeSeconds;
+                    string label = profile + (replay ? " replay" : " experiment");
+                    var directions = new[] { new Vector3(.2f, .8f, -1), Vector3.up, new Vector3(0, .05f, -1), new Vector3(1, .4f, 0) };
+                    for (int view = 0; view < directions.Length; view++)
+                    {
+                        exhibit.View.transform.position = directions[view].normalized * 12;
+                        exhibit.View.transform.LookAt(Vector3.zero, view == 1 ? Vector3.forward : Vector3.up);
+                        foreach (double boundary in new[] { -12.0, 0.0, 40.0 })
+                        {
+                            exhibit.Session.Seek(merger + (boundary - .001) * tg); exhibit.RenderFrame();
+                            var before = ReadPixels(exhibit.SceneTarget);
+                            exhibit.Session.Seek(merger + (boundary + .001) * tg); exhibit.RenderFrame();
+                            double difference = SilhouetteDifference(before, ReadPixels(exhibit.SceneTarget), out int area);
+                            fixtures.Add(new Fixture { label = label + " local silhouette boundary " + boundary + " view " + view,
+                                measuredX = difference, measuredY = area });
+                            Check(area > 150 && difference < .035, label + " continuous local silhouette at " + boundary + " tg, view " + view);
+                        }
+                        exhibit.Session.Seek(merger + 8 * tg); exhibit.RenderFrame();
+                        Check(exhibit.MergerSurface.Visible && exhibit.RemnantTransform.gameObject.activeSelf
+                            && !exhibit.RemnantTransform.GetComponent<Renderer>().enabled,
+                            label + " smooth surface hides only the authoritative proxy renderer, view " + view);
+                        var exact = model.Evaluate(exhibit.Snapshot.ElapsedSeconds);
+                        Check(exhibit.Snapshot.Signal.NormalizedRealH22 == exact.Signal.NormalizedRealH22
+                            && exhibit.Snapshot.Signal.HPlus == exact.Signal.HPlus
+                            && Vector3.Distance(exhibit.RemnantTransform.position, V(exact.Remnant.Value.PositionRg)) < 1e-6f,
+                            label + " presentation leaves model position and scientific signal unchanged, view " + view);
+                        var surface = ReadPixels(exhibit.SceneTarget);
+                        exhibit.SetWristGas(true); exhibit.GasMaterial.SetFloat("_Opacity", 0);
+                        exhibit.MergerSurface.SurfaceRenderer.forceRenderingOff = true;
+                        exhibit.RenderFrame();
+                        double maskError = SilhouetteDifference(surface, ReadPixels(exhibit.SceneTarget), out int maskArea);
+                        Check(maskArea > 150 && maskError < .015, label + " gas and visible surface share the same occluder, view " + view);
+                        exhibit.MergerSurface.SurfaceRenderer.forceRenderingOff = false;
+                        exhibit.GasMaterial.SetFloat("_Opacity", opacity); exhibit.SetWristGas(false);
+                        exhibit.Session.Seek(merger - 6 * tg); exhibit.RenderFrame();
+                        exhibit.Session.Seek(merger + 8 * tg); exhibit.RenderFrame();
+                        Check(PixelDifference(surface, ReadPixels(exhibit.SceneTarget)) < 1e-6,
+                            label + " rewind restores the same merged surface, view " + view);
+                    }
+                    exhibit.Session.Seek(merger - 6 * tg); exhibit.RenderFrame();
+                    Check(exhibit.BodyATransform.gameObject.activeSelf
+                        && Vector3.Distance(exhibit.BodyATransform.position, V(exhibit.Snapshot.BodyA.Value.PositionRg)) < 1e-6f,
+                        label + " pre-merger authoritative centres remain intact");
+                }
+                ValidateMergerGrazing(profile);
+            }
+            finally
+            {
+                if (exhibit.MergerSurface.SurfaceRenderer != null) exhibit.MergerSurface.SurfaceRenderer.forceRenderingOff = false;
+                exhibit.GasMaterial.SetFloat("_Opacity", opacity); exhibit.View.backgroundColor = background;
+                exhibit.BackgroundStarsVisible = true; exhibit.SelectWristScenario(true); exhibit.ShowAccretionView();
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+            }
+            double centre = exhibit.Session.Model.MergerTimeSeconds, step = exhibit.Session.Model.GravitationalTimeSeconds;
+            exhibit.WatchMerger(); exhibit.SetWristPlaying(false);
+            exhibit.View.transform.position = new Vector3(0, 8, -12); exhibit.View.transform.LookAt(Vector3.zero);
+            foreach (double offset in new[] { -14.0, -6.0, 0.0, 12.0, 28.0, 42.0 })
+            {
+                exhibit.Session.Seek(centre + offset * step); exhibit.Present();
+                Capture(profile + "-smooth-merger-" + offset.ToString("0", CultureInfo.InvariantCulture) + ".png");
+            }
+            exhibit.ShowAccretionView();
+        }
+
+        private void ValidateMergerGrazing(string profile)
+        {
+            exhibit.SelectWristScenario(true); exhibit.SetWristGas(false);
+            exhibit.Session.Seek(exhibit.Session.Model.MergerTimeSeconds);
+            exhibit.View.transform.position = new Vector3(0, 8, -12); exhibit.View.transform.LookAt(Vector3.zero);
+            exhibit.RenderFrame();
+            var renderer = exhibit.MergerSurface.SurfaceRenderer;
+            Check(renderer != null && exhibit.MergerSurface.Visible, profile + " T0 grazing fixture has a visible merger surface");
+            if (renderer == null) return;
+            var material = renderer.sharedMaterial;
+            Vector4 a = material.GetVector("_MergerA"), b = material.GetVector("_MergerB");
+            Vector4 r = material.GetVector("_MergerR"), shape = material.GetVector("_MergerShape");
+            var surfacePixels = ReadPixels(exhibit.SceneTarget);
+            float opacity = exhibit.GasMaterial.GetFloat("_Opacity");
+            bool forceOff = renderer.forceRenderingOff;
+            try
+            {
+                exhibit.SetWristGas(true); exhibit.GasMaterial.SetFloat("_Opacity", 0);
+                renderer.forceRenderingOff = true; exhibit.RenderFrame();
+                var gasPixels = ReadPixels(exhibit.SceneTarget);
+                int width = exhibit.SceneTarget.width, height = exhibit.SceneTarget.height;
+                // Original 640x360 top-left pixels where a grazing first lobe hid a later interior hit.
+                var seeds = new[] { new Vector2Int(332,175), new Vector2Int(328,174), new Vector2Int(319,174),
+                    new Vector2Int(303,185), new Vector2Int(302,187), new Vector2Int(338,178) };
+                foreach (var seed in seeds)
+                {
+                    int x = Mathf.Clamp(Mathf.FloorToInt((seed.x + .5f) / 640 * width), 0, width - 1);
+                    int y = Mathf.Clamp(Mathf.FloorToInt((1 - (seed.y + .5f) / 360) * height), 0, height - 1);
+                    Ray ray = exhibit.View.ViewportPointToRay(new Vector3((x + .5f) / width, (y + .5f) / height, 0));
+                    Vector3 origin = exhibit.View.transform.position, direction = ray.direction.normalized;
+                    double interior = double.PositiveInfinity;
+                    foreach (var sphere in new[] { a, b, r })
+                    {
+                        double t = Math.Max(0, Vector3.Dot(new Vector3(sphere.x, sphere.y, sphere.z) - origin, direction));
+                        interior = Math.Min(interior, MergerDistanceReference(origin + direction * (float)t, a, b, r, shape));
+                    }
+                    string label = profile + " T0 grazing ray " + seed;
+                    // A negative distance at any point proves intersection without another ray marcher.
+                    Check(interior < -.01, label + " has a strict CPU-certified interior point");
+                    Color32 surface = surfacePixels[y * width + x], gas = gasPixels[y * width + x];
+                    int surfaceLight = Math.Max(surface.r, Math.Max(surface.g, surface.b));
+                    int gasLight = Math.Max(gas.r, Math.Max(gas.g, gas.b));
+                    fixtures.Add(new Fixture { label = label + " surface/gas maximum channel and interior SDF",
+                        expectedX = 0, measuredX = Math.Max(surfaceLight, gasLight) / 255.0, measuredY = interior,
+                        absoluteError = Math.Max(surfaceLight, gasLight) / 255.0 });
+                    Check(surfaceLight <= 2, label + " visible silhouette has no background pinhole");
+                    Check(gasLight <= 2, label + " gas occluder has no background pinhole");
+                }
+            }
+            finally
+            {
+                renderer.forceRenderingOff = forceOff; exhibit.GasMaterial.SetFloat("_Opacity", opacity);
+                exhibit.SetWristGas(false);
+            }
+        }
+
+        private static double MergerDistanceReference(Vector3 p, Vector4 a, Vector4 b, Vector4 r, Vector4 shape)
+        {
+            double Sphere(Vector4 sphere)
+            {
+                double x = (double)p.x - sphere.x, y = (double)p.y - sphere.y, z = (double)p.z - sphere.z;
+                return Math.Sqrt(x * x + y * y + z * z) - sphere.w;
+            }
+            double da = Sphere(a), db = Sphere(b), width = shape.y;
+            double h = Math.Max(0, Math.Min(1, .5 + .5 * (db - da) / Math.Max(width, 1e-8)));
+            double binary = width > 1e-8 ? db + (da - db) * h - width * h * (1 - h) : Math.Min(da, db);
+            return binary + (Sphere(r) - binary) * Math.Max(0, Math.Min(1, shape.x));
+        }
+
+        private struct SourcePixels
+        {
+            public double flux, x, y;
+            public int corePixels, diameter;
+            public Color32[] contribution;
+        }
+
+        private SourcePixels MeasureFeaturedSource()
+        {
+            var star = exhibit.FeaturedStar;
+            star.Visibility = false; exhibit.RenderFrame(); var background = ReadPixels(exhibit.SceneTarget);
+            star.Visibility = true; exhibit.RenderFrame(); var foreground = ReadPixels(exhibit.SceneTarget);
+            int width = exhibit.SceneTarget.width, height = exhibit.SceneTarget.height;
+            var measurement = new SourcePixels { contribution = new Color32[foreground.Length] };
+            int minX = width, minY = height, maxX = -1, maxY = -1;
+            double momentX = 0, momentY = 0;
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                int index = y * width + x;
+                int r = Math.Max(0, foreground[index].r - background[index].r);
+                int g = Math.Max(0, foreground[index].g - background[index].g);
+                int b = Math.Max(0, foreground[index].b - background[index].b);
+                measurement.contribution[index] = new Color32((byte)r, (byte)g, (byte)b, 255);
+                double weight = .2126 * r + .7152 * g + .0722 * b;
+                measurement.flux += weight; momentX += weight * (x + .5); momentY += weight * (y + .5);
+                if (weight <= 32) continue;
+                measurement.corePixels++;
+                minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
+                minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
+            }
+            measurement.x = measurement.flux > 0 ? momentX / measurement.flux : -10000;
+            measurement.y = measurement.flux > 0 ? momentY / measurement.flux : -10000;
+            measurement.diameter = measurement.corePixels > 0 ? Math.Max(maxX - minX + 1, maxY - minY + 1) : 0;
+            return measurement;
+        }
+
+        private void ValidateDiscoveryViews(string profile)
+        {
+            var ownedTargets = new HashSet<int>();
+            foreach (var target in Resources.FindObjectsOfTypeAll<RenderTexture>())
+                if (target.IsCreated()) ownedTargets.Add(target.GetInstanceID());
+            Renderer[] isolatedRenderers = null;
+            bool[] previousForcedOff = null;
+            try
+            {
+                exhibit.SelectWristScenario(true); exhibit.SeekWrist(.2); exhibit.SetWristPlaying(false);
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+                double starTime = exhibit.Snapshot.ElapsedSeconds;
+                exhibit.ShowStarView(); exhibit.RenderFrame();
+                Check(exhibit.StarFinderVisible && !exhibit.WaveMapVisible && !exhibit.GasVisible && !exhibit.SamplesVisible
+                    && !exhibit.Wrist.Raised && !exhibit.Session.IsPlaying && exhibit.Snapshot.ElapsedSeconds == starTime,
+                    profile + " star finder identifies the source at the unchanged paused epoch with unobstructed gas-free view");
+                Check(Math.Abs(exhibit.View.fieldOfView - 12) < .001 && exhibit.BackgroundStarsVisible
+                    && exhibit.OpticalStyle == InteractiveOpticalStyle.Off && exhibit.LensGain == .35f && exhibit.WaveGain == 0,
+                    profile + " star finder uses a narrow field with retained background and a mass-only bending comparison");
+                var source = exhibit.FeaturedStar;
+                var sourcePosition = source.SourcePositionRg; float sourceRadius = source.SourceRadiusRg;
+                double radiusMeters = sourceRadius * exhibit.Snapshot.GravitationalRadiusMeters;
+                double distanceMeters = sourcePosition.magnitude * exhibit.Snapshot.GravitationalRadiusMeters;
+                Check(Math.Abs(radiusMeters / 695700000.0 - 1) < 2e-6 && Math.Abs(distanceMeters / 149597870700.0 - 1) < 2e-6,
+                    profile + " findable source remains one solar radius at one AU from the binary");
+                var unbent = MeasureFeaturedSource();
+                Vector3 expected = exhibit.View.WorldToViewportPoint(sourcePosition);
+                double dx = unbent.x - expected.x * exhibit.SceneTarget.width, dy = unbent.y - expected.y * exhibit.SceneTarget.height;
+                double centroidError = Math.Sqrt(dx * dx + dy * dy);
+                fixtures.Add(new Fixture { label = profile + " star finder source contribution / flux and core diameter", measuredX = unbent.flux, measuredY = unbent.diameter });
+                fixtures.Add(new Fixture { label = profile + " star finder centroid vs actual world projection", expectedX = expected.x * exhibit.SceneTarget.width,
+                    expectedY = expected.y * exhibit.SceneTarget.height, measuredX = unbent.x, measuredY = unbent.y, absoluteError = centroidError });
+                Check(expected.z > 0 && expected.x > .4 && expected.x < .6 && expected.y > .4 && expected.y < .6
+                    && unbent.flux > 100 && centroidError < 1.25, profile + " visible unbent star core agrees with the source marker within 1.25 pixels");
+                Check(unbent.diameter >= 10 && unbent.diameter < exhibit.SceneTarget.height * .15
+                    && unbent.corePixels > 30 && unbent.corePixels < unbent.contribution.Length * .02,
+                    profile + " source is a resolved compact disk even at the admitted internal resolution");
+                Capture(profile + "-star-view-off.png");
+                exhibit.ToggleStellarBending();
+                var lensed = MeasureFeaturedSource();
+                double sourceDifference = PixelDifference(unbent.contribution, lensed.contribution);
+                fixtures.Add(new Fixture { label = profile + " star finder lensed source / flux and isolated RGB difference", measuredX = lensed.flux, measuredY = sourceDifference });
+                Check(lensed.flux > 100 && sourceDifference > 1e-6 && exhibit.WaveGain == 0
+                    && exhibit.Snapshot.ElapsedSeconds == starTime && source.SourcePositionRg == sourcePosition && source.SourceRadiusRg == sourceRadius,
+                    profile + " bending moves the actual stellar light while preserving source dimensions and event time");
+                Capture(profile + "-star-view-lensed.png");
+                exhibit.ToggleStellarBending(); var restoredSource = MeasureFeaturedSource();
+                Check(PixelDifference(unbent.contribution, restoredSource.contribution) < 1e-6,
+                    profile + " star bending Off restores the same resolved source");
+                exhibit.ShowStarView(); exhibit.SetViewPreset(0);
+                Check(!exhibit.StarFinderVisible && Math.Abs(exhibit.View.fieldOfView - 52) < .001
+                    && exhibit.OpticalStyle == InteractiveOpticalStyle.Enhanced && exhibit.LensGain == .35f && exhibit.WaveGain == 1.3f,
+                    profile + " leaving repeated star finder restores the normal field and prior optical settings");
+
+                exhibit.ToggleWaveMap(); exhibit.SetWristPlaying(false); exhibit.RenderFrame();
+                var surface = exhibit.WaveSurface;
+                Check(exhibit.WaveMapVisible && surface != null && surface.Ready && surface.Visible && !exhibit.GasVisible
+                    && !exhibit.StarFinderVisible, profile + " wave map opens a visible grid with a clear independent legend");
+                if (surface == null || !surface.Ready) return;
+                Renderer gridRenderer = null; Mesh gridMesh = null;
+                foreach (var filter in surface.GetComponentsInChildren<MeshFilter>(true))
+                    if (filter.sharedMesh != null && filter.sharedMesh.name == "Immutable illustrative strain grid")
+                    { gridMesh = filter.sharedMesh; gridRenderer = filter.GetComponent<Renderer>(); break; }
+                Check(gridRenderer != null && gridMesh != null, profile + " wave map owns an actual renderable mesh");
+                if (gridRenderer == null || gridMesh == null) return;
+                fixtures.Add(new Fixture { label = profile + " wave map mesh / vertices and estimated GPU payload", measuredX = gridMesh.vertexCount, measuredY = surface.EstimatedMeshBytes });
+                Check(surface.GridResolution >= 96 && surface.GridResolution <= 192 && gridMesh.vertexCount <= 36864
+                    && gridMesh.vertexCount == surface.VertexCount && surface.EstimatedMeshBytes > 0 && surface.EstimatedMeshBytes < 1048576
+                    && gridMesh.indexFormat == IndexFormat.UInt16 && !gridMesh.isReadable,
+                    profile + " wave grid has a capped uploaded mesh without a retained CPU copy");
+                Check(float.IsFinite(surface.DisplayRadiusRg) && surface.DisplayRadiusRg > 0
+                    && gridRenderer.bounds.extents.x >= .99f * surface.DisplayRadiusRg
+                    && gridRenderer.bounds.extents.z >= .99f * surface.DisplayRadiusRg
+                    && gridRenderer.bounds.extents.y >= .99f * surface.MaximumHeightRg,
+                    profile + " wave mesh bounds contain its complete displaced surface");
+                var withGrid = ReadPixels(exhibit.SceneTarget);
+                gridRenderer.forceRenderingOff = true; exhibit.RenderFrame(); var withoutGrid = ReadPixels(exhibit.SceneTarget);
+                gridRenderer.forceRenderingOff = false; exhibit.RenderFrame();
+                Check(PixelDifference(withGrid, withoutGrid) > 1e-5, profile + " actual wave grid contributes visible pixels over the full background");
+                Capture(profile + "-wave-map.png");
+
+                isolatedRenderers = exhibit.GetComponentsInChildren<Renderer>(true);
+                previousForcedOff = new bool[isolatedRenderers.Length];
+                for (int i = 0; i < isolatedRenderers.Length; i++)
+                {
+                    previousForcedOff[i] = isolatedRenderers[i].forceRenderingOff;
+                    isolatedRenderers[i].forceRenderingOff = isolatedRenderers[i] != gridRenderer;
+                }
+                double mapTime = exhibit.Snapshot.ElapsedSeconds;
+                double laterTime = Math.Min(exhibit.Snapshot.DurationSeconds, mapTime + 30 * exhibit.Snapshot.GravitationalTimeSeconds);
+                foreach (var style in new[] { InteractiveOpticalStyle.Off, InteractiveOpticalStyle.Enhanced })
+                {
+                    exhibit.SetWristOptics(style, 0, 0); exhibit.Session.Seek(mapTime); exhibit.Present(); exhibit.RenderFrame();
+                    var initial = ReadPixels(exhibit.SceneTarget);
+                    exhibit.Session.Seek(laterTime); exhibit.Present(); exhibit.RenderFrame(); var later = ReadPixels(exhibit.SceneTarget);
+                    exhibit.Session.Seek(mapTime); exhibit.Present(); exhibit.RenderFrame(); var rewind = ReadPixels(exhibit.SceneTarget);
+                    double changed = PixelDifference(initial, later), restored = PixelDifference(initial, rewind);
+                    fixtures.Add(new Fixture { label = profile + " isolated grid clock / " + style + " zero gains / change and rewind", measuredX = changed, measuredY = restored });
+                    Check(surface.Visible && changed > 1e-5 && restored < 1e-6 && exhibit.Snapshot.ElapsedSeconds == mapTime,
+                        profile + " grid advances and rewinds exactly with shared event time / " + style + " zero stellar gains");
+                }
+                Vector3 viewPosition = exhibit.View.transform.position; Quaternion viewRotation = exhibit.View.transform.rotation;
+                var fixedView = ReadPixels(exhibit.SceneTarget);
+                exhibit.MoveCamera(exhibit.View.transform.right * surface.DisplayRadiusRg * .08f);
+                exhibit.View.transform.Rotate(0, 7, 0, Space.Self); exhibit.RenderFrame();
+                Check(!exhibit.Session.IsPlaying && exhibit.Snapshot.ElapsedSeconds == mapTime
+                    && PixelDifference(fixedView, ReadPixels(exhibit.SceneTarget)) > 1e-5,
+                    profile + " paused wave surface remains freely traversable without advancing its signal");
+                exhibit.View.transform.SetPositionAndRotation(viewPosition, viewRotation); exhibit.RenderFrame();
+                Check(PixelDifference(fixedView, ReadPixels(exhibit.SceneTarget)) < 1e-6, profile + " returning the wave camera restores the same surface image");
+                for (int i = 0; i < isolatedRenderers.Length; i++) isolatedRenderers[i].forceRenderingOff = previousForcedOff[i];
+                isolatedRenderers = null;
+                exhibit.ToggleWaveMap(); exhibit.RenderFrame();
+                Check(!exhibit.WaveMapVisible && !surface.Visible && exhibit.GasVisible && !exhibit.GeneratedFluidActive
+                    && !exhibit.Session.IsPlaying && exhibit.Snapshot.ElapsedSeconds == mapTime && Math.Abs(exhibit.View.fieldOfView - 52) < .001,
+                    profile + " closing paused wave map restores disks and normal camera without seeking");
+                exhibit.ToggleWaveMap(); double playingTime = exhibit.Snapshot.ElapsedSeconds;
+                Check(exhibit.Session.IsPlaying, profile + " wave map starts shared-clock playback");
+                exhibit.ToggleWaveMap(); exhibit.RenderFrame();
+                Check(exhibit.Session.IsPlaying && exhibit.Snapshot.ElapsedSeconds == playingTime && !surface.Visible && exhibit.GasVisible,
+                    profile + " closing a playing wave map preserves playback and current event time");
+            }
+            finally
+            {
+                if (isolatedRenderers != null)
+                    for (int i = 0; i < isolatedRenderers.Length; i++)
+                        if (isolatedRenderers[i] != null) isolatedRenderers[i].forceRenderingOff = previousForcedOff[i];
+                exhibit.ShowAccretionView(); exhibit.BackgroundStarsVisible = true;
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f); exhibit.RenderFrame();
+                bool noExtraTargets = true;
+                foreach (var target in Resources.FindObjectsOfTypeAll<RenderTexture>())
+                    if (target.IsCreated() && !ownedTargets.Contains(target.GetInstanceID())) noExtraTargets = false;
+                Check(noExtraTargets, profile + " discovery views add no persistent render targets");
+            }
+        }
+
+        private IEnumerator CaptureDiscoverySequence()
+        {
+            exhibit.SelectWristScenario(true); exhibit.SeekWrist(.2); exhibit.ShowStarView();
+            Capture("discovery-star-off.png"); exhibit.ToggleStellarBending(); Capture("discovery-star-lensed.png");
+            exhibit.SetViewPreset(0); exhibit.ToggleWaveMap(); exhibit.SetWristPlaying(false);
+            Directory.CreateDirectory(Path.Combine(output, "discovery-wave-map"));
+            double start = exhibit.Snapshot.ElapsedSeconds;
+            double end = Math.Min(exhibit.Snapshot.DurationSeconds, start + 4 * exhibit.Session.PlaybackRate);
+            bool sharedClock = true;
+            for (int i = 0; i < 120; i++)
+            {
+                double time = start + (end - start) * i / 119;
+                exhibit.Session.Seek(time); exhibit.Present();
+                Capture("discovery-wave-map/frame-" + i.ToString("D3") + ".png");
+                sharedClock &= exhibit.WaveMapVisible && !exhibit.GasVisible && exhibit.WaveSurface.Visible
+                    && Math.Abs(exhibit.Snapshot.ElapsedSeconds - time) < 1e-10
+                    && exhibit.Wrist.PresentedSourceTime == exhibit.Snapshot.ElapsedSeconds;
+                yield return null;
+            }
+            fixtures.Add(new Fixture { label = "wave-map preview event interval / four presentation seconds", expectedX = start, measuredX = end });
+            Check(sharedClock, "wave-map preview uses the shared scene and wrist clock throughout 120 frames");
+            exhibit.ShowAccretionView(); exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+        }
+
+        private IEnumerator ValidateAutomaticAccretion(string profile)
+        {
+            // Require ordinary camera frames; never use RenderFrame or SubmitRenderRequest in this measurement.
+            exhibit.View.enabled = true; exhibit.CaptureCamera.enabled = true;
+            Check(exhibit.GasVisible && exhibit.Snapshot.ElapsedSeconds == 0 && !exhibit.Session.IsPlaying,
+                profile + " ordinary startup has gas enabled at the paused initial epoch");
+            int initialCallbacks = exhibit.AutomaticOpticalFrames;
+            yield return null; yield return null; yield return new WaitForSecondsRealtime(.05f);
+            int initialFrames = exhibit.AutomaticOpticalFrames - initialCallbacks;
+            Check(initialFrames >= 2, profile + " initial disk capture receives genuine automatic camera frames / " + initialFrames);
+            var gas = ReadPixels(exhibit.SceneTarget);
+            CaptureAutomaticScene(profile + "-automatic-start-gas.png");
+
+            exhibit.SetWristGas(false);
+            int offCallbacks = exhibit.AutomaticOpticalFrames;
+            yield return null; yield return null; yield return new WaitForSecondsRealtime(.05f);
+            int offFrames = exhibit.AutomaticOpticalFrames - offCallbacks;
+            Check(offFrames >= 2, profile + " gas-off comparison receives genuine automatic camera frames / " + offFrames);
+            var noGas = ReadPixels(exhibit.SceneTarget);
+            CaptureAutomaticScene(profile + "-automatic-start-no-gas.png");
+            ValidateAutomaticDiskPixels(profile, gas, noGas);
+
+            exhibit.WatchStarlight(); exhibit.SetWristPlaying(false);
+            Check(!exhibit.GasVisible, profile + " starlight inspection explicitly hides gas");
+            exhibit.ShowAccretionView();
+            Check(exhibit.GasVisible && !exhibit.Session.IsPlaying && exhibit.Snapshot.ElapsedSeconds == 0
+                && !exhibit.Wrist.Raised && !exhibit.GeneratedFluidActive,
+                profile + " accretion view restores illustrative disks, paused start and lowered wrist");
+            int restoredCallbacks = exhibit.AutomaticOpticalFrames;
+            yield return null; yield return null; yield return new WaitForSecondsRealtime(.05f);
+            int restoredFrames = exhibit.AutomaticOpticalFrames - restoredCallbacks;
+            Check(restoredFrames >= 2, profile + " restored disks receive genuine automatic camera frames / " + restoredFrames);
+            var restored = ReadPixels(exhibit.SceneTarget);
+            double difference = PixelDifference(gas, restored);
+            fixtures.Add(new Fixture { label = profile + " automatic accretion restoration / RGB difference", measuredX = difference });
+            Check(difference < 1e-6, profile + " starlight to accretion restores the actual initial disk image");
+            CaptureAutomaticScene(profile + "-automatic-restored-gas.png");
+            Debug.Log("DTET_AUTOMATIC_DISKS " + profile + " / " + SystemInfo.graphicsDeviceType + " / "
+                + exhibit.SceneTarget.width + "x" + exhibit.SceneTarget.height + " / automatic frames "
+                + initialFrames + "," + offFrames + "," + restoredFrames + " / restore difference "
+                + difference.ToString("R", CultureInfo.InvariantCulture));
+        }
+
+        private void ValidateAutomaticDiskPixels(string profile, Color32[] gas, Color32[] noGas)
+        {
+            int width = exhibit.SceneTarget.width, height = exhibit.SceneTarget.height, warm = 0;
+            for (int i = 0; i < gas.Length; i++)
+                if (gas[i].r - noGas[i].r > 20 && gas[i].r > gas[i].b * 1.15f) warm++;
+            fixtures.Add(new Fixture { label = profile + " automatic initial warm gas pixels", measuredX = warm,
+                expectedX = gas.Length * .003 });
+            Check(warm > gas.Length * .003, profile + " automatic initial image contains resolved warm gas / " + warm);
+            int bodyIndex = 0;
+            foreach (var body in new[] { exhibit.Snapshot.GasState.BodyA, exhibit.Snapshot.GasState.BodyB })
+            {
+                Vector3 centre = exhibit.View.WorldToViewportPoint(V(body.PositionRg));
+                Vector3 edge = exhibit.View.WorldToViewportPoint(V(body.PositionRg)
+                    + exhibit.View.transform.right * (float)body.OuterRadiusRg);
+                float radius = Mathf.Abs(edge.x-centre.x) * width;
+                float cx = centre.x * width, cy = centre.y * height;
+                bool visible = centre.z > 0 && radius >= 4 && cx-radius > 0 && cx+radius < width
+                    && cy-radius > 0 && cy+radius < height;
+                Check(visible, profile + " automatic initial compact disk is framed and resolved / body " + bodyIndex);
+                int resolved = 0;
+                for (int y = Mathf.Max(0, (int)(cy-radius)); y < Mathf.Min(height, cy+radius); y++)
+                for (int x = Mathf.Max(0, (int)(cx-radius)); x < Mathf.Min(width, cx+radius); x++)
+                {
+                    if ((x-cx)*(x-cx)+(y-cy)*(y-cy) > radius*radius) continue;
+                    int i = y * width + x;
+                    if (gas[i].r-noGas[i].r > 20 && gas[i].r > gas[i].b*1.15f) resolved++;
+                }
+                // Require a fraction of each projected disk, not a few shared stream pixels.
+                double minimum = Math.Max(16, .025 * Math.PI * radius * radius);
+                fixtures.Add(new Fixture { label = profile + " automatic initial disk " + bodyIndex + " warm pixels / radius",
+                    expectedX = minimum, measuredX = resolved, measuredY = radius });
+                Check(resolved > minimum, profile + " automatic initial compact disk has warm emission / body "
+                    + bodyIndex + " / " + resolved + " pixels, required " + minimum.ToString("F1", CultureInfo.InvariantCulture));
+                bodyIndex++;
+            }
+        }
+
+        private void CaptureAutomaticScene(string name)
+        {
+            // Read the existing linear scene directly, without another draw or display tone mapping.
+            var active = RenderTexture.active; RenderTexture.active = exhibit.SceneTarget;
+            var image = new Texture2D(exhibit.SceneTarget.width, exhibit.SceneTarget.height, TextureFormat.RGB24, false, true);
+            try
+            {
+                image.ReadPixels(new Rect(0, 0, image.width, image.height), 0, 0); image.Apply();
+                File.WriteAllBytes(Path.Combine(output, name), image.EncodeToPNG()); images.Add(name);
+                Check(new FileInfo(Path.Combine(output, name)).Length > 100, "capture " + name);
+            }
+            finally { Destroy(image); RenderTexture.active = active; }
+        }
+
+        private void ValidateVisibleScene()
+        {
+            exhibit.SelectWristScenario(true); exhibit.Wrist.SetRaised(false, true);
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+            exhibit.SeekWrist(.45); exhibit.SetViewPreset(0); exhibit.RenderFrame();
+            var a = exhibit.View.WorldToViewportPoint(exhibit.BodyATransform.position);
+            var b = exhibit.View.WorldToViewportPoint(exhibit.BodyBTransform.position);
+            Check(a.z > 0 && b.z > 0 && a.x > .1 && a.x < .9 && b.x > .1 && b.x < .9
+                && a.y > .18 && a.y < .85 && b.y > .18 && b.y < .85
+                && Vector2.Distance(a, b) > .10f, "binary framing separates both horizons within the visible scene");
+            Check(exhibit.BodyATransform.GetComponentsInChildren<LineRenderer>().Length == 0,
+                "horizon silhouettes have no luminous coordinate wireframes");
+            ValidateRayProjection();
+            for (int view = 0; view < 4; view++)
+            {
+                exhibit.SetViewPreset(view); Capture("revised-replay-view-" + view + ".png");
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 0); exhibit.RenderFrame();
+                var noWave = ReadPixels((RenderTexture)exhibit.PresentedTexture);
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f); exhibit.RenderFrame();
+                var wave = ReadPixels((RenderTexture)exhibit.PresentedTexture);
+                double change = PixelDifference(noWave, wave);
+                fixtures.Add(new Fixture { label = "rendered wave-only image difference / view " + view,
+                    measuredX = change });
+                // Check rendered background response; isolated source tests follow.
+                Check(change > .000001, "wave distortion displaces background stellar pixels from viewpoint " + view);
+            }
+            exhibit.SetViewPreset(0); exhibit.SetWristOptics(InteractiveOpticalStyle.Off, 0, 0);
+            exhibit.SetWristGas(false); exhibit.RenderFrame(); var noGas = ReadPixels(exhibit.SceneTarget);
+            exhibit.SetWristGas(true); exhibit.RenderFrame(); var gas = ReadPixels(exhibit.SceneTarget);
+            int lit = 0;
+            for (int i = 0; i < gas.Length; i++) if (gas[i].r - noGas[i].r > 35 && gas[i].r > gas[i].b * 1.15f) lit++;
+            Check(lit > gas.Length * .003, "accretion emission produces a resolved warm structure in the rendered image");
+            foreach (var body in new[] { exhibit.Snapshot.GasState.BodyA, exhibit.Snapshot.GasState.BodyB })
+            {
+                Vector3 centre = exhibit.View.WorldToViewportPoint(V(body.PositionRg));
+                Vector3 edge = exhibit.View.WorldToViewportPoint(V(body.PositionRg) + exhibit.View.transform.right * (float)body.OuterRadiusRg);
+                float rx = Mathf.Abs(edge.x - centre.x) * exhibit.SceneTarget.width;
+                float cx = centre.x * exhibit.SceneTarget.width, cy = centre.y * exhibit.SceneTarget.height;
+                int resolved = 0;
+                for (int y = Mathf.Max(0, (int)(cy-rx)); y < Mathf.Min(exhibit.SceneTarget.height, cy+rx); y++)
+                for (int x = Mathf.Max(0, (int)(cx-rx)); x < Mathf.Min(exhibit.SceneTarget.width, cx+rx); x++)
+                {
+                    if ((x-cx)*(x-cx)+(y-cy)*(y-cy)>rx*rx) continue;
+                    int i = y * exhibit.SceneTarget.width + x;
+                    if (gas[i].r-noGas[i].r > 35 && gas[i].r > gas[i].b*1.15f) resolved++;
+                }
+                Check(resolved > 30, "each compact disk has resolved warm emission around body " + body.MassFraction);
+            }
+            Capture("revised-disks-optics-off.png");
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 1.3f);
+            Capture("revised-waves-only.png");
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+            double initialSeparation = exhibit.Snapshot.SeparationRg;
+            exhibit.WatchMerger(); exhibit.SetWristPlaying(false);
+            Check(exhibit.Snapshot.SeparationRg < initialSeparation && !exhibit.Wrist.Raised
+                && exhibit.Snapshot.ElapsedSeconds < exhibit.Session.Model.MergerTimeSeconds,
+                "watch merger frames a later tighter binary before common horizon formation");
+            Capture("revised-late-inspiral.png");
+            var pose = exhibit.View.transform.position;
+            exhibit.Session.Seek(exhibit.Session.Model.MergerTimeSeconds); exhibit.Present();
+            ValidateGasFixtures();
+            Capture("revised-common-horizon.png");
+            Check(exhibit.View.transform.position == pose, "event playback preserves the user's inspection viewpoint");
+            exhibit.Session.Seek(Math.Min(exhibit.Snapshot.DurationSeconds,
+                exhibit.Session.Model.MergerTimeSeconds + 120 * exhibit.Snapshot.GravitationalTimeSeconds));
+            exhibit.Present(); Capture("revised-post-merger-waves.png");
+            exhibit.RestartPresentation();
+            Check(exhibit.Snapshot.ElapsedSeconds == 0 && exhibit.Session.PlaybackRate == .05
+                && !exhibit.Session.IsPlaying && !exhibit.Wrist.Raised,
+                "restart restores the beginning, normal slow rate and unobstructed binary framing");
+        }
+
+        private IEnumerator CaptureMergerSequence()
+        {
+            Directory.CreateDirectory(Path.Combine(output, "movie"));
+            exhibit.SelectWristScenario(true); exhibit.Wrist.SetRaised(false, true);
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+            exhibit.WatchMerger(); exhibit.SetWristPlaying(false);
+            double centre = exhibit.Session.Model.MergerTimeSeconds;
+            double tg = exhibit.Session.Model.GravitationalTimeSeconds;
+            exhibit.View.transform.position = new Vector3(0, 8, -12); exhibit.View.transform.LookAt(Vector3.zero);
+            for (int i = 0; i < 120; i++)
+            {
+                exhibit.Session.Seek(Math.Max(0, Math.Min(exhibit.Snapshot.DurationSeconds, centre + (-30 + 100.0 * i / 119) * tg)));
+                exhibit.Present(); Capture("movie/frame-" + i.ToString("D3") + ".png");
+                // Allow deferred texture disposal between captures.
+                yield return null;
+            }
+        }
+
+        private void ValidateStellarLight()
+        {
+            exhibit.SelectWristScenario(true); exhibit.SeekWrist(.35); exhibit.SetViewPreset(0);
+            exhibit.SetWristSamples(false); exhibit.SetWristGas(true); exhibit.Wrist.SetRaised(false, true);
+            Check(exhibit.FeaturedStar != null, "extended background star is installed");
+            ValidateFeaturedProjectionAndFormula();
+            exhibit.BackgroundStarsVisible = false;
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Off, 0, 0); exhibit.RenderFrame();
+            var gasOnly = ReadPixels((RenderTexture)exhibit.PresentedTexture);
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 2, 2); exhibit.RenderFrame();
+            Check(PixelDifference(gasOnly, ReadPixels((RenderTexture)exhibit.PresentedTexture)) < 1e-6,
+                "mass and wave optics do not distort or illuminate foreground gas when stars are hidden");
+            exhibit.SetWristGas(false); exhibit.FeaturedStar.Visibility = true;
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Off, 0, 0); exhibit.RenderFrame();
+            var unbent = ReadPixels(exhibit.SceneTarget);
+            int lit = 0; foreach (var p in unbent) if (p.r > 45 || p.g > 45 || p.b > 45) lit++;
+            Check(lit > 3 && lit < unbent.Length * .01, "unbent nearby background star is resolved and occupies less than one percent of the scene");
+            Capture("featured-star-unbent.png");
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 0); exhibit.RenderFrame();
+            var lensed = ReadPixels(exhibit.SceneTarget);
+            Check(PixelDifference(unbent, lensed) > .00001, "moving binary lens changes the extended background star image");
+            Capture("featured-star-lensed.png");
+            foreach (double fraction in new[] { 0.0, .15, .3, .45, .6, .8 })
+            {
+                exhibit.SeekWrist(fraction); Capture("featured-star-epoch-" + fraction.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + ".png");
+            }
+            exhibit.SeekWrist(.35); exhibit.RenderFrame();
+            Check(PixelDifference(lensed, ReadPixels(exhibit.SceneTarget)) < 1e-6,
+                "extended star lens image is deterministic after rewind");
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f); exhibit.RenderFrame();
+            Check(PixelDifference(lensed, ReadPixels(exhibit.SceneTarget)) > .000001,
+                "retarded waves distort the extended background star light");
+            Capture("featured-star-waves.png");
+            var source = exhibit.FeaturedStar.SourcePositionRg;
+            double time = exhibit.Snapshot.ElapsedSeconds;
+            exhibit.MoveCamera(new Vector3(4, 3, 0)); exhibit.RenderFrame();
+            Check(exhibit.FeaturedStar.SourcePositionRg == source && exhibit.Snapshot.ElapsedSeconds == time,
+                "featured source stays fixed when observer moves while paused");
+            exhibit.BackgroundStarsVisible = true;
+            exhibit.WatchStarlight(); exhibit.SetWristPlaying(false);
+            Check(!exhibit.GasVisible && !exhibit.Wrist.Raised && exhibit.Snapshot.ElapsedSeconds == 0,
+                "starlight view isolates background sources with a reset event");
+            Capture("starlight-view.png");
+            exhibit.RestartPresentation();
+            Check(exhibit.GasVisible, "restart restores the accretion view after starlight inspection");
+        }
+
+        private void ValidateOutgoingWaves()
+        {
+            var sky = FindFirstObjectByType<ReducedExhibitSky>();
+            Check(sky != null && sky.BackgroundReady, "fixed stellar backdrop is ready for outgoing-wave inspection");
+            if (sky == null || !sky.BackgroundReady) return;
+            bool pointSources = sky.Visible, backdrop = sky.BackdropVisible;
+            bool featured = exhibit.FeaturedStar != null && exhibit.FeaturedStar.Visibility;
+            try
+            {
+                exhibit.SelectWristScenario(true); exhibit.SetWristGas(false);
+                exhibit.WatchOutgoingWaves();
+                double watchTime = Math.Max(0, exhibit.Session.Model.MergerTimeSeconds - 250 * exhibit.Snapshot.GravitationalTimeSeconds);
+                Check(exhibit.GasVisible && !exhibit.GeneratedFluidActive && !exhibit.SamplesVisible
+                    && exhibit.Session.IsPlaying && exhibit.Session.PlaybackRate == .01
+                    && Math.Abs(exhibit.Snapshot.ElapsedSeconds - watchTime) < 1e-10
+                    && !exhibit.Wrist.Raised && exhibit.OpticalStyle == InteractiveOpticalStyle.Enhanced
+                    && exhibit.LensGain == .35f && exhibit.WaveGain == 2,
+                    "outgoing-wave button restores gas and starts the shared clock at the declared epoch, rate and gains");
+                exhibit.SetWristPlaying(false); Capture("outgoing-waves-view.png");
+
+                // Isolate the continuous background so point sources cannot satisfy these checks.
+                sky.Visible = false; sky.BackdropVisible = true;
+                if (exhibit.FeaturedStar != null) exhibit.FeaturedStar.Visibility = false;
+                exhibit.SetWristGas(false); exhibit.SetWristSamples(false);
+                for (int view = 0; view < 4; view++)
+                {
+                    exhibit.SetViewPreset(view);
+                    exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 0); exhibit.RenderFrame();
+                    var noWave = ReadPixels(exhibit.SceneTarget);
+                    Capture("outgoing-background-view-" + view + "-off.png");
+                    exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 2); exhibit.RenderFrame();
+                    var wave = ReadPixels(exhibit.SceneTarget);
+                    double difference = PixelDifference(noWave, wave);
+                    int changed = 0, maximum = 0;
+                    for (int i = 0; i < wave.Length; i++)
+                    {
+                        int delta = Math.Max(Math.Abs(wave[i].r - noWave[i].r),
+                            Math.Max(Math.Abs(wave[i].g - noWave[i].g), Math.Abs(wave[i].b - noWave[i].b)));
+                        if (delta > 0) changed++;
+                        maximum = Math.Max(maximum, delta);
+                    }
+                    fixtures.Add(new Fixture { label = "outgoing background response / view " + view,
+                        measuredX = difference, measuredY = changed, absoluteError = maximum / 255.0 });
+                    Check(changed > 0 && difference > 0,
+                        "outgoing waves change isolated background pixels / view " + view + " / " + changed);
+                    Capture("outgoing-background-view-" + view + "-on.png");
+
+                    exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 0); exhibit.RenderFrame();
+                    Check(PixelDifference(noWave, ReadPixels(exhibit.SceneTarget)) < 1e-6,
+                        "zero gains restore the isolated background after outgoing waves / view " + view);
+                    exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 2);
+                    exhibit.SeekWrist(.8); exhibit.Session.Seek(watchTime); exhibit.Present(); exhibit.RenderFrame();
+                    Check(PixelDifference(wave, ReadPixels(exhibit.SceneTarget)) < 1e-6,
+                        "rewind restores the isolated outgoing-wave image / view " + view);
+                }
+
+                exhibit.SetViewPreset(0); exhibit.Session.Seek(0); exhibit.Present();
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 0); exhibit.RenderFrame();
+                var initialBackground = ReadPixels(exhibit.SceneTarget);
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 2); exhibit.RenderFrame();
+                Check(PixelDifference(initialBackground, ReadPixels(exhibit.SceneTarget)) < 1e-6,
+                    "event time zero adds no outgoing-wave image before positive-radius history exists");
+                var zeroHistory = ReadUploadedWaveHistory();
+                bool noPrehistory = true;
+                for (int i = 1; i < zeroHistory.Length; i++)
+                    noPrehistory &= zeroHistory[i].b == 0 && zeroHistory[i].r == 0 && zeroHistory[i].g == 0;
+                Check(noPrehistory, "event time zero uploads no invented waveform at positive radius");
+                ValidateOutwardWaveHistory();
+            }
+            finally
+            {
+                sky.Visible = pointSources; sky.BackdropVisible = backdrop;
+                if (exhibit.FeaturedStar != null) exhibit.FeaturedStar.Visibility = featured;
+                exhibit.ShowAccretionView(); exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+            }
+        }
+
+        private void ValidateOutwardWaveHistory()
+        {
+            var model = exhibit.Session.Model;
+            double radiusStep = exhibit.Optics.WaveRadiusRg / (InteractiveOpticsReference.WaveSamples - 1);
+            double tg = model.GravitationalTimeSeconds;
+            double interval = Math.Min(model.MergerTimeSeconds, exhibit.Optics.WaveRadiusRg * tg);
+            int available = Math.Min(InteractiveOpticsReference.WaveSamples - 1,
+                (int)(.7 * interval / (radiusStep * tg)));
+            int inner = Math.Max(1, available / 3), outer = Math.Max(inner + 1, 2 * available / 3);
+            Check(outer <= available, "outward-wave fixtures fit inside the retained inspiral history");
+            if (outer > available) return;
+            double innerRadius = inner * radiusStep, outerRadius = outer * radiusStep;
+            double relativeTolerance = ((Texture2D)exhibit.Optics.WarpMaterial.GetTexture("_WaveHistory")).format
+                == TextureFormat.RGBAHalf ? .002 : 0;
+            bool nonzeroTransported = false;
+            foreach (double phase in new[] { .10, .15, .20 })
+            {
+                double emission = phase * interval;
+                double firstTime = emission + innerRadius * tg, secondTime = emission + outerRadius * tg;
+                var expected = model.EvaluateSignal(emission);
+                double plus = expected.Kind == InteractiveSignalKind.QuadrupoleStrain
+                    ? expected.HPlus.GetValueOrDefault() / InteractiveBinaryScenario.ReferenceStrainAmplitude
+                    : expected.NormalizedRealH22.GetValueOrDefault();
+                double cross = expected.Kind == InteractiveSignalKind.QuadrupoleStrain
+                    ? expected.HCross.GetValueOrDefault() / InteractiveBinaryScenario.ReferenceStrainAmplitude
+                    : expected.NormalizedImaginaryH22.GetValueOrDefault();
+                exhibit.Session.Seek(firstTime); exhibit.Present(); exhibit.RenderFrame();
+                var first = ReadUploadedWaveHistory();
+                double firstScale = exhibit.Optics.WarpMaterial.GetVector("_WaveParameters").y;
+                exhibit.Session.Seek(secondTime); exhibit.Present(); exhibit.RenderFrame();
+                var second = ReadUploadedWaveHistory();
+                double secondScale = exhibit.Optics.WarpMaterial.GetVector("_WaveParameters").y;
+                var a = first[inner]; var b = second[outer];
+                double error = Math.Max(Math.Max(Math.Abs(a.r * firstScale - plus), Math.Abs(a.g * firstScale - cross)),
+                    Math.Max(Math.Abs(b.r * secondScale - plus), Math.Abs(b.g * secondScale - cross)));
+                double tolerance = 2e-6 + relativeTolerance * Math.Max(Math.Abs(plus), Math.Abs(cross));
+                var firstSignal = model.EvaluateRetardedSignal(firstTime, innerRadius);
+                var secondSignal = model.EvaluateRetardedSignal(secondTime, outerRadius);
+                Check(expected.IsAvailable && firstSignal.IsAvailable && secondSignal.IsAvailable
+                    && Math.Abs(firstSignal.EmissionElapsedSeconds - emission) < 1e-10
+                    && Math.Abs(secondSignal.EmissionElapsedSeconds - emission) < 1e-10
+                    && a.b > .999f && b.b > .999f && error <= tolerance,
+                    "signed GPU waveform follows one emission epoch to a later outer radius / " + phase);
+                fixtures.Add(new Fixture { label = "outward signed waveform / bounded-interval fraction " + phase,
+                    expectedX = plus, expectedY = cross, measuredX = b.r * secondScale,
+                    measuredY = b.g * secondScale, absoluteError = error });
+                fixtures.Add(new Fixture { label = "outward propagation / radius and reception time / " + phase,
+                    expectedX = innerRadius, expectedY = firstTime, measuredX = outerRadius, measuredY = secondTime });
+                bool coverage = true; int firstFront = -1, secondFront = -1;
+                for (int i = 0; i < first.Length; i++)
+                {
+                    bool firstCovered = model.EvaluateSignal(firstTime - i * radiusStep * tg).IsAvailable;
+                    bool secondCovered = model.EvaluateSignal(secondTime - i * radiusStep * tg).IsAvailable;
+                    coverage &= (first[i].b > .999f) == firstCovered && (second[i].b > .999f) == secondCovered;
+                    if (first[i].b > .999f) firstFront = i;
+                    if (second[i].b > .999f) secondFront = i;
+                }
+                Check(coverage && secondFront > firstFront,
+                    "GPU coverage front expands outward with source time / " + phase + " / bins " + firstFront + " to " + secondFront);
+                nonzeroTransported |= Math.Max(Math.Abs(plus), Math.Abs(cross)) > 1e-4
+                    && Math.Max(Math.Abs(a.r * firstScale), Math.Abs(a.g * firstScale)) > 1e-4
+                    && Math.Max(Math.Abs(b.r * secondScale), Math.Abs(b.g * secondScale)) > 1e-4;
+            }
+            Check(nonzeroTransported, "outward propagation carries a nonzero signed waveform rather than only a coverage flag");
+        }
+
+        private Color[] ReadUploadedWaveHistory()
+        {
+            var wave = exhibit.Optics.WarpMaterial.GetTexture("_WaveHistory") as Texture2D;
+            if (wave == null) throw new InvalidOperationException("Outgoing-wave history is unavailable.");
+            var target = new RenderTexture(wave.width, 1, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+            var image = new Texture2D(wave.width, 1, TextureFormat.RGBAFloat, false, true);
+            var previous = RenderTexture.active; bool previousSrgb = GL.sRGBWrite;
+            try
+            {
+                if (!target.Create()) throw new InvalidOperationException("Cannot allocate outgoing-wave history readback.");
+                GL.sRGBWrite = false; Graphics.Blit(wave, target); RenderTexture.active = target;
+                image.ReadPixels(new Rect(0, 0, wave.width, 1), 0, 0); image.Apply();
+                return image.GetPixels();
+            }
+            finally
+            {
+                GL.sRGBWrite = previousSrgb; RenderTexture.active = previous;
+                Destroy(image); target.Release(); Destroy(target);
+            }
+        }
+
+        private void ValidateFeaturedProjectionAndFormula()
+        {
+            var source = exhibit.FeaturedStar;
+            if (source == null || !source.Ready) { Check(false, "featured stellar shader is ready for independent projection checks"); return; }
+            Camera view = exhibit.View;
+            Vector3 previousPosition = view.transform.position; Quaternion previousRotation = view.transform.rotation;
+            bool previousStars = exhibit.BackgroundStarsVisible, previousFeatured = source.Visibility;
+            bool previousGas = exhibit.GasVisible, previousSamples = exhibit.SamplesVisible;
+            InteractiveOpticalStyle previousStyle = exhibit.OpticalStyle;
+            float previousLens = exhibit.LensGain, previousWave = exhibit.WaveGain;
+            RenderTexture previousActive = RenderTexture.active;
+            Material material = source.StarMaterial;
+            material.EnableKeyword("DTET_QA_FIXTURES");
+            float previousFixture = material.GetFloat("_StellarFixture");
+            Vector4 previousInput = material.GetVector("_StellarFixtureInput"), previousLensInput = material.GetVector("_StellarFixtureLens");
+            var ownedTargets = new HashSet<int>();
+            foreach (var texture in Resources.FindObjectsOfTypeAll<RenderTexture>())
+                if (texture.IsCreated() && (texture.name == "Bounded interactive scene" || texture.name == "Capped astronomical optics"))
+                    ownedTargets.Add(texture.GetInstanceID());
+            Renderer[] renderers = exhibit.GetComponentsInChildren<Renderer>(true);
+            var previousEnabled = new bool[renderers.Length];
+            for (int i = 0; i < renderers.Length; i++) previousEnabled[i] = renderers[i].enabled;
+            RenderTexture fixtureTarget = null; Texture2D fixtureImage = null; GameObject fixtureCameraObject = null;
+            try
+            {
+                exhibit.BackgroundStarsVisible = false; exhibit.SetWristGas(false); exhibit.SetWristSamples(false);
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Off, 0, 0); material.SetFloat("_StellarFixture", 0);
+                // Test both vertical signs against Unity's projection to expose render-target Y flips.
+                foreach (Vector2 rotation in new[] { new Vector2(-5, -5), new Vector2(-5, 5), new Vector2(5, -5), new Vector2(5, 5) })
+                {
+                    view.transform.rotation = previousRotation * Quaternion.Euler(rotation.y, rotation.x, 0);
+                    source.Visibility = false; exhibit.RenderFrame(); var background = ReadPixels(exhibit.SceneTarget);
+                    source.Visibility = true; exhibit.RenderFrame(); var foreground = ReadPixels(exhibit.SceneTarget);
+                    Vector3 expected = view.WorldToViewportPoint(source.SourcePositionRg);
+                    int width = exhibit.SceneTarget.width, height = exhibit.SceneTarget.height;
+                    double flux = 0, momentX = 0, momentY = 0;
+                    for (int y = 0; y < height; y++)
+                    for (int x = 0; x < width; x++)
+                    {
+                        int index = y * width + x;
+                        double weight = Math.Max(0, .2126 * (foreground[index].r-background[index].r)
+                            + .7152 * (foreground[index].g-background[index].g) + .0722 * (foreground[index].b-background[index].b));
+                        flux += weight; momentX += weight * (x+.5); momentY += weight * (y+.5);
+                    }
+                    double measuredX = flux > 0 ? momentX/flux : -10000, measuredY = flux > 0 ? momentY/flux : -10000;
+                    double expectedX = expected.x*width, expectedY = expected.y*height;
+                    double error = Math.Sqrt((measuredX-expectedX)*(measuredX-expectedX)+(measuredY-expectedY)*(measuredY-expectedY));
+                    fixtures.Add(new Fixture { label = "featured source actual centroid vs Unity projection / camera yaw-pitch " + rotation,
+                        expectedX = expectedX, expectedY = expectedY, measuredX = measuredX, measuredY = measuredY, absoluteError = error });
+                    Check(expected.z > 0 && expected.x > .1 && expected.x < .9 && expected.y > .1 && expected.y < .9
+                        && flux > 100 && error < 1.25, "unbent featured source matches world projection within 1.25 pixels / yaw-pitch " + rotation);
+                    Capture("stellar-projection-yaw-" + rotation.x.ToString("0", CultureInfo.InvariantCulture)
+                        + "-pitch-" + rotation.y.ToString("0", CultureInfo.InvariantCulture) + ".png");
+                }
+
+                // Use the production mesh; a blit has different vertex coordinates.
+                const int side = 65;
+                fixtureTarget = new RenderTexture(side, side, 24, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear)
+                    { name = "QA featured stellar reference target" };
+                if (!fixtureTarget.Create()) throw new InvalidOperationException("Could not allocate the floating stellar reference target.");
+                fixtureImage = new Texture2D(side, side, TextureFormat.RGBAFloat, false, true);
+                fixtureCameraObject = new GameObject("QA actual stellar mesh reference camera");
+                Camera fixtureCamera = fixtureCameraObject.AddComponent<Camera>(); fixtureCamera.CopyFrom(view);
+                fixtureCamera.enabled = false; fixtureCamera.targetTexture = null; fixtureCamera.aspect = 1;
+                fixtureCamera.clearFlags = CameraClearFlags.SolidColor; fixtureCamera.backgroundColor = Color.black;
+                fixtureCamera.allowHDR = true; fixtureCamera.allowMSAA = false;
+                fixtureCamera.transform.SetPositionAndRotation(previousPosition, previousRotation);
+                fixtureCameraObject.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>().renderPostProcessing = false;
+                for (int i = 0; i < renderers.Length; i++) renderers[i].enabled = renderers[i].sharedMaterial == material;
+                material.SetFloat("_StellarFixture", 1);
+                foreach (Vector4 lens in new[] { new Vector4(100, .5f, 1, 1e8f), new Vector4(100, .5f, 1, 200),
+                    new Vector4(100, .5f, 1, 99), new Vector4(1, .8f, 1.6f, 1e6f) })
+                foreach (Vector2 angle in new[] { new Vector2(.2f, .1f), new Vector2(-.1f, .02f), new Vector2(.0001f, -.0002f) })
+                {
+                    material.SetVector("_Optics", new Vector4(1, 0, 1, 1));
+                    material.SetVector("_StellarFixtureInput", new Vector4(angle.x, angle.y, 0, 0));
+                    material.SetVector("_StellarFixtureLens", lens);
+                    StellarLensReference.Deflection(angle.x, angle.y, lens.x, lens.y, lens.z, lens.w, 1, out double x, out double y);
+                    var request = new RenderPipeline.StandardRequest { destination = fixtureTarget };
+                    if (!RenderPipeline.SupportsRenderRequest(fixtureCamera, request))
+                        throw new InvalidOperationException("URP stellar reference render requests are unavailable.");
+                    RenderPipeline.SubmitRenderRequest(fixtureCamera, request);
+                    RenderTexture.active = fixtureTarget;
+                    fixtureImage.ReadPixels(new Rect(0, 0, side, side), 0, 0); fixtureImage.Apply();
+                    RecordFixture("actual stellar shader / lens " + lens + " / angle " + angle, x, y,
+                        fixtureImage.GetPixel(side/2, side/2), 3e-4);
+                }
+            }
+            finally
+            {
+                material.SetFloat("_StellarFixture", previousFixture);
+                material.SetVector("_StellarFixtureInput", previousInput); material.SetVector("_StellarFixtureLens", previousLensInput);
+                RenderTexture.active = previousActive;
+                if (fixtureCameraObject != null) { fixtureCameraObject.SetActive(false); Destroy(fixtureCameraObject); }
+                if (fixtureImage != null) Destroy(fixtureImage);
+                if (fixtureTarget != null)
+                {
+                    fixtureTarget.Release(); Check(!fixtureTarget.IsCreated(), "stellar formula check releases its floating render target");
+                    Destroy(fixtureTarget);
+                }
+                view.transform.SetPositionAndRotation(previousPosition, previousRotation);
+                exhibit.BackgroundStarsVisible = previousStars; source.Visibility = previousFeatured;
+                exhibit.SetWristGas(previousGas); exhibit.SetWristSamples(previousSamples);
+                exhibit.SetWristOptics(previousStyle, previousLens, previousWave);
+                for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null) renderers[i].enabled = previousEnabled[i];
+                exhibit.RenderFrame();
+                bool noExtraTargets = true;
+                foreach (var texture in Resources.FindObjectsOfTypeAll<RenderTexture>())
+                    if (texture.IsCreated() && (texture.name == "Bounded interactive scene" || texture.name == "Capped astronomical optics"
+                        || texture.name == "QA featured stellar reference target") && !ownedTargets.Contains(texture.GetInstanceID())) noExtraTargets = false;
+                Check(noExtraTargets, "stellar projection and formula checks retain no additional owned render targets");
+            }
+        }
+
+        private IEnumerator CaptureStellarSequence()
+        {
+            Directory.CreateDirectory(Path.Combine(output, "starlight-movie"));
+            exhibit.SelectWristScenario(true); exhibit.WatchStarlight(); exhibit.SetWristPlaying(false);
+            double end = Math.Min(.5, exhibit.Session.Model.MergerTimeSeconds * .7);
+            for (int i = 0; i < 120; i++)
+            {
+                exhibit.Session.Seek(end * i / 119); exhibit.Present();
+                Capture("starlight-movie/frame-" + i.ToString("D3") + ".png"); yield return null;
+            }
+            exhibit.RestartPresentation();
+        }
+
+        private IEnumerator CaptureAccretionSequence()
+        {
+            Directory.CreateDirectory(Path.Combine(output, "accretion-movie"));
+            exhibit.SelectWristScenario(true); exhibit.ShowAccretionView();
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f); exhibit.SetViewPreset(0);
+            double end = Math.Min(.5, exhibit.Session.Model.MergerTimeSeconds * .7);
+            for (int i = 0; i < 120; i++)
+            {
+                exhibit.Session.Seek(end * i / 119); exhibit.Present();
+                Capture("accretion-movie/frame-" + i.ToString("D3") + ".png"); yield return null;
+            }
+            exhibit.ShowAccretionView();
+        }
+
+        private IEnumerator CaptureOutgoingWaveSequence()
+        {
+            Directory.CreateDirectory(Path.Combine(output, "outgoing-wave-movie"));
+            exhibit.SelectWristScenario(true); exhibit.WatchOutgoingWaves(); exhibit.SetWristPlaying(false);
+            double start = exhibit.Snapshot.ElapsedSeconds;
+            double end = Math.Min(exhibit.Snapshot.DurationSeconds, start + 6 * exhibit.Session.PlaybackRate);
+            bool sharedClock = true;
+            for (int i = 0; i < 180; i++)
+            {
+                double time = start + (end - start) * i / 179;
+                exhibit.Session.Seek(time); exhibit.Present();
+                Capture("outgoing-wave-movie/frame-" + i.ToString("D3") + ".png");
+                sharedClock &= exhibit.GasVisible && !exhibit.GeneratedFluidActive
+                    && Math.Abs(exhibit.Snapshot.ElapsedSeconds - time) < 1e-10
+                    && exhibit.Wrist.PresentedSourceTime == exhibit.Snapshot.ElapsedSeconds;
+                yield return null;
+            }
+            fixtures.Add(new Fixture { label = "outgoing-wave preview event interval / six presentation seconds",
+                expectedX = start, measuredX = end, measuredY = exhibit.Session.PlaybackRate });
+            Check(sharedClock, "outgoing-wave preview keeps visible gas and the wrist on the shared event clock");
+            exhibit.ShowAccretionView();
         }
 
         private IEnumerator Measure(string scenario)
@@ -320,11 +1298,151 @@ namespace DTET.VisualPrototype
             exhibit.Wrist.SetRaised(true, true); exhibit.Wrist.SetFrequencyPlot(false);
         }
 
+        private void ValidateWaveHistoryReadback(string label)
+        {
+            var material = exhibit.Optics.WarpMaterial;
+            var wave = material == null ? null : material.GetTexture("_WaveHistory") as Texture2D;
+            Check(wave != null && wave.width == InteractiveOpticsReference.WaveSamples && wave.height == 1,
+                label + " has the actual uploaded wave history");
+            if (wave == null) return;
+            if (Environment.GetEnvironmentVariable("DTET_FORCE_HALF_TEXTURES_QA") == "1")
+                Check(wave.format == TextureFormat.RGBAHalf, label + " forced Half wave texture is selected");
+            Check(wave.filterMode == FilterMode.Bilinear, label + " wave texture uses linear filtering");
+            var target = new RenderTexture(wave.width, 1, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+            var image = new Texture2D(wave.width, 1, TextureFormat.RGBAFloat, false, true);
+            var previous = RenderTexture.active;
+            bool previousSrgbWrite = GL.sRGBWrite;
+            try
+            {
+                Check(target.Create(), label + " wave readback target allocates");
+                if (!target.IsCreated()) return;
+                GL.sRGBWrite = false;
+                Graphics.Blit(wave, target); RenderTexture.active = target;
+                image.ReadPixels(new Rect(0, 0, wave.width, 1), 0, 0); image.Apply();
+                // Decode with the shader's scale and compare against CPU display magnitudes.
+                double displayScale = material.GetVector("_WaveParameters").y;
+                double relativeTolerance = wave.format == TextureFormat.RGBAHalf ? .002 : 0;
+                bool coverageMatches = true, valuesMatch = true, nonzeroSurvives = false;
+                int covered = 0, worstIndex = 0;
+                double maximumError = 0, worstExpectedPlus = 0, worstExpectedCross = 0;
+                double worstMeasuredPlus = 0, worstMeasuredCross = 0;
+                for (int i = 0; i < wave.width; i++)
+                {
+                    double radius = exhibit.Optics.WaveRadiusRg * i / (wave.width - 1);
+                    var ideal = exhibit.Session.Model.EvaluateRetardedSignal(exhibit.Snapshot.ElapsedSeconds, radius);
+                    double plus = ideal.IsAvailable ? (ideal.Kind == InteractiveSignalKind.QuadrupoleStrain
+                        ? ideal.HPlus.GetValueOrDefault() / InteractiveBinaryScenario.ReferenceStrainAmplitude
+                        : ideal.NormalizedRealH22.GetValueOrDefault()) : 0;
+                    double cross = ideal.IsAvailable ? (ideal.Kind == InteractiveSignalKind.QuadrupoleStrain
+                        ? ideal.HCross.GetValueOrDefault() / InteractiveBinaryScenario.ReferenceStrainAmplitude
+                        : ideal.NormalizedImaginaryH22.GetValueOrDefault()) : 0;
+                    var pixel = image.GetPixel(i, 0);
+                    double measuredPlus = pixel.r * displayScale, measuredCross = pixel.g * displayScale;
+                    coverageMatches &= float.IsFinite(pixel.b) && Math.Abs(pixel.b - (ideal.IsAvailable ? 1 : 0)) < 1e-6;
+                    if (ideal.IsAvailable) covered++;
+                    double error = Math.Max(Math.Abs(measuredPlus - plus), Math.Abs(measuredCross - cross));
+                    valuesMatch &= double.IsFinite(measuredPlus) && double.IsFinite(measuredCross)
+                        && Math.Abs(measuredPlus - plus) <= 2e-6 + relativeTolerance * Math.Abs(plus)
+                        && Math.Abs(measuredCross - cross) <= 2e-6 + relativeTolerance * Math.Abs(cross);
+                    nonzeroSurvives |= ideal.IsAvailable && Math.Max(Math.Abs(plus), Math.Abs(cross)) > 1e-4
+                        && Math.Max(Math.Abs(measuredPlus), Math.Abs(measuredCross)) > 1e-4;
+                    if (i == 0 || error > maximumError)
+                    {
+                        maximumError = error; worstIndex = i; worstExpectedPlus = plus; worstExpectedCross = cross;
+                        worstMeasuredPlus = measuredPlus; worstMeasuredCross = measuredCross;
+                    }
+                }
+                fixtures.Add(new Fixture { label = label + " decoded wave history / " + wave.format + " / worst sample " + worstIndex,
+                    expectedX = worstExpectedPlus, expectedY = worstExpectedCross,
+                    measuredX = worstMeasuredPlus, measuredY = worstMeasuredCross, absoluteError = maximumError });
+                Check(coverageMatches && covered == exhibit.Optics.CoveredWaveSamples && covered > 0,
+                    label + " GPU coverage agrees with retarded CPU history");
+                Check(valuesMatch, label + " decoded GPU waveform agrees with CPU display magnitude");
+                Check(nonzeroSurvives, label + " nonzero covered waveform survives GPU storage");
+            }
+            finally
+            {
+                GL.sRGBWrite = previousSrgbWrite; RenderTexture.active = previous;
+                Destroy(image); target.Release(); Destroy(target);
+            }
+        }
+
+        private void ValidateRayProjection()
+        {
+            var bodyMaterial = exhibit.BodyATransform.GetComponent<Renderer>().sharedMaterial;
+            Color originalColor = bodyMaterial.GetColor("_Color");
+            bool originalGas = exhibit.GasVisible, originalSamples = exhibit.SamplesVisible;
+            var originalStyle = exhibit.OpticalStyle;
+            float originalLens = exhibit.LensGain, originalWave = exhibit.WaveGain;
+            var optics = exhibit.Optics.WarpMaterial;
+            optics.EnableKeyword("DTET_QA_FIXTURES");
+            var target = new RenderTexture(exhibit.SceneTarget.width, exhibit.SceneTarget.height, 0,
+                RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
+            var previousTarget = RenderTexture.active;
+            bool previousSrgb = GL.sRGBWrite;
+            try
+            {
+                if (!target.Create()) throw new InvalidOperationException("Cannot allocate real-camera ray projection fixture.");
+                bodyMaterial.SetColor("_Color", Color.green);
+                exhibit.SetWristGas(false); exhibit.SetWristSamples(false);
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+                for (int view = 0; view < 4; view++)
+                {
+                    exhibit.SetViewPreset(view); exhibit.RenderFrame();
+                    var rendered = ReadPixels(exhibit.SceneTarget);
+                    optics.SetFloat("_OpticsFixture", 3); GL.sRGBWrite = false;
+                    Graphics.Blit(exhibit.SceneTarget, target, optics);
+                    var analytic = ReadPixels(target);
+                    int actualCount = 0, analyticCount = 0, union = 0, intersection = 0;
+                    double actualX = 0, actualY = 0, analyticX = 0, analyticY = 0;
+                    var overlay = new Color32[rendered.Length];
+                    for (int i = 0; i < rendered.Length; i++)
+                    {
+                        bool actual = rendered[i].g > 180 && rendered[i].r < 30 && rendered[i].b < 30;
+                        bool predicted = analytic[i].r > 180;
+                        int x = i % target.width, y = i / target.width;
+                        if (actual) { actualCount++; actualX += x; actualY += y; }
+                        if (predicted) { analyticCount++; analyticX += x; analyticY += y; }
+                        if (actual || predicted) union++;
+                        if (actual && predicted) intersection++;
+                        overlay[i] = new Color32(predicted ? (byte)255 : (byte)0, actual ? (byte)255 : (byte)0, 0, 255);
+                    }
+                    double overlap = union == 0 ? 0 : (double)intersection / union;
+                    double centroidError = actualCount == 0 || analyticCount == 0 ? 1e6
+                        : Math.Sqrt(Math.Pow(actualX / actualCount - analyticX / analyticCount, 2)
+                            + Math.Pow(actualY / actualCount - analyticY / analyticCount, 2));
+                    fixtures.Add(new Fixture { label = "actual rendered horizon versus optical ray mask / view " + view,
+                        expectedX = 1, measuredX = overlap, measuredY = centroidError, absoluteError = 1 - overlap });
+                    Check(actualCount > 20 && analyticCount > 20 && overlap > .90 && centroidError < 1.5,
+                        "actual camera geometry and optical ray projection align from viewpoint " + view);
+                    var image = new Texture2D(target.width, target.height, TextureFormat.RGBA32, false, true);
+                    try
+                    {
+                        image.SetPixels32(overlay); image.Apply();
+                        string name = "optics-ray-projection-view-" + view + ".png";
+                        File.WriteAllBytes(Path.Combine(output, name), image.EncodeToPNG()); images.Add(name);
+                    }
+                    finally { Destroy(image); }
+                    optics.SetFloat("_OpticsFixture", 0);
+                }
+            }
+            finally
+            {
+                optics.SetFloat("_OpticsFixture", 0); bodyMaterial.SetColor("_Color", originalColor);
+                exhibit.SetWristGas(originalGas); exhibit.SetWristSamples(originalSamples);
+                exhibit.SetWristOptics(originalStyle, originalLens, originalWave);
+                GL.sRGBWrite = previousSrgb; RenderTexture.active = previousTarget;
+                target.Release(); Destroy(target);
+                exhibit.SetViewPreset(0); exhibit.RenderFrame();
+            }
+        }
+
         private void ValidateGpuFixtures()
         {
             var target = new RenderTexture(1, 1, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear); target.Create();
             var image = new Texture2D(1, 1, TextureFormat.RGBAFloat, false, true);
             var optics = new Material(Resources.Load<Shader>("DTET/InteractiveOptics"));
+            optics.EnableKeyword("DTET_QA_FIXTURES");
             var active = RenderTexture.active;
             try
             {
@@ -342,6 +1460,16 @@ namespace DTET.VisualPrototype
                     optics.SetVector("_FixtureInput", new Vector4(.2f, .4f, signal.x, signal.y));
                     InteractiveOpticsReference.WaveOffset(.2f, .4f, signal.x, signal.y, 2, out double x, out double y);
                     FixtureRead("wave plus/cross " + signal, x, y, optics, target, image, 2e-6);
+                }
+                foreach (Vector2 angle in new[] { new Vector2(.01f, .03f), new Vector2(.2f, .4f), new Vector2(.9f, -.7f) })
+                foreach (float gain in new[] { 0, .35f, 2 })
+                {
+                    optics.SetFloat("_OpticsFixture", 4); optics.SetVector("_Optics", new Vector4(gain, 0, 1, 1));
+                    optics.SetVector("_FixtureInput", new Vector4(angle.x, angle.y, 0, 0));
+                    optics.SetVector("_FixtureLens", new Vector4(25, .5f, 1, 1e6f));
+                    InteractiveOpticsReference.SkyApparentOffset(angle.x, angle.y, 25, .5, 1, gain, out double x, out double y);
+                    FixtureRead("shared sky star-centre deflection " + angle + " / gain " + gain,
+                        x, y, optics, target, image, 2e-6);
                 }
                 ValidateGasFixtures();
             }
@@ -366,6 +1494,7 @@ namespace DTET.VisualPrototype
             Material gas = exhibit.GasMaterial;
             if (gas == null) throw new InvalidOperationException("The adjustable gas fixture requires an active gas material.");
             float previousTest = gas.GetFloat("_FieldTest"); Vector4 previousPoint = gas.GetVector("_FieldPoint");
+            bool fixturesEnabled = gas.IsKeywordEnabled("DTET_QA_FIXTURES");
             Renderer[] renderers = exhibit.GetComponentsInChildren<Renderer>(true);
             var enabled = new bool[renderers.Length];
             for (int i = 0; i < renderers.Length; i++) enabled[i] = renderers[i].enabled;
@@ -376,9 +1505,7 @@ namespace DTET.VisualPrototype
                 target = new RenderTexture(side, side, 24, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
                 if (!target.Create()) throw new InvalidOperationException("Could not allocate the linear gas fixture target.");
                 image = new Texture2D(side, side, TextureFormat.RGBAFloat, false, true);
-                // The volume is a world-space, front-culled cube. A fullscreen blit would not
-                // exercise its actual vertex/culling path. A dedicated camera also avoids the
-                // exhibit's normal endCameraRendering optical composite callback.
+                // A dedicated camera exercises the volume's world-space vertices and front-face culling.
                 cameraObject = new GameObject("QA adjustable gas fixture camera");
                 Camera camera = cameraObject.AddComponent<Camera>(); camera.CopyFrom(exhibit.View);
                 camera.enabled = false; camera.targetTexture = null; camera.aspect = 1;
@@ -389,9 +1516,10 @@ namespace DTET.VisualPrototype
                     (float)-exhibit.Session.Model.HalfExtentXZ * 2);
                 camera.transform.LookAt(Vector3.zero);
                 for (int i = 0; i < renderers.Length; i++) renderers[i].enabled = renderers[i].sharedMaterial == gas;
+                gas.EnableKeyword("DTET_QA_FIXTURES");
                 gas.SetFloat("_FieldTest", 1);
                 foreach (Vector3 point in new[] { new Vector3((float)(exhibit.Snapshot.GasState.ReservoirInnerRadiusRg * 1.3), 0, 0),
-                    V(exhibit.Snapshot.GasState.BodyA.PositionRg) + new Vector3(5, 0, 0), new Vector3(1000, 0, 0) })
+                    V(exhibit.Snapshot.GasState.BodyA.PositionRg) + new Vector3(5, 0, 0), new Vector3(10, 0, 0), new Vector3(1000, 0, 0) })
                 {
                     var expected = exhibit.Session.Model.SampleGas(exhibit.Snapshot.GasState, point.x, point.y, point.z);
                     gas.SetVector("_FieldPoint", point);
@@ -408,6 +1536,7 @@ namespace DTET.VisualPrototype
             finally
             {
                 gas.SetFloat("_FieldTest", previousTest); gas.SetVector("_FieldPoint", previousPoint);
+                if (!fixturesEnabled) gas.DisableKeyword("DTET_QA_FIXTURES");
                 for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null) renderers[i].enabled = enabled[i];
                 RenderTexture.active = previous;
                 if (cameraObject != null) Destroy(cameraObject);

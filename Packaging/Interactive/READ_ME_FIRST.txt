@@ -16,7 +16,12 @@ Docs/INTERACTIVE_OBSERVATORY.md for the current controls, settings and science l
 Representative replay retains SXS:BBH:0305 numerical positions and a normalized
 radiation mode. Adjustable masses use a separate bounded quadrupole inspiral with
 an explicitly conceptual merger and a physical-waveform cutoff. Bright gas is a
-prescribed educational field, not measured GW150914 gas or a GRMHD calculation.
+prescribed educational field by default. SOLVE GAS generates an optional 2D
+isothermal fluid history with pressure and softened Newtonian gravity. No private
+gas files are needed. Wait for generation, then use the existing time/view controls.
+The covered final interval is shown in the gas panel; earlier gas is unavailable.
+The gas environment, thickness and brightness are assumed, not measured GW150914
+gas or a GRMHD calculation. See Docs/GENERATED_FLUID_MODEL.md.
 Optical warping and magnified wave distortion are illustrative. Density samples are
 weighted spatial samples, not fluid particles. The star catalogue is synthetic.
 The observations of GW150914 came from LIGO; no Einstein Telescope event readings

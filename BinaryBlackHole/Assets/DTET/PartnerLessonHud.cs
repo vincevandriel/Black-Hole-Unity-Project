@@ -4,10 +4,7 @@ using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>
-    /// World-space exhibit cards and a wrist-mounted control canvas. No screen-space control dock.
-    /// All playback commands go through the same provider used by the main learning controls.
-    /// </summary>
+    // World-space cards and wrist controls using the shared playback provider.
     public sealed class PartnerLessonHud : MonoBehaviour
     {
         private static readonly Color Accent = new Color(0.37f, 0.88f, 0.83f);
@@ -289,7 +286,7 @@ namespace DTET.VisualPrototype
             var stage = snapshot.ConceptualEndpoint ? 2 : snapshot.Progress < 0.5f ? 0 : 1;
             for (var i = 0; i < stageChips.Length; i++) stageChips[i].color = i == stage
                 ? new Color(Accent.r, Accent.g, Accent.b, 0.35f) : new Color(1, 1, 1, 0.1f);
-            // Local scripted narration only. Never sends a snapshot to a network provider.
+            // Scripted narration stays local.
             var narrationStage = snapshot.ConceptualEndpoint ? 4 : Mathf.Min(3, Mathf.FloorToInt(snapshot.Progress * 4f));
             if (snapshot.NumericalModel)
             {

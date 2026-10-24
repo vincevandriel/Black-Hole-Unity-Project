@@ -22,9 +22,8 @@ namespace DTET.VisualPrototype
         { X = x; Y = y; Jxx = jxx; Jxy = jxy; Jyy = jyy; }
     }
 
-    /// <summary>Instantaneous, common-plane point-mass lens equation in paraxial tangent coordinates.
-    /// NOT null-geodesic integration, a binary spacetime, photon capture, redshift or time dilation.
-    /// The bounded multi-start Newton search does not guarantee all caustic images are found.</summary>
+    // Common-plane point-mass lens in paraxial coordinates, not a spacetime ray tracer.
+    // The bounded Newton search may miss caustic images.
     public static class ThinLensModel
     {
         public const int MaximumImages = 5;

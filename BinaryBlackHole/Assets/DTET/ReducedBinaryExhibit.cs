@@ -10,7 +10,7 @@ using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>M4 desktop coordinate inspection. The SXS history is authoritative; gas is prescribed.</summary>
+    // Coordinate inspection of SXS history with prescribed gas.
     public sealed class ReducedBinaryExhibit : MonoBehaviour
     {
         public bool Ready { get; private set; }

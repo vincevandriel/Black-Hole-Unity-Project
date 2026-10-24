@@ -2,7 +2,7 @@ using System;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Dimensionless input multipliers; never change simulation time or tracked XR poses.</summary>
+    // Dimensionless input multipliers; never change simulation time or tracked XR poses.
     public sealed class ObserverInputSettings
     {
         public const float DefaultLook = 1f;

@@ -2,7 +2,7 @@ using System;
 
 namespace BlackHole.Staging.Simulation
 {
-    /// <summary>Scalar transfer controls in declared units; these functions are not a ray tracer.</summary>
+    // Scalar transfer controls in declared units; these functions are not a ray tracer.
     public static class RadiativeTransferReference
     {
         public const double PlanckConstant = 6.62607015e-34;

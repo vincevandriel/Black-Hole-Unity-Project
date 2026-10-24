@@ -11,11 +11,7 @@ using Debug = UnityEngine.Debug;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>
-    /// Opt-in development recording of the real exhibit. No effect in normal sessions.
-    /// Encodes completed screen frames directly, without generating a large image cache.
-    /// Captioning is a separate editorial step; this does not add a desktop interface.
-    /// </summary>
+    // Opt-in development recording; stream completed frames directly to the encoder.
     internal sealed class PrototypeVideoCapture : MonoBehaviour
     {
         private const int Fps = 30, Seconds = 36;

@@ -22,7 +22,7 @@ namespace BlackHole.Staging.Simulation
         }
     }
 
-    /// <summary>Synthetic fixed directions and apparent fluxes; not a measured star catalogue.</summary>
+    // Synthetic fixed directions and apparent fluxes; not a measured star catalogue.
     public static class SyntheticSkyCatalog
     {
         public const uint DefaultSeed = 150914;
@@ -39,8 +39,7 @@ namespace BlackHole.Staging.Simulation
             return stars;
         }
 
-        // The random variates depend on index and seed only: adding dimmer stars never moves,
-        // brightens, recolours or renormalizes the retained bright catalogue prefix.
+        // Index-and-seed sampling preserves existing stars when the catalogue grows.
         public static SyntheticSkyStar Star(int index, uint seed = DefaultSeed)
         {
             if (index < 0 || index >= MaximumStars) throw new ArgumentOutOfRangeException(nameof(index));
@@ -49,22 +48,43 @@ namespace BlackHole.Staging.Simulation
             double radius = Math.Sqrt(Math.Max(0, 1 - y * y));
             double magnitude = -1.46 + (5.0 / 3) * Math.Log10(1 + 12.0 * index);
             double temperature = 2800 + 9200 * Math.Pow(Uniform(ref state), 2);
-            // Three Planck samples, normalized against 6500 K, gently desaturated for display.
-            // This is a colour cue, not integration through measured photometric passbands.
+            double x = radius * Math.Cos(phi), z = radius * Math.Sin(phi);
+            // Fixed synthetic bright sources compose the opening view; they are not measured GW150914 stars.
+            if (index < 8)
+            {
+                double horizontal, vertical;
+                switch (index)
+                {
+                    case 0: horizontal = -.48; vertical = .24; temperature = 4400; break;
+                    case 1: horizontal = .40; vertical = .26; temperature = 10000; break;
+                    case 2: horizontal = -.24; vertical = -.28; temperature = 3200; break;
+                    case 3: horizontal = .32; vertical = -.24; temperature = 6500; break;
+                    case 4: horizontal = -.58; vertical = -.08; temperature = 8500; break;
+                    case 5: horizontal = .55; vertical = .06; temperature = 3800; break;
+                    case 6: horizontal = .09; vertical = .33; temperature = 7200; break;
+                    default: horizontal = -.07; vertical = -.34; temperature = 5200; break;
+                }
+                double viewLength = Math.Sqrt(.85 * .85 + 1.3 * 1.3);
+                x = horizontal; y = (-.85 + 1.3 * vertical) / viewLength;
+                z = (1.3 + .85 * vertical) / viewLength;
+                double length = Math.Sqrt(x * x + y * y + z * z);
+                x /= length; y /= length; z /= length;
+            }
+            // Three Planck samples relative to 6500 K give a display colour, not measured photometry.
             double r = PlanckRatio(610e-9, temperature), g = PlanckRatio(545e-9, temperature), b = PlanckRatio(460e-9, temperature);
             double luminance = .2126 * r + .7152 * g + .0722 * b;
             r = .4 + .6 * r / luminance; g = .4 + .6 * g / luminance; b = .4 + .6 * b / luminance;
-            return new SyntheticSkyStar(radius * Math.Cos(phi), y, radius * Math.Sin(phi), magnitude, temperature, r, g, b);
+            return new SyntheticSkyStar(x, y, z, magnitude, temperature, r, g, b);
         }
 
         public static double PsfSigmaPixels(double flux, int renderHeight)
         {
             if (!Finite(flux) || flux <= 0 || renderHeight < 2) throw new ArgumentOutOfRangeException(nameof(flux));
-            return Math.Max(.65, (.65 + .55 * Math.Pow(flux, .25)) * renderHeight / ReferenceImageHeight);
+            // Broaden bright-source PSFs while preserving integrated flux; this is not a stellar radius.
+            return Math.Max(.65, Math.Min(3, .52 + 1.8 * Math.Sqrt(flux)) * renderHeight / ReferenceImageHeight);
         }
 
-        /// <summary>Pixel-integrated, square-truncated Gaussian. Summing a complete pixel lattice
-        /// yields one for every subpixel location and sigma, up to the stated erf approximation.</summary>
+        // Pixel-integrated truncated Gaussian; lattice sums equal one within the erf approximation.
         public static double PsfPixelMass(double xFromCenterPixels, double yFromCenterPixels, double sigmaPixels)
         {
             if (!Finite(xFromCenterPixels) || !Finite(yFromCenterPixels) || !Finite(sigmaPixels) || sigmaPixels <= 0)
@@ -84,8 +104,7 @@ namespace BlackHole.Staging.Simulation
             return DefaultExposure * flux * scale * scale;
         }
 
-        // Receives translation to make its intentional irrelevance testable. All camera locations
-        // in this ~black-hole-sized scene share the same distant source directions.
+        // Distant-source directions ignore camera translation; the argument makes this invariant testable.
         public static void DirectionAtObserver(SyntheticSkyStar star, double observerX, double observerY, double observerZ,
             out double x, out double y, out double z)
         {

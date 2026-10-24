@@ -22,8 +22,7 @@ New-Item -ItemType Directory -Path $dtetPackage -Force | Out-Null
 Copy-Item -Path (Join-Path $dtetTemplates '*') -Destination $dtetPackage -Recurse
 $dtetRuntime = Join-Path $dtetPackage 'Demo'
 New-Item -ItemType Directory -Path $dtetRuntime | Out-Null
-# Only shipping components of the isolated release build are eligible. Engine
-# dependency directories are kept intact except optional symbol/backup files.
+# Allow only release-player roots; preserve dependencies except symbols and backups.
 $dtetAllowedRoots = @('DTET_Prototype.exe','UnityPlayer.dll','UnityCrashHandler64.exe',
     'DTET_Prototype_Data','MonoBleedingEdge','D3D12','WinPixEventRuntime.dll')
 foreach ($dtetFile in Get-ChildItem -LiteralPath $dtetBuild -File -Recurse) {

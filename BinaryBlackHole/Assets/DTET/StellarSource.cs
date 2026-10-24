@@ -2,8 +2,7 @@ using UnityEngine;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>A fixed synthetic emitter, independent of its apparent image(s).
-    /// Positions and sizes are exhibit units, not astronomical metres. Tint is authored, not a spectrum.</summary>
+    // Synthetic emitter in exhibit units, independent of its apparent images. Tint is authored.
     public sealed class StellarSource : MonoBehaviour
     {
         internal bool CachedActive;

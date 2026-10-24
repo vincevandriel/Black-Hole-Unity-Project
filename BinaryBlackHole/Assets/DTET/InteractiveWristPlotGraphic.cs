@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Fixed-axis scientific plot. Missing coverage remains a gap; no model is evaluated here.</summary>
+    // Fixed-axis plot of supplied samples; missing coverage remains a gap.
     public sealed class InteractiveWristPlotGraphic : MaskableGraphic
     {
         private const int Count = 768;
@@ -34,10 +34,8 @@ namespace DTET.VisualPrototype
                 double? envelope = frequency ? null : source.SampleWristEnvelope(i / (double)(Count - 1));
                 envelopes[i] = Finite(envelope) ? (float)(Math.Abs(envelope.Value) / AxisMaximum) : float.NaN;
             }
-            // A conservative local sampling guard: use the greatest supplied frequency at both
-            // ends and the midpoint, with a 50% safety margin. The admitted model chirps smoothly
-            // within valid coverage. Missing/ambiguous frequency also selects an envelope; no
-            // oscillatory phase is invented by joining under-resolved uniform-time samples.
+            // Use the largest endpoint/midpoint frequency plus 50% margin to detect undersampling.
+            // Plot an envelope when phase or frequency is unresolved.
             double binSeconds = Math.Max(0, durationSeconds) / (Count - 1);
             for (int i = 0; i < Count - 1; i++)
             {
@@ -92,8 +90,7 @@ namespace DTET.VisualPrototype
                 if (dense[i])
                 {
                     if (float.IsNaN(envelopes[i]) || float.IsNaN(envelopes[i + 1])) continue;
-                    // This is a model-provided phase-independent amplitude envelope, not a
-                    // min/max estimate from a few oscillatory samples. The band is labelled.
+                    // Use the model's amplitude envelope, not extrema of undersampled oscillations.
                     float e0 = Mathf.Clamp01(envelopes[i]), e1 = Mathf.Clamp01(envelopes[i + 1]);
                     float y0 = rect.height * .48f * e0, y1 = rect.height * .48f * e1;
                     var bandColor = next <= progress ? new Color(signal.r, signal.g, signal.b, .28f) : new Color(future.r, future.g, future.b, .14f);

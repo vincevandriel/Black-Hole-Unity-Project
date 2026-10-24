@@ -5,19 +5,29 @@ using UnityEngine.Rendering;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>One batched, translation-invariant synthetic sky; no scene star objects or time animation.</summary>
+    // Fixed distant stars and unresolved galactic light.
     public sealed class ReducedExhibitSky : MonoBehaviour
     {
         private Camera view;
         private Material material;
         private Mesh mesh;
         private GameObject batch;
+        private Material backdropMaterial;
+        private Mesh backdropMesh;
+        private GameObject backdrop;
         public int StarCount { get; private set; }
         public ulong CatalogFingerprint { get; private set; }
-        // Four position/UV/float4-colour vertices and six UInt16 indices per star, uploaded once.
-        // Excludes Unity/driver object overhead; no CPU-readable mesh is retained after upload.
+        // Uploaded mesh payload only; excludes engine overhead.
         public long EstimatedMeshBytes => 156L * StarCount;
         public bool Ready => material != null && batch != null;
+        public bool BackgroundReady => backdropMaterial != null && backdrop != null;
+        public long EstimatedBackdropMeshBytes => backdropMesh == null ? 0 : 60;
+        public bool BackdropVisible { get => backdrop != null && backdrop.activeSelf; set { if (backdrop != null) backdrop.SetActive(value); } }
+        public bool Visible
+        {
+            get => batch != null && batch.activeSelf;
+            set { if (batch != null) batch.SetActive(value); BackdropVisible = value; }
+        }
         public string Status { get; private set; } = "Sky has not been initialized.";
 
         public void Initialize(Camera camera, int starCount)
@@ -67,10 +77,74 @@ namespace DTET.VisualPrototype
             renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
             StarCount = starCount;
             Status = $"Synthetic sky: {starCount} fixed directions; dim cutoff m={stars[starCount - 1].ApparentMagnitude:F2}.";
+            InitializeBackdrop();
             UpdateRenderSize();
         }
 
+        private void InitializeBackdrop()
+        {
+            var shader = Resources.Load<Shader>("DTET/StellarBackdrop");
+            if (shader == null || !shader.isSupported) return;
+            backdropMaterial = new Material(shader) { name = "Fixed synthetic stellar background" };
+            backdropMesh = new Mesh { name = "Stellar background clip quad", indexFormat = IndexFormat.UInt16 };
+            backdropMesh.vertices = new[] { new Vector3(-1, -1, 0), new Vector3(-1, 1, 0), new Vector3(1, 1, 0), new Vector3(1, -1, 0) };
+            backdropMesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
+            backdropMesh.bounds = new Bounds(Vector3.zero, Vector3.one * 1000000);
+            backdropMesh.UploadMeshData(true);
+            backdrop = new GameObject("Fixed distant stellar light / synthetic galactic band");
+            backdrop.transform.SetParent(transform, false); backdrop.layer = 0;
+            backdrop.AddComponent<MeshFilter>().sharedMesh = backdropMesh;
+            var renderer = backdrop.AddComponent<MeshRenderer>(); renderer.sharedMaterial = backdropMaterial;
+            renderer.shadowCastingMode = ShadowCastingMode.Off; renderer.receiveShadows = false;
+            renderer.lightProbeUsage = LightProbeUsage.Off; renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+        }
+
         private void LateUpdate() { UpdateRenderSize(); }
+
+        // Deflect star centres before foreground gas is drawn.
+        public void SetLensing(InteractiveBinarySnapshot snapshot, float gain)
+        {
+            if (material == null) return;
+            if (!float.IsFinite(gain)) throw new ArgumentOutOfRangeException(nameof(gain));
+            material.SetFloat("_SkyLensGain", Mathf.Clamp(gain, 0, 2));
+            material.SetVector("_SkyLensA", LensBody(snapshot.BodyA));
+            material.SetVector("_SkyLensB", LensBody(snapshot.BodyB));
+            material.SetVector("_SkyLensR", LensBody(snapshot.Remnant));
+            material.SetVector("_SkyLensRadii", new Vector4((float)(snapshot.BodyA?.HorizonRadiusRg ?? 0),
+                (float)(snapshot.BodyB?.HorizonRadiusRg ?? 0), (float)(snapshot.Remnant?.HorizonRadiusRg ?? 0), 0));
+            UpdateRenderSize();
+        }
+
+        public void SetStellarWaves(Material opticsMaterial, bool enabled)
+        {
+            InteractiveOptics.CopyStellarUniforms(material, opticsMaterial, enabled);
+            InteractiveOptics.CopyStellarUniforms(backdropMaterial, opticsMaterial, enabled);
+            BindBackdropCamera();
+        }
+
+        private void BindBackdropCamera()
+        {
+            if (view == null || backdropMaterial == null) return;
+            var pose = view.transform;
+            backdropMaterial.SetVector("_CameraOrigin", pose.position);
+            backdropMaterial.SetVector("_CameraRight", pose.right);
+            backdropMaterial.SetVector("_CameraUp", pose.up);
+            backdropMaterial.SetVector("_CameraForward", pose.forward);
+            int width = view.targetTexture != null ? view.targetTexture.width : Math.Max(2, view.pixelWidth);
+            int height = view.targetTexture != null ? view.targetTexture.height : Math.Max(2, view.pixelHeight);
+            float tangent = Mathf.Tan(view.fieldOfView * Mathf.Deg2Rad * .5f);
+            Vector4 optics = backdropMaterial.GetVector("_Optics");
+            optics.z = tangent * width / height; optics.w = tangent;
+            backdropMaterial.SetVector("_Optics", optics);
+        }
+
+        private static Vector4 LensBody(InteractiveBinaryBody? body)
+        {
+            if (!body.HasValue) return Vector4.zero;
+            var b = body.Value;
+            return new Vector4((float)b.PositionRg.X, (float)b.PositionRg.Y, (float)b.PositionRg.Z, (float)b.MassFraction);
+        }
 
         private void UpdateRenderSize()
         {
@@ -78,6 +152,7 @@ namespace DTET.VisualPrototype
             int width = view.targetTexture != null ? view.targetTexture.width : Math.Max(2, view.pixelWidth);
             int height = view.targetTexture != null ? view.targetTexture.height : Math.Max(2, view.pixelHeight);
             material.SetVector("_RenderSize", new Vector4(width, height, 1f / width, 1f / height));
+            BindBackdropCamera();
         }
 
         private void OnDestroy() { ReleaseResources(); }
@@ -87,6 +162,10 @@ namespace DTET.VisualPrototype
             if (batch != null) { batch.SetActive(false); Destroy(batch); }
             if (mesh != null) Destroy(mesh);
             if (material != null) Destroy(material);
+            if (backdrop != null) { backdrop.SetActive(false); Destroy(backdrop); }
+            if (backdropMesh != null) Destroy(backdropMesh);
+            if (backdropMaterial != null) Destroy(backdropMaterial);
+            backdrop = null; backdropMesh = null; backdropMaterial = null;
             batch = null; mesh = null; material = null; view = null;
             StarCount = 0; CatalogFingerprint = 0;
         }

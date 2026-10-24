@@ -9,7 +9,7 @@ using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Opt-in numerical replay checks against the actual built-player scene and HUD.</summary>
+    // Opt-in numerical replay checks against the actual built-player scene and HUD.
     internal sealed class NumericalEventQaCapture : MonoBehaviour
     {
         private readonly List<string> checks = new List<string>();

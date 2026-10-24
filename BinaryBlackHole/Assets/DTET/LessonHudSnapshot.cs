@@ -2,7 +2,7 @@ using System;
 using BlackHole.Staging.Simulation;
 namespace DTET.VisualPrototype
 {
-    /// <summary>Presentation data, not a second simulation clock. Null physical values mean unavailable.</summary>
+    // Presentation data, not a second simulation clock. Null physical values mean unavailable.
     public readonly struct LessonHudSnapshot
     {
         public readonly float Progress, PlaybackRate, VisualSeparationRatio;

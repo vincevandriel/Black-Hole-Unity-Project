@@ -3,19 +3,19 @@ using System;
 
 namespace BlackHole.Staging.Simulation
 {
-    /// <summary>
-    /// Compact prescribed gas illustration driven by the retained SXS horizon history.
-    /// This does not solve hydrodynamics, conserve gas, or reconstruct gas in GW150914.
-    /// Coordinates map SXS (X,Y,Z) to Unity (X,Z,Y), in total-source-mass rg=GM/c^2.
-    /// Sample velocities are prescribed coordinate velocities, not local GR measurements.
-    /// </summary>
+    // Prescribed gas driven by SXS history, not a conservative fluid solution or GW150914 gas reconstruction.
+    // Units: total-mass rg=GM/c^2; SXS (X,Y,Z) maps to Unity (X,Z,Y). Velocities are coordinate values.
     public sealed class ReducedBinaryFlowModel
     {
-        public const string ModelId = "assumed-SXS0305-reduced-binary-flow-v1";
+        public const string ModelId = "assumed-SXS0305-reduced-binary-flow-v3-stream-taper";
         public const double TemperatureScaleKelvin = 1e7;
         public const double GrayExtinctionPerRg = .16;
         public const double BinaryFadeTg = 120;
         public const double RemnantRiseTg = 160;
+        public const double TransitionLeadTg = 600;
+        public const double EmittingInnerHorizonRatio = 1.25;
+        public const double TransitionInnerRadiusRg = 4;
+        public const double TransitionOuterRadiusRg = 16;
         public const double ReservoirAspect = .18;
         public const double DiskAspect = .24;
         public const double StreamWidthRg = 1.4;
@@ -47,8 +47,7 @@ namespace BlackHole.Staging.Simulation
             HalfExtentY = Math.Ceiling(ReservoirAspect * ReservoirOuterRadiusRg + 1);
         }
 
-        // The adjustable scenario supplies its own immutable epoch. The existing replay constructor
-        // and EvaluateState behavior are unchanged; no fabricated NumericalEventHistory is created.
+        // Adjustable scenarios provide their own immutable gas state.
         internal ReducedBinaryFlowModel(double rg, double tg, double separationRg, double duration, double transition)
         {
             GravitationalRadiusMeters = rg; GravitationalTimeSeconds = tg;
@@ -111,8 +110,10 @@ namespace BlackHole.Staging.Simulation
             {
                 AccumulateMini(state.BodyA, state.BinaryWeight, xRg, yRg, zRg, ref density, ref emission, ref vx, ref vy, ref vz);
                 AccumulateMini(state.BodyB, state.BinaryWeight, xRg, yRg, zRg, ref density, ref emission, ref vx, ref vy, ref vz);
-                AccumulateStream(state.StreamA, state.BinaryWeight, xRg, yRg, zRg, ref density, ref emission, ref vx, ref vy, ref vz);
-                AccumulateStream(state.StreamB, state.BinaryWeight, xRg, yRg, zRg, ref density, ref emission, ref vx, ref vy, ref vz);
+                AccumulateStream(state.StreamA, state.BinaryWeight * SmoothStep(state.BodyA.OuterRadiusRg - state.BodyA.InnerRadiusRg),
+                    xRg, yRg, zRg, ref density, ref emission, ref vx, ref vy, ref vz);
+                AccumulateStream(state.StreamB, state.BinaryWeight * SmoothStep(state.BodyB.OuterRadiusRg - state.BodyB.InnerRadiusRg),
+                    xRg, yRg, zRg, ref density, ref emission, ref vx, ref vy, ref vz);
             }
             if (state.RemnantWeight > 0)
             {
@@ -122,6 +123,11 @@ namespace BlackHole.Staging.Simulation
                     body.MassFraction, .008, body.VelocityOverC, 1, 0, 0,
                     ref density, ref emission, ref vx, ref vy, ref vz);
             }
+            // An assumed shared-gas component bridges minidisk fade and remnant rise with a C1 envelope.
+            if (state.TransitionWeight > 0)
+                AccumulateRing(xRg, yRg, zRg, TransitionInnerRadiusRg, TransitionOuterRadiusRg,
+                    DiskAspect, 1.5 * state.TransitionWeight, 1.1, 1, .008, default,
+                    state.PatternCos2, state.PatternSin2, .2, ref density, ref emission, ref vx, ref vy, ref vz);
             if (density <= 0) return default;
             // Coordinate equal-area-sphere mask, not a ray-traced horizon or optical shadow.
             double mask = state.IsCommonHorizon
@@ -140,7 +146,7 @@ namespace BlackHole.Staging.Simulation
             double vscale = deltaSeconds > 0 ? 1 / (deltaSeconds * history.SpeedOfLight) : 0;
             var velocity = new NumericalVector3((r.X - l.X) * vscale, (r.Z - l.Z) * vscale, (r.Y - l.Y) * vscale);
             return new ReducedBinaryFlowBody(position, velocity, mass, current.ArealRadiusMeters / GravitationalRadiusMeters,
-                6 * mass, outer);
+                EmittingInnerHorizonRatio * current.ArealRadiusMeters / GravitationalRadiusMeters, outer);
         }
 
         internal ReducedBinaryFlowStream MakeStream(ReducedBinaryFlowBody body)
@@ -197,9 +203,10 @@ namespace BlackHole.Staging.Simulation
             vz += rho * (translation.Z + omega * x - inwardSpeed * z / radius);
         }
 
-        private static void AccumulateStream(ReducedBinaryFlowStream stream, double binary, double x, double y, double z,
+        private static void AccumulateStream(ReducedBinaryFlowStream stream, double weight, double x, double y, double z,
             ref double density, ref double emission, ref double vx, ref double vy, ref double vz)
         {
+            if (weight <= 0) return;
             double cx = stream.EndRg.X - stream.StartRg.X, cz = stream.EndRg.Z - stream.StartRg.Z;
             double u = ((x - stream.StartRg.X) * cx + (z - stream.StartRg.Z) * cz) / stream.ChordLengthSquaredRg2;
             if (u <= 0 || u >= 1) return;
@@ -211,7 +218,7 @@ namespace BlackHole.Staging.Simulation
                 + dy * dy / (StreamHeightRg * StreamHeightRg);
             if (ellipse >= 1) return;
             double along = 4 * u * (1 - u), across = 1 - ellipse;
-            double rho = .9 * binary * along * along * across * across;
+            double rho = .9 * weight * along * along * across * across;
             double temperature = .4 + .5 * u, t4 = temperature * temperature; t4 *= t4;
             double tx = cx + stream.BowNormal.X * 4 * StreamBowRg * (1 - 2 * u);
             double tz = cz + stream.BowNormal.Z * 4 * StreamBowRg * (1 - 2 * u);
@@ -261,6 +268,10 @@ namespace BlackHole.Staging.Simulation
         public double SeparationRg { get; }
         public double BinaryWeight { get; }
         public double RemnantWeight { get; }
+        // Intra-ISCO emission is assumed plunging gas, not stable circular motion.
+        public double TransitionWeight => ReducedBinaryFlowModel.SmoothStep(
+            (AlignedTimeTg + ReducedBinaryFlowModel.TransitionLeadTg) / ReducedBinaryFlowModel.TransitionLeadTg)
+            * (1 - RemnantWeight);
         public bool IsCommonHorizon => AlignedTimeTg >= 0;
         public double ReservoirInnerRadiusRg { get; }
         public double ReservoirOuterRadiusRg { get; }

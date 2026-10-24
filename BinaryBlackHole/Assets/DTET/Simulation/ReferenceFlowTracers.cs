@@ -2,11 +2,8 @@ using System;
 
 namespace BlackHole.Staging.Simulation
 {
-    /// <summary>
-    /// Optional weighted markers. Continuous emission never depends on their count.
-    /// Weights represent the normalized measure rho/rho0 dV/rg^3, not a measured gas mass.
-    /// Trajectories are absolute-time circular paths of the prescribed field, without integration.
-    /// </summary>
+    // Optional markers follow prescribed circular paths; emission is independent of marker count.
+    // Weights represent rho/rho0 dV/rg^3, not measured gas mass.
     public static class ReferenceFlowTracers
     {
         public static ReferenceFlowTracer[] Create(int count)
@@ -34,14 +31,12 @@ namespace BlackHole.Staging.Simulation
                 double weight = result[i].WeightRelativeMass * total / sum;
                 result[i] = result[i].WithWeight(weight); written += weight;
             }
-            // Correct rounding on the largest weight, not the final marker: a low-discrepancy
-            // last sample can approach the zero-density boundary and be smaller than roundoff.
+            // Correct the largest weight; the last sample may be smaller than roundoff near the boundary.
             result[largest] = result[largest].WithWeight(result[largest].WeightRelativeMass + (total - written));
             return result;
         }
 
-        // Deterministic midpoint resampling of the source empirical mass CDF. Duplicated locations
-        // are allowed: changing marker count does not manufacture spatial field resolution.
+        // Resample the mass CDF at deterministic midpoints; duplicates preserve mass without adding field resolution.
         public static ReferenceFlowTracer[] Resample(ReferenceFlowTracer[] source, int count)
         {
             if (source == null) throw new ArgumentNullException(nameof(source));

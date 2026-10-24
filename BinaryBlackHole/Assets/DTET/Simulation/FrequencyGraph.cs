@@ -21,8 +21,7 @@ namespace BlackHole.Staging.Simulation
 
     public static class FrequencyGraph
     {
-        // Deterministic redraw. A seek or scenario switch simply resamples the same model.
-        // The graph stops before cutoff because the approximation ends there.
+        // Resample the model deterministically, stopping before its physical cutoff.
         public static IReadOnlyList<FrequencyGraphPoint> Sample(CircularInspiral model,
             double playbackTimeSeconds, int sampleCount)
         {

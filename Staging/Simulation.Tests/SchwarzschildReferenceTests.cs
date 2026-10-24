@@ -36,8 +36,8 @@ internal static class SchwarzschildReferenceTests
             Check(ray.MaximumNullResidual < 2e-8, "Near-critical null first-integral residual");
         }
 
-        // Independent quadrature of the first integral, not a second copy of the RK4 evolution.
-        // x=r_min/r, x=1-t^2 removes the turning-point singularity analytically.
+        // Independent first-integral quadrature.
+        // Use x=r_min/r, x=1-t^2 to remove the turning-point singularity.
         foreach (double periapsis in new[] { 3.01, 3.1, 3.5, 6.0, 10.0, 30.0 })
         {
             double impact = periapsis / Math.Sqrt(1 - 2 / periapsis);
@@ -101,7 +101,6 @@ internal static class SchwarzschildReferenceTests
         MustReject(() => SchwarzschildReference.TraceDisk(new NumericalVector3(10, 0, 0), new NumericalVector3(1, 1, 0), normal, innerRadiusM: 5), "Disk below stable-orbit domain");
         MustReject(() => SchwarzschildReference.CircularEmitterFrequencyRatio(6, 30, double.NaN), "Nonfinite angle");
 
-        // Warm up once, then verify the control is allocation-free per ray.
         _ = Scatter(9, 100, 0.005);
         long bytesBefore = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 100; i++) _ = Scatter(9, 100, 0.005);

@@ -4,8 +4,7 @@ namespace DTET.VisualPrototype
 {
     public enum RelativityFidelity { Unavailable, Approximate, Relativistic }
 
-    /// <summary>Complete proper-time totals from one spacetime/worldline history.
-    /// Consumers never integrate Unity frame time or infer proper time from a photon redshift.</summary>
+    // Proper-time totals from one worldline history, independent of frame time and photon redshift.
     public readonly struct RelativityClockSnapshot
     {
         public readonly string ModelId;

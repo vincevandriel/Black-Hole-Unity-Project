@@ -129,7 +129,6 @@ internal static class NumericalEventTests
         ExpectInvalid(bytes[..^1], "Truncation");
         ExpectInvalid(bytes.Concat(new byte[] { 0 }).ToArray(), "Trailing data");
 
-        // Querying known history should not generate garbage every display frame.
         for (int i = 0; i < 100; i++) history.Evaluate(.5);
         long allocated = GC.GetAllocatedBytesForCurrentThread(); double sink = 0;
         for (int i = 0; i < 1000; i++) sink += history.Evaluate(history.DurationSeconds * i / 1000).NativeCoordinateTime;

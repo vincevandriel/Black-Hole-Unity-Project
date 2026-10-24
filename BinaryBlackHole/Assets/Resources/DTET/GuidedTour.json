@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "language": "en-US",
+  "narrationMetadata": {
+    "kind": "machine-generated reference narration",
+    "engine": "Windows System.Speech / SAPI, offline",
+    "voice": "Microsoft David Desktop",
+    "rate": -1,
+    "rateScale": "System.Speech integer scale, -10 to 10",
+    "volume": 100,
+    "format": "PCM, signed 16-bit, mono, 22050 Hz",
+    "generatedDate": "2026-10-24",
+    "replacement": "Edit each narration script and replace its matching WAV; preserve the ID and Resources-relative clip path. See Docs/GUIDED_TOUR_NARRATION.md."
+  },
+  "entries": [
+    {
+      "id": "inspiral",
+      "title": "Two black holes spiral inward",
+      "body": "Numerical replay.\n\nWatch the two black holes orbit their shared centre. Gravitational waves carry energy and angular momentum away, bringing the pair closer. This representative numerical binary is inspired by GW150914. Move around the paused scene to compare their positions and sizes; changing your viewpoint leaves the selected event time unchanged.",
+      "narration": "Watch the two black holes orbit their shared centre. Gravitational waves carry energy and angular momentum away, bringing the pair closer. This is a representative numerical replay inspired by G W fifteen oh nine fourteen. You can move around the paused scene to compare their positions and sizes without changing the selected event time.",
+      "clip": "DTET/Narration/inspiral",
+      "titleExperiment": "Two black holes spiral inward",
+      "bodyExperiment": "Bounded inspiral model.\n\nThe two black holes orbit their shared centre. Gravitational waves carry energy and angular momentum away, bringing the pair closer. These are the masses and separation selected in the wrist experiment. Quantitative inspiral predictions end at the model cutoff. Move around the paused scene to compare the pair without advancing event time.",
+      "narrationExperiment": "The two black holes orbit their shared centre. Gravitational waves carry energy and angular momentum away, bringing the pair closer. These are the masses and separation selected in the wrist experiment. Quantitative inspiral predictions end at the model cutoff. Move around the paused scene to compare the pair without advancing event time.",
+      "clipExperiment": "DTET/Narration/inspiral_experiment"
+    },
+    {
+      "id": "gas_tides",
+      "title": "Inspiral and tidal gas",
+      "body": "Assumed gas environment.\n\nLook for uneven bright patches and stretched gas around each black hole. Pressure and tidal gravity reshape the recorded fluid. The patches follow passive material labels carried by that flow, rather than independent glowing particles. View the disks from above and below to see how curved light reveals the far side.",
+      "narration": "Look for uneven bright patches and stretched gas around each black hole. In this assumed gas environment, pressure and tidal gravity reshape the recorded fluid. Bright patches follow material carried by the flow. Move above and below the disks to see how curved light can reveal emission from the far side.",
+      "clip": "DTET/Narration/gas_tides"
+    },
+    {
+      "id": "final_approach",
+      "title": "The final approach accelerates",
+      "body": "One shared source clock.\n\nThe black holes are closer and their orbital motion is faster. The gravitational wave frequency rises: this is the chirp. Raise the wrist display to compare the signal with the pair. Automatic slow motion makes this interval easier to inspect, while bodies, gas and waveform still share the same event time.",
+      "narration": "The black holes are closer, and their orbital motion is faster. The gravitational wave frequency rises. This is the chirp. Raise the wrist display to compare the signal with the pair. Automatic slow motion makes this interval easier to inspect, while the bodies, gas, and waveform still share the same event time.",
+      "clip": "DTET/Narration/final_approach",
+      "titleExperiment": "The final approach",
+      "bodyExperiment": "Illustrative late evolution.\n\nThe pair is approaching the joining transition. In this adjustable experiment, the quantitative inspiral ends at ten gravitational radii. Later positions and the merger provide an illustrative continuation. The wrist leaves unsupported signal values unavailable. Explore the gas and dark regions, and compare an earlier supported time to see the rising inspiral frequency.",
+      "narrationExperiment": "The pair is approaching the joining transition. In this adjustable experiment, the quantitative inspiral ends at ten gravitational radii. Later positions and the merger provide an illustrative continuation. The wrist leaves unsupported signal values unavailable. Explore the gas and dark regions, and compare an earlier supported time to see the rising inspiral frequency.",
+      "clipExperiment": "DTET/Narration/final_approach_experiment"
+    },
+    {
+      "id": "coalescence",
+      "title": "A common black hole forms",
+      "body": "Illustrative capture surface.\n\nThe two dark regions are joining. At this stage the numerical record identifies a common horizon, and one remnant replaces the pair. The smooth visible boundary helps you follow that transition. Inspect it from another angle; the recorded body and waveform values continue to use the same scientific history.",
+      "narration": "The two dark regions are joining. At this stage, the numerical record identifies a common horizon, and one remnant replaces the pair. The smooth visible boundary is an illustration that helps you follow this transition. Inspect it from another angle. The recorded body and waveform values continue to use the same scientific history.",
+      "clip": "DTET/Narration/coalescence",
+      "titleExperiment": "A common black hole forms",
+      "bodyExperiment": "Illustrative merger.\n\nThe two displayed dark regions join into a remnant. For this adjustable experiment, that transition is an illustration beyond the quantitative inspiral cutoff, not a numerical relativity solution. Inspect the smooth boundary from another angle. Gas continues through its own reduced calculation while the wrist makes unavailable signal predictions explicit.",
+      "narrationExperiment": "The two displayed dark regions join into a remnant. For this adjustable experiment, that transition is an illustration beyond the quantitative inspiral cutoff, not a numerical relativity solution. Inspect the smooth boundary from another angle. Gas continues through its own reduced calculation while the wrist makes unavailable signal predictions explicit.",
+      "clipExperiment": "DTET/Narration/coalescence_experiment"
+    },
+    {
+      "id": "remnant",
+      "title": "The remnant settles",
+      "body": "Finite assumed gas inventory.\n\nOne black hole remains as the gravitational wave signal fades through ringdown. Look for the changing gas and its declining brightness. This scene begins with a finite amount of gas and does not continually refill it. Pause or rewind to compare earlier structure, and explore the remnant freely from different viewpoints.",
+      "narration": "One black hole remains as the gravitational wave signal fades through ringdown. Look for changing gas and its declining brightness. This scene begins with a finite assumed gas inventory and does not continually refill it. Pause or rewind to compare the earlier structure, and explore the remnant freely from different viewpoints.",
+      "clip": "DTET/Narration/remnant",
+      "titleExperiment": "The remnant",
+      "bodyExperiment": "Illustrative remnant.\n\nOne displayed black hole remains after the conceptual merger. The quantitative waveform model does not predict this adjustable ringdown. The gas evolves from a finite assumed inventory and is not continually refilled. Explore its changing structure from different viewpoints, or rewind to compare the remnant with the earlier pair and supported inspiral signal.",
+      "narrationExperiment": "One displayed black hole remains after the conceptual merger. The quantitative waveform model does not predict this adjustable ringdown. The gas evolves from a finite assumed inventory and is not continually refilled. Explore its changing structure from different viewpoints, or rewind to compare the remnant with the earlier pair and supported inspiral signal.",
+      "clipExperiment": "DTET/Narration/remnant_experiment"
+    },
+    {
+      "id": "system",
+      "title": "The GW150914 system",
+      "body": "Representative reconstruction.\n\nGW150914 was the first gravitational wave signal detected directly, recorded by LIGO in 2015. It revealed two black holes merging into one. This exhibit uses a representative numerical binary to explore that event. The bright gas is an assumed environment added for exploration, rather than a disk measured around GW150914.",
+      "narration": "This system is inspired by G W fifteen oh nine fourteen, the first gravitational wave signal detected directly by LIGO in twenty fifteen. It revealed two black holes merging into one. The exhibit uses a representative numerical binary. Its bright gas is an assumed environment, rather than an observed disk.",
+      "clip": "DTET/Narration/system",
+      "titleExperiment": "The adjustable binary system",
+      "bodyExperiment": "Educational experiment.\n\nThese masses and separation describe your chosen binary. The inspiral uses a bounded physical approximation; the merger and remnant are illustrative extensions. This is separate from the representative GW150914 replay. Its gas is a conditional pressure-and-gravity calculation. Use the wrist to compare parameters and the supported part of the gravitational wave signal.",
+      "narrationExperiment": "These masses and separation describe your chosen binary. The inspiral uses a bounded physical approximation; the merger and remnant are illustrative extensions. This is separate from the representative GW150914 replay. Its gas is a conditional pressure-and-gravity calculation. Use the wrist to compare parameters and the supported part of the gravitational wave signal.",
+      "clipExperiment": "DTET/Narration/system_experiment"
+    },
+    {
+      "id": "black_hole_a",
+      "title": "Black hole A",
+      "body": "Approximate capture region.\n\nThis is black hole A. Its mass sets its gravitational length scale and the size of the displayed dark region. A black hole is not a solid sphere. Compare its mass with component B on the wrist. Move sideways to inspect the silhouette against the assumed gas shining behind and around it.",
+      "narration": "This is black hole A. Its mass sets its gravitational length scale and the size of the displayed dark region. A black hole is not a solid sphere. Compare its mass with component B on the wrist. Move sideways to inspect the silhouette against the assumed gas shining behind and around it.",
+      "clip": "DTET/Narration/black_hole_a"
+    },
+    {
+      "id": "black_hole_b",
+      "title": "Black hole B",
+      "body": "The second component.\n\nThis is black hole B. Compare its mass and displayed dark region with component A, then follow how both orbit their shared centre. The two bodies form one interacting system. Their changing motion produces gravitational waves. The bright assumed gas helps make their surroundings visible, but the binary remains the source of the waveform.",
+      "narration": "This is black hole B. Compare its mass and displayed dark region with component A, then follow how both orbit their shared centre. The two bodies form one interacting system. Their changing motion produces gravitational waves. The bright assumed gas helps make their surroundings visible, but the binary remains the source of the waveform.",
+      "clip": "DTET/Narration/black_hole_b"
+    },
+    {
+      "id": "accretion",
+      "title": "The accretion disks",
+      "body": "Assumed gas and colour.\n\nThe bright structures represent rotating gas around the black holes. Their coarse density and motion evolve through pressure, softened gravity and accretion sinks. Flowing patches add visible material detail without changing that gas calculation. Look above, below and along the disk plane: emission, absorption and approximate light bending change what you see.",
+      "narration": "These bright structures represent assumed gas rotating around the black holes. Pressure and softened gravity evolve its flow, while sinks remove nearby gas. Bright patches add material detail. Look above, below, and along the disk plane to see how emission, absorption, and approximate light bending change your view.",
+      "clip": "DTET/Narration/accretion"
+    },
+    {
+      "id": "waves",
+      "title": "The rippling light display",
+      "body": "Exaggerated wave display.\n\nGravitational waves are travelling changes in spacetime. The moving ripples in the background visualize the retained waveform history through an optical illustration. Their displacement is amplified and their spacing compressed to make them visible. Compare the wrist signal and wave map; this is not a literal view of visible waves around GW150914.",
+      "narration": "Gravitational waves are travelling changes in spacetime. The moving ripples in this background are an optical illustration driven by the retained waveform history. Their displacement is amplified and their spacing compressed so you can see them. Compare the wrist signal and wave map. This is not a literal view of visible waves around the event.",
+      "clip": "DTET/Narration/waves"
+    }
+  ]
+}

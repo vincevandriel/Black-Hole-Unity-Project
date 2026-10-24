@@ -7,10 +7,7 @@ using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>
-    /// Desktop SI inspiral lesson with a separately selectable artistic storyboard.
-    /// Merger, gas and observer optics remain outside this bounded model.
-    /// </summary>
+    // SI inspiral lesson with a separate artistic storyboard; no merger, gas or observer-optics model.
     public sealed partial class VisualPrototypeBootstrap : MonoBehaviour, ILessonHudProvider
     {
         private static readonly Color Ink = Hex("#07101F");
@@ -175,6 +172,10 @@ namespace DTET.VisualPrototype
             bool interactiveExhibit = Array.IndexOf(Environment.GetCommandLineArgs(), "--interactive-exhibit") >= 0;
             bool reducedExhibit = Array.IndexOf(Environment.GetCommandLineArgs(), "--reduced-exhibit") >= 0;
             bool referenceLab = Array.IndexOf(Environment.GetCommandLineArgs(), "--reference-lab") >= 0;
+#if DTET_DESKTOP_RELEASE
+            interactiveExhibit |= !reducedExhibit && !referenceLab
+                && Array.IndexOf(Environment.GetCommandLineArgs(), "--event-lessons") < 0;
+#endif
 #if UNITY_EDITOR
             int editorExhibit = UnityEditor.SessionState.GetInt("DTET.StartupExhibit", 0);
             interactiveExhibit |= editorExhibit == 3;
@@ -185,6 +186,9 @@ namespace DTET.VisualPrototype
             {
                 if (FindFirstObjectByType<InteractiveBinaryExhibit>() == null)
                     new GameObject("DT-ET interactive suit observatory").AddComponent<InteractiveBinaryExhibit>();
+#if DTET_DESKTOP_RELEASE
+                Debug.Log("DTET_DESKTOP_OBSERVATORY_INSTALLED");
+#endif
                 return;
             }
             if (reducedExhibit)
@@ -452,7 +456,7 @@ namespace DTET.VisualPrototype
 
         private void BuildLearningHud(Transform parent)
         {
-            // A physical exhibit board, not a camera viewport overlay.
+            // World-space exhibit board.
             var reserved = Block(parent, "Learning reserved background", Ink, Anchor.Stretch, Vector2.zero, Vector2.zero);
             reserved.GetComponent<Image>().raycastTarget = false;
             TextAt(parent, "DT / ET", 34, White, new Vector2(42, -36), new Vector2(620, 50), TextAnchor.MiddleLeft, Anchor.TopLeft);

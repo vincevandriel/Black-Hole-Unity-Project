@@ -14,7 +14,7 @@ namespace DTET.VisualPrototype
             material.SetVector("_FlowBRadii",new Vector4((float)state.BodyB.InnerRadiusRg,(float)state.BodyB.OuterRadiusRg,(float)state.BodyB.HorizonRadiusRg,0));
             material.SetVector("_FlowRemnantRadii",new Vector4((float)state.Remnant.InnerRadiusRg,(float)state.Remnant.OuterRadiusRg,(float)state.Remnant.HorizonRadiusRg,0));
             material.SetVector("_FlowReservoir",new Vector4((float)state.ReservoirInnerRadiusRg,(float)state.ReservoirOuterRadiusRg,(float)state.PatternCos2,(float)state.PatternSin2));
-            material.SetVector("_FlowWeights",new Vector4((float)state.BinaryWeight,(float)state.RemnantWeight,state.IsCommonHorizon?1:0,0));
+            material.SetVector("_FlowWeights",new Vector4((float)state.BinaryWeight,(float)state.RemnantWeight,state.IsCommonHorizon?1:0,(float)state.TransitionWeight));
             material.SetVector("_FlowStreamAStart",V(state.StreamA.StartRg));material.SetVector("_FlowStreamAEnd",V(state.StreamA.EndRg));
             material.SetVector("_FlowStreamABow",V(state.StreamA.BowNormal,state.StreamA.ChordLengthSquaredRg2));
             material.SetVector("_FlowStreamBStart",V(state.StreamB.StartRg));material.SetVector("_FlowStreamBEnd",V(state.StreamB.EndRg));

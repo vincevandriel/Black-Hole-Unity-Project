@@ -1,7 +1,6 @@
-"""Generate the interim report from editable Markdown plus verified capture receipts.
+"""Build the interim report from Markdown and verified capture receipts.
 
-This writes generated artifacts outside Unity Assets. It does not alter source assets.
-Use the bundled Python runtime with ReportLab, then render/inspect every PDF page.
+Write outside Unity Assets; use ReportLab, then render and inspect every PDF page.
 """
 import argparse
 import html
@@ -27,7 +26,7 @@ def main():
     shots = args.evidence / 'screenshots'
     receipts = json.loads((shots / 'capture-receipts.json').read_text(encoding='utf-8-sig'))
     assert len(receipts) == 12 and all(r['ExitCode'] == 0 and r['PassGroups'] == 9 for r in receipts)
-    # Receipts preserve original paths; prefer relocated package files for reproducibility.
+    # Prefer relocated files; receipts retain original paths.
     shot_map = {r['Variant']: shots / r['Screenshot'].replace('\\', '/').split('/')[-1] for r in receipts}
     assert all(p.is_file() for p in shot_map.values()), 'Capture PNG missing from supplied evidence folder'
     metrics = []
@@ -54,7 +53,7 @@ def main():
     text = (repo / 'Docs' / 'PROTOTYPE_AUDIT_REPORT.md').read_text(encoding='utf-8')
     text = text.replace('{{VERIFICATION_TABLE}}', verification).replace('{{SIZE_TABLE}}', size_table).replace('{{PERFORMANCE_SUMMARY}}', perf)
     args.output.mkdir(parents=True, exist_ok=True)
-    # Editable delivered copy uses portable screenshot paths within the same output bundle.
+    # Use portable screenshot paths in the delivered copy.
     expanded = re.sub(r'\(audit:([^)]*)\)', lambda m: '(screenshots/' + shot_map[m[1]].name + ')', text)
     (args.output / 'DTET_Prototype_Audit_Report.md').write_text(expanded, encoding='utf-8')
     pdfmetrics.registerFont(TTFont('Audit', 'C:/Windows/Fonts/arial.ttf'))
@@ -98,7 +97,7 @@ def main():
             if image_match:
                 caption, variant = image_match.groups()
                 figure_count += 1
-                # Two-image feature pages use smaller figures with readable full-width captions.
+                # Keep captions readable on two-image pages.
                 width = 480 if page.count('](audit:') == 2 else 528
                 im = Image(str(shot_map[variant]), width=width, height=width*9/16)
                 im.hAlign = 'LEFT'

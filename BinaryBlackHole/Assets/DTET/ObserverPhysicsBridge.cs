@@ -3,8 +3,7 @@ using UnityEngine;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Display pose only. A physics provider MUST map it to metric coordinates,
-    /// physical time and a timelike observer worldline; scene units are not automatically metres.</summary>
+    // Display pose; the provider maps it to metric coordinates, physical time and a timelike worldline.
     public readonly struct ObserverViewRequest
     {
         public readonly Matrix4x4 DisplayPose;
@@ -13,8 +12,7 @@ namespace DTET.VisualPrototype
         { DisplayPose = displayPose; Epoch = epoch; WorldlineRevision = worldlineRevision; }
     }
 
-    /// <summary>One backwards-traced camera ray. A renderer can sample many rays, allowing
-    /// multiple lensed images of the same source. FrequencyRatio = nu_observer / nu_emitter.</summary>
+    // Backward-traced camera ray; FrequencyRatio = nu_observer / nu_emitter.
     public readonly struct StellarRaySample
     {
         public readonly bool Available, Captured;
@@ -35,8 +33,7 @@ namespace DTET.VisualPrototype
         }
     }
 
-    /// <summary>One provider owns the metric, physical mapping, light propagation AND clocks.
-    /// Clock snapshots are complete histories, not per-frame additions. No GR implementation is installed yet.</summary>
+    // Provider contract for metric, light propagation and complete clock histories; no GR provider is installed.
     public interface IObserverPhysicsProvider
     {
         string ModelId { get; }
@@ -55,8 +52,7 @@ namespace DTET.VisualPrototype
             new StellarRaySample(false, false, null, null);
     }
 
-    /// <summary>Visitor attachment point shared by future wrist clock and optical renderer.
-    /// Teleports invalidate worldline history; seeks/resets/scenario changes invalidate the epoch.</summary>
+    // Shared clock/optics attachment. Teleports invalidate worldline history; timeline changes invalidate the epoch.
     public sealed class ObserverPhysicsBridge : MonoBehaviour
     {
         private ExhibitCameraRig rig;

@@ -8,7 +8,7 @@ namespace DTET.VisualPrototype
 {
     public enum InteractiveOpticalStyle { Off, Subtle, Enhanced }
 
-    /// <summary>Presentation-only values captured from one authoritative scenario generation.</summary>
+    // Display values from one scenario generation.
     public struct InteractiveWristState
     {
         public long Generation;
@@ -21,7 +21,7 @@ namespace DTET.VisualPrototype
         public float LensGain, WaveGain;
     }
 
-    /// <summary>Commands go to the exhibit session; this display owns no physical clock or model.</summary>
+    // Route display commands to the shared exhibit session.
     public interface IInteractiveExhibitPresenter
     {
         InteractiveWristState CaptureWristState();
@@ -40,10 +40,24 @@ namespace DTET.VisualPrototype
         void LeaveWristExhibit();
     }
 
-    /// <summary>
-    /// Desktop suit projector composed after the astronomical target at full interface resolution.
-    /// Its pose is an illustrated desktop emulation, not a tracked XR hand or physical observer.
-    /// </summary>
+    public struct GeneratedFluidUiState
+    {
+        public bool Supported, Generating, Ready, Selected, Covered;
+        public double Progress;
+        public string Status, Coverage, Metrics;
+    }
+
+    // Optional fluid controls.
+    public interface IGeneratedFluidPresenter
+    {
+        GeneratedFluidUiState CaptureGeneratedFluidState();
+        void StartGeneratedFluid();
+        void CancelGeneratedFluid();
+        void UseGeneratedFluid(bool value);
+        void SeekGeneratedFluidStart();
+    }
+
+    // Desktop wrist display drawn at interface resolution; its pose is emulated.
     [DefaultExecutionOrder(200)]
     public sealed class InteractiveWristDisplay : MonoBehaviour
     {
@@ -73,6 +87,10 @@ namespace DTET.VisualPrototype
         private float reveal;
         private string localValidation;
         private float nextTextRefresh;
+        private RectTransform fluidPanel;
+        private Text fluidStatus, fluidCoverage, fluidMetrics;
+        private Button fluidSolve, fluidCancel, fluidGenerated, fluidIllustrative, fluidStart;
+        private IGeneratedFluidPresenter fluidPresenter;
 
         public bool Raised { get; private set; } = true;
         public bool Pinned { get; private set; }
@@ -94,9 +112,12 @@ namespace DTET.VisualPrototype
         {
             get
             {
+                var selected = EventSystem.current == null ? null : EventSystem.current.currentSelectedGameObject;
+                if (fluidPanel != null && fluidPanel.gameObject.activeInHierarchy
+                    && ((Mouse.current != null && RectTransformUtility.RectangleContainsScreenPoint(fluidPanel, Mouse.current.position.ReadValue(), interfaceCamera))
+                    || (selected != null && selected.activeInHierarchy && selected.transform.IsChildOf(fluidPanel)))) return true;
                 if (!Raised || reveal < .1f || panel == null) return false;
                 if (Mouse.current != null && IsScreenPointOverPanel(Mouse.current.position.ReadValue())) return true;
-                var selected = EventSystem.current == null ? null : EventSystem.current.currentSelectedGameObject;
                 return selected != null && selected.activeInHierarchy && selected.transform.IsChildOf(panel);
             }
         }
@@ -113,8 +134,7 @@ namespace DTET.VisualPrototype
             var root = new GameObject("Suit hologram / full resolution presentation", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             root.transform.SetParent(transform, false);
             root.layer = 5;
-            // This canvas is nested under M4.1's full-screen HUD. A newly created RectTransform
-            // otherwise keeps Unity's centered 100x100 default, shifting every instrument offscreen.
+            // Fill the parent HUD; Unity's default 100x100 canvas would offset the instruments.
             var canvasRect = root.GetComponent<RectTransform>();
             canvasRect.anchorMin = Vector2.zero; canvasRect.anchorMax = Vector2.one;
             canvasRect.offsetMin = canvasRect.offsetMax = Vector2.zero;
@@ -135,6 +155,8 @@ namespace DTET.VisualPrototype
             suitRect = suit.GetComponent<RectTransform>(); Place(suitRect, 960, 754, 610, 215);
             suitGraphic = suit.GetComponent<InteractiveSuitGraphic>(); suitGraphic.raycastTarget = false;
             BuildPanel(root.transform);
+            fluidPresenter = presenter as IGeneratedFluidPresenter;
+            if (fluidPresenter != null) BuildFluidPanel(root.transform);
             var open = Button(root.transform, "V  /  WRIST", 1405, 852, 164, 31, () => SetRaised(!Raised));
             openText = open.GetComponentInChildren<Text>();
             SetReducedMotion(PlayerPrefs.GetInt("DTET.Wrist.ReduceMotion", 0) == 1);
@@ -199,14 +221,45 @@ namespace DTET.VisualPrototype
             TextAt(panel, "LENS GAIN", 10, Muted, 20, 589, 85, 18);
             lensGain = Slider(panel, "Mass bending visual gain", 111, 592, 190, 12, 0, 1, _ => OpticsChanged());
             TextAt(panel, "WAVE GAIN", 10, Muted, 332, 589, 90, 18);
-            waveGain = Slider(panel, "Magnified wave visual gain", 432, 592, 190, 12, 0, 1, _ => OpticsChanged());
+            waveGain = Slider(panel, "Magnified wave visual gain", 432, 592, 190, 12, 0, 2, _ => OpticsChanged());
             gasText = Button(panel, "GAS ON", 20, 620, 145, 29, () => presenter.SetWristGas(!presenter.CaptureWristState().GasEnabled)).GetComponentInChildren<Text>();
             samplesText = Button(panel, "SAMPLES OFF", 173, 620, 145, 29, () => presenter.SetWristSamples(!presenter.CaptureWristState().SamplesEnabled)).GetComponentInChildren<Text>();
             Button(panel, "ABOVE", 326, 620, 92, 29, () => presenter.SetWristView(1));
             Button(panel, "EDGE", 426, 620, 92, 29, () => presenter.SetWristView(2));
-            Button(panel, "OVERVIEW", 526, 620, 96, 29, () => presenter.SetWristView(0));
+            Button(panel, "BINARY", 526, 620, 96, 29, () => presenter.SetWristView(0));
             validation = TextAt(panel, "", 10, Gold, 20, 656, 602, 23);
             status = TextAt(panel, "", 10, Muted, 20, 682, 602, 22);
+        }
+
+        private void BuildFluidPanel(Transform root)
+        {
+            Button(root, "FLUID LAB  /  SOLVE GAS", 36, 196, 300, 32,
+                () => fluidPanel.gameObject.SetActive(!fluidPanel.gameObject.activeSelf));
+            fluidPanel = Box(root, "Generated fluid laboratory", 36, 240, 392, 386, new Color(.018f, .050f, .078f, .97f));
+            TextAt(fluidPanel, "GAS COMPUTATION", 15, Cyan, 12, 10, 368, 22);
+            TextAt(fluidPanel, "Assumed gas / Newtonian gravity / false colour", 11, Gold, 12, 34, 368, 20);
+            fluidSolve = Button(fluidPanel, "SOLVE RESERVOIR", 12, 63, 178, 30, () => fluidPresenter.StartGeneratedFluid());
+            fluidCancel = Button(fluidPanel, "CANCEL", 202, 63, 178, 30, () => fluidPresenter.CancelGeneratedFluid());
+            fluidIllustrative = Button(fluidPanel, "DEFAULT DISKS", 12, 102, 178, 30, () => fluidPresenter.UseGeneratedFluid(false));
+            fluidGenerated = Button(fluidPanel, "GENERATED FLUID", 202, 102, 178, 30, () => fluidPresenter.UseGeneratedFluid(true));
+            fluidStart = Button(fluidPanel, "GO TO COVERAGE START", 12, 141, 368, 30, () => fluidPresenter.SeekGeneratedFluidStart());
+            fluidStatus = TextAt(fluidPanel, "", 12, White, 12, 181, 368, 60);
+            fluidCoverage = TextAt(fluidPanel, "", 11, Gold, 12, 247, 368, 40);
+            fluidMetrics = TextAt(fluidPanel, "", 11, Muted, 12, 297, 368, 80);
+            fluidPanel.gameObject.SetActive(false);
+        }
+
+        private void RefreshFluidPanel()
+        {
+            if (fluidPresenter == null || fluidPanel == null) return;
+            var state = fluidPresenter.CaptureGeneratedFluidState();
+            fluidSolve.interactable = state.Supported && !state.Generating;
+            fluidCancel.interactable = state.Generating;
+            fluidIllustrative.interactable = !state.Generating;
+            fluidGenerated.interactable = fluidStart.interactable = state.Ready && !state.Generating;
+            fluidStatus.text = state.Generating ? $"SOLVING {100 * state.Progress:0.0}%\n{state.Status}" : state.Status;
+            fluidCoverage.text = state.Coverage; fluidMetrics.text = state.Metrics;
+            SetSelected(fluidGenerated, state.Selected); SetSelected(fluidIllustrative, !state.Selected);
         }
 
         public void SetRaised(bool value, bool immediate = false)
@@ -226,6 +279,8 @@ namespace DTET.VisualPrototype
         public void SetFrequencyPlot(bool value)
         { frequencyPlot = value; plottedGeneration = long.MinValue; Refresh(true); }
         public void RefreshNow() => Refresh(true);
+        public void SetFluidPanelOpen(bool value)
+        { if (fluidPanel != null) { fluidPanel.gameObject.SetActive(value); RefreshFluidPanel(); } }
         public void SetPendingExperiment(float m1, float m2, float initialSeparationRg)
         {
             if (massA == null) return;
@@ -259,12 +314,12 @@ namespace DTET.VisualPrototype
         }
         public void SetOpticalStyle(InteractiveOpticalStyle style)
         {
-            float lens = style == InteractiveOpticalStyle.Off ? 0 : style == InteractiveOpticalStyle.Subtle ? .35f : .80f;
-            float wave = style == InteractiveOpticalStyle.Off ? 0 : style == InteractiveOpticalStyle.Subtle ? .25f : .75f;
+            float lens = style == InteractiveOpticalStyle.Off ? 0 : style == InteractiveOpticalStyle.Subtle ? .2f : .35f;
+            float wave = style == InteractiveOpticalStyle.Off ? 0 : style == InteractiveOpticalStyle.Subtle ? .45f : 1.3f;
             presenter.SetWristOptics(style, lens, wave); Refresh(true);
         }
         public void SetOpticalGains(float lens, float wave)
-        { presenter.SetWristOptics(lastState.OpticalStyle, Mathf.Clamp01(lens), Mathf.Clamp01(wave)); Refresh(true); }
+        { presenter.SetWristOptics(lastState.OpticalStyle, Mathf.Clamp01(lens), Mathf.Clamp(wave, 0, 2)); Refresh(true); }
         private void InputsChanged()
         { if (refreshing) return; pendingEdits = true; localValidation = null; UpdateInputLabels(); }
         private void OpticsChanged()
@@ -342,13 +397,14 @@ namespace DTET.VisualPrototype
                 playText.text = state.Playing ? "PAUSE" : "PLAY"; rateText.text = $"{Math.Abs(state.PlaybackRate):0.00}x";
                 gasText.text = state.GasEnabled ? "GAS ON" : "GAS OFF";
                 samplesText.text = state.SamplesEnabled ? "SAMPLES ON" : "SAMPLES OFF";
-                opticalText.text = state.OpticalStyle == InteractiveOpticalStyle.Off ? "WARP OFF" : "MAGNIFIED / APPROX.";
+                opticalText.text = state.OpticalStyle == InteractiveOpticalStyle.Off ? "WARP OFF" : "AMPLIFIED / SPACING 1:12";
                 lensGain.SetValueWithoutNotify(state.LensGain); waveGain.SetValueWithoutNotify(state.WaveGain);
                 massA.interactable = massB.interactable = separation.interactable = !state.ReplayMode;
                 applyButton.interactable = !state.ReplayMode;
                 modeHint.text = state.ReplayMode ? "Recorded q/spins / use timeline for separation" : "5-80 solar each / q >= 0.10 / pending until Apply";
                 validation.text = localValidation ?? state.ValidationMessage ?? (pendingEdits ? "Pending inputs: APPLY & PAUSE starts a new scenario." : "Assumed gas / illustrative optics / source-frame timeline");
                 status.text = state.Status ?? "";
+                RefreshFluidPanel();
                 SetSelected(replayButton, state.ReplayMode); SetSelected(customButton, !state.ReplayMode);
                 SetSelected(signalTab, !frequencyPlot); SetSelected(frequencyTab, frequencyPlot);
                 for (int i = 0; i < opticsButtons.Length; i++) SetSelected(opticsButtons[i], i == (int)state.OpticalStyle);
@@ -397,8 +453,7 @@ namespace DTET.VisualPrototype
             var slider = rect.gameObject.AddComponent<Slider>(); slider.targetGraphic = handle.GetComponent<Image>();
             slider.fillRect = fill; slider.handleRect = handle; slider.minValue = min; slider.maxValue = max;
             fill.sizeDelta = Vector2.zero;
-            // Slider stretches the cross-axis anchors from 0 to 1. Subtract the hit-area
-            // height to keep the actual handle 20px tall without shrinking that hit area.
+            // Keep a 20px handle inside the larger hit area despite the slider's stretched anchors.
             handle.pivot = new Vector2(.5f, .5f);
             handle.anchoredPosition = Vector2.zero;
             handle.sizeDelta = new Vector2(13, 20 - (h + 10));

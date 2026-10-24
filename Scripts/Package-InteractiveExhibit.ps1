@@ -3,11 +3,10 @@
 .SYNOPSIS
 Packages an already-built, already-tested Windows x64 development player.
 .DESCRIPTION
-Does not build or launch Unity. TestedRevision is the caller's provenance assertion:
-the supplied build log and validation receipt cannot prove which source produced a
-binary. Preserve the build/revision record made by the release operator separately.
-Sorted ZIP entries use the tested commit timestamp. Given identical input bytes,
-arguments and PowerShell/.NET compressor, repeated runs have reproducible contents.
+Packages without building or launching Unity. TestedRevision is caller-declared;
+passing receipts and build markers do not establish binary-to-source identity.
+Retain separate build/revision evidence. Sorted ZIP entries use the tested commit
+timestamp; identical inputs and compressor produce identical contents.
 .EXAMPLE
 .\Scripts\Package-InteractiveExhibit.ps1 -BuildDirectory C:\build\VisualQA `
   -TestedRevision <full-40-character-commit> -ValidationReceipt C:\qa\interactive-exhibit-integration.json `
@@ -18,6 +17,7 @@ param(
     [Parameter(Mandatory=$true)][string]$BuildDirectory,
     [Parameter(Mandatory=$true)][ValidatePattern('^[0-9a-fA-F]{40}$')][string]$TestedRevision,
     [Parameter(Mandatory=$true)][string]$ValidationReceipt,
+    [string]$GeneratedFluidReceipt,
     [Parameter(Mandatory=$true)][string]$BuildLog,
     [Parameter(Mandatory=$true)][string]$OutputDirectory,
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$')][string]$PackageName = 'DTET_Interactive_Observatory_Development_Candidate',
@@ -69,6 +69,16 @@ if ($dtetReceipt.success -isnot [bool] -or !$dtetReceipt.success -or $dtetChecks
     throw 'ValidationReceipt must contain success:true and a nonempty list of passing checks.'
 }
 if ($dtetReceipt.performanceOnly -isnot [bool] -or $dtetReceipt.performanceOnly) { throw 'Supply the full interactive integration receipt, not a performance-only receipt.' }
+$dtetFluidReceiptPath = $null
+$dtetFluidPassCount = 0
+if ($GeneratedFluidReceipt) {
+    $dtetFluidReceiptPath = (Resolve-Path -LiteralPath $GeneratedFluidReceipt).Path
+    $dtetFluidReceipt = Get-Content -LiteralPath $dtetFluidReceiptPath -Raw | ConvertFrom-Json
+    if ($dtetFluidReceipt.success -isnot [bool] -or !$dtetFluidReceipt.success -or $dtetFluidReceipt.checks.Count -eq 0 -or @($dtetFluidReceipt.checks | Where-Object { $_ -isnot [string] -or $_ -cnotlike 'PASS *' }).Count -gt 0) {
+        throw 'GeneratedFluidReceipt must contain success:true and a nonempty list of passing checks.'
+    }
+    $dtetFluidPassCount = $dtetFluidReceipt.checks.Count
+}
 $dtetBuildText = Get-Content -LiteralPath $dtetLogPath -Raw
 if ($dtetBuildText -notmatch '(?m)^DTET_QA_BUILD_SUCCEEDED(?:[ \t]+[^\r\n]+)?\r?$') { throw 'BuildLog lacks DTET_QA_BUILD_SUCCEEDED from the development QA build.' }
 if ($dtetBuildText -match '(?m)^DTET_.*BUILD_FAILED|^error CS\d|Build completed with a result of .Failed.') { throw 'BuildLog contains a build failure marker.' }
@@ -94,7 +104,7 @@ foreach ($path in @($dtetPackage, $dtetZip, $dtetManifestPath, $dtetSummaryPath)
 }
 if ($VerifyExtractedPackage -and (Test-Path -LiteralPath $dtetExtracted)) { throw "Refusing to overwrite: $dtetExtracted" }
 
-# Explicit player root allowlist; no repository/build-directory wildcard copy.
+# Copy only allowlisted player roots.
 $dtetRuntimeRoots = @('BinaryBlackHole_VisualQA.exe','UnityPlayer.dll','UnityCrashHandler64.exe','BinaryBlackHole_VisualQA_Data','MonoBleedingEdge','D3D12','WinPixEventRuntime.dll')
 foreach ($name in @('BinaryBlackHole_VisualQA.exe','UnityPlayer.dll','BinaryBlackHole_VisualQA_Data','MonoBleedingEdge')) {
     if (!(Test-Path -LiteralPath (Join-Path $dtetBuild $name))) { throw "Required player root is missing: $name" }
@@ -118,6 +128,7 @@ if ($dtetRuntimePaths.Count -lt 10) { throw 'Player runtime inventory is unexpec
 $dtetDocuments = @(
     'Docs/INTERACTIVE_OBSERVATORY.md','Docs/INTERACTIVE_OBSERVATORY_VALIDATION.md','Docs/FINAL_DESKTOP_SCOPE.md','Docs/INTERACTIVE_SCENARIO_MODEL.md',
     'Docs/INTERACTIVE_OPTICS.md','Docs/M4_REDUCED_FLOW_MODEL.md','Docs/M4_QUALITY_AND_SKY.md',
+    'Docs/GENERATED_FLUID_MODEL.md','Docs/GENERATED_FLUID_VALIDATION.md','Docs/PUBLIC_SIMULATION_ROUTE.md',
     'Docs/PHYSICS_M1.md','Docs/PHYSICS_M2.md','Docs/PHYSICS_M3.md','Docs/PHYSICS_M4.md',
     'Docs/M3_OPTICAL_REFERENCE.md','Docs/Data/SXS0305/README.md','Docs/Data/SXS0305/LICENSE.txt',
     'Docs/Data/SXS0305/provenance.json','Docs/Data/SXS0305/fixtures.json'
@@ -130,7 +141,7 @@ $dtetTemplateNames = @('READ_ME_FIRST.txt','NOTICES.txt','START_OBSERVATORY.cmd'
 foreach ($name in $dtetTemplateNames) {
     if (!(Test-Path -LiteralPath (Join-Path $dtetTemplates $name) -PathType Leaf)) { throw "Missing package template: $name" }
 }
-# Reuse the tested harness, changing only its two explicit player-location lines.
+# Adapt only the tested harness's two player-location lines.
 $dtetRunner = Get-Content -LiteralPath (Join-Path $dtetRepo 'Scripts/Test-InteractiveExhibit.ps1') -Raw
 $dtetOldRepo = '$dtetRepo = Split-Path -Parent $PSScriptRoot'
 $dtetOldPlayer = '$dtetPlayer = Join-Path $dtetRepo ''BinaryBlackHole\Builds\VisualQA\BinaryBlackHole_VisualQA.exe'''
@@ -164,8 +175,7 @@ foreach ($relative in $dtetDocuments) {
     [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($destination)) | Out-Null
     [IO.File]::Copy($source, $destination, $false)
 }
-# Keep local links among shipped documents. Other relative Markdown links lead to
-# source at the packaging checkout revision, without copying the repository itself.
+# Keep shipped document links local; point other relative links to the checkout revision.
 foreach ($relative in $dtetDocuments | Where-Object { $_.EndsWith('.md') }) {
     $destination = Join-Path $dtetPackage $relative
     $text = [IO.File]::ReadAllText($destination)
@@ -184,14 +194,15 @@ foreach ($relative in $dtetDocuments | Where-Object { $_.EndsWith('.md') }) {
 }
 [IO.Directory]::CreateDirectory((Join-Path $dtetPackage 'Evidence')) | Out-Null
 [IO.File]::Copy($dtetReceiptPath, (Join-Path $dtetPackage 'Evidence/interactive-exhibit-integration.json'), $false)
+if ($dtetFluidReceiptPath) { [IO.File]::Copy($dtetFluidReceiptPath, (Join-Path $dtetPackage 'Evidence/generated-fluid-integration.json'), $false) }
 $dtetProvenance = 'The caller declares this source revision produced the tested runtime. Build marker and passing receipt are checked; their association with these binary bytes depends on the external build/revision record. Runtime SHA-256 hashes identify the exact packaged bytes.'
 $dtetRuntimeRecord = [ordered]@{
     schema='dtet.interactive-runtime-manifest.v1'; packageKind='Windows x64 verification/development candidate';
     callerDeclaredTestedRuntimeRevision=$dtetResolvedRevision; packagingCheckoutRevision=$dtetDocumentationRevision;
     provenance=$dtetProvenance; sourceUrl=$dtetSourceUrl; buildMarker='DTET_QA_BUILD_SUCCEEDED';
     buildLogSha256=(Get-Sha $dtetLogPath); validationReceiptSha256=(Get-Sha $dtetReceiptPath);
-    validationPassCount=$dtetChecks.Count; copiedRuntimeFiles=$dtetRuntimeManifest.ToArray();
-    pending=@('Visible native-window interaction and presentation measurements','Designated laptop measurements','Physical XR hardware and human usability validation','Compatible physical gas/metric data required for scientific fluid and binary ray-transfer claims')
+    validationPassCount=$dtetChecks.Count; generatedFluidPassCount=$dtetFluidPassCount; copiedRuntimeFiles=$dtetRuntimeManifest.ToArray();
+    pending=@('Visible native-window interaction and presentation measurements','Designated laptop measurements','Physical XR hardware and human usability validation','Relativistic fluid/metric evolution and observer ray transfer; public-data generation route documented')
 }
 Write-Utf8 (Join-Path $dtetPackage 'runtime-manifest.json') ($dtetRuntimeRecord | ConvertTo-Json -Depth 8)
 $dtetPackageInventory = @(Get-Inventory $dtetPackage)
@@ -234,6 +245,7 @@ $dtetSummary = [ordered]@{
     developmentCandidate=$true; archiveFile=([IO.Path]::GetFileName($dtetZip)); archiveBytes=(Get-Item -LiteralPath $dtetZip).Length;
     archiveSha256=(Get-Sha $dtetZip); packageManifestSha256=(Get-Sha $dtetManifestPath);
     runtimeFiles=$dtetRuntimeManifest.Count; archiveFiles=$dtetPackageInventory.Count; validationPassCount=$dtetChecks.Count;
+    generatedFluidPassCount=$dtetFluidPassCount;
     runtimeCopiesHashVerified=$true; zipEntriesHashVerified=$true; extractedPackageHashVerified=[bool]$VerifyExtractedPackage;
     nativeWindowOrLaptopCertified=$false; physicalXrCertified=$false; provenance=$dtetProvenance
 }

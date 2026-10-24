@@ -2,11 +2,8 @@ using System;
 
 namespace BlackHole.Staging.Simulation
 {
-    /// <summary>
-    /// Exactly two allocated decoded frames. This small synchronous reference reconstructs indexed
-    /// frames analytically; it does not preload a history or provide past-light-cone access.
-    /// A snapshot's buffers are borrowed until the next Seek call. Upload both before publishing time.
-    /// </summary>
+    // Two analytically reconstructed frames, borrowed until the next Seek.
+    // Upload both before publishing time; no full history or past-light-cone sampling.
     public sealed class ReferenceFlowCache
     {
         private readonly ReferenceFlowModel model;
@@ -70,7 +67,7 @@ namespace BlackHole.Staging.Simulation
         public double TimeTg => Index * ReferenceFlowModel.FrameSpacingTg;
         public int Resolution { get; }
         // Borrowed read-only by contract. x-fastest float4: rho, rho*T/T0, rho*vx/c, rho*vz/c.
-        // Suitable for Texture3D RGBAFloat, or explicitly measured RGBAHalf conversion.
+        // Texture3D layout supports RGBAFloat or measured RGBAHalf conversion.
         public float[] PackedRgba { get; }
         internal ReferenceFlowFrame(int resolution)
         { Resolution = resolution; PackedRgba = new float[checked(4 * resolution * resolution * resolution)]; }

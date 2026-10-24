@@ -56,7 +56,7 @@ internal static class ReferenceFlowTests
         Reject(() => cache.Seek(double.NaN), "NaN cache request");
         Reject(() => new ReferenceFlowCache(model, 129), "Unbounded field size");
 
-        // Check cell-centre packing and density-weighted interpolation against the source formula.
+        // Check cell-centre packing and density-weighted interpolation.
         snapshot = cache.Seek(80);
         int ix = 23, iy = 16, iz = 17, n = cache.Resolution;
         double x = ((ix + .5) / n * 2 - 1) * 20, y = ((iy + .5) / n * 2 - 1) * 6, z = ((iz + .5) / n * 2 - 1) * 20;
@@ -65,8 +65,8 @@ internal static class ReferenceFlowTests
         Near(sampled.TemperatureKelvin, analytic.TemperatureKelvin, 1.5e-7, "Density-weighted temperature round-trip");
         Near(sampled.VelocityXOverC, analytic.VelocityXOverC, 1.5e-7, "Density-weighted velocity round-trip");
 
-        // Independent analytic cylindrical volume integral and high-order one-dimensional quadrature,
-        // compared with complete Cartesian voxel sums. Luminosity proxy is integral rho*(T/T0)^4 dV.
+        // Compare independent cylindrical integrals with Cartesian voxel sums.
+        // Emission proxy: integral rho*(T/T0)^4 dV.
         const double expectedMass = 1793.9333458743354;
         const double expectedBolometricProxy = 533.0242888578038;
         Near(ReferenceFlowModel.IntegratedRelativeDensityVolumeRg3, expectedMass, 1e-14, "Analytic normalized mass fixture");

@@ -2,10 +2,7 @@ using UnityEngine;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>
-    /// Procedural exhibit art. None of these shapes perform lensing or predict emission.
-    /// Runtime generation keeps the prototype editable and avoids third-party asset provenance.
-    /// </summary>
+    // Procedural exhibit art, independent of physical optics and emission.
     public static class VisualAssetFactory
     {
         private static Mesh diskMesh;
