@@ -164,7 +164,9 @@ namespace DTET.VisualPrototype
             var material = exhibit.GeneratedFluidMaterial;
             Check(material != null && material.shader.isSupported, "generated fluid shader supported");
             if (material == null) return;
-            var storedFrame = material.GetTexture("_GeneratedFrameA") as Texture2D;
+            // These sampler uniforms are not serialized Shader Properties. Inspect the actual
+            // owned texture instead of relying on Material.GetTexture's property lookup.
+            var storedFrame = exhibit.GeneratedFluidPlayer.LowerFrameTextureForQa;
             bool halfPrecision = storedFrame != null && storedFrame.format == TextureFormat.RGBAHalf;
             Check(storedFrame != null && (halfPrecision || storedFrame.format == TextureFormat.RGBAFloat),
                 "generated field uses an admitted floating-point texture");

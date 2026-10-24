@@ -45,6 +45,9 @@ namespace DTET.VisualPrototype
         public int TextureUploads { get; private set; }
         public int LowerFrame => lowerFrame;
         public int UpperFrame => upperFrame;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        internal Texture2D LowerFrameTextureForQa => frameA;
+#endif
         public double FrameBlend => blend;
         public double GenerationProgress => work == null ? (Ready ? 1 : 0) : work.Progress;
         public string Status { get; private set; } = "No generated history. SOLVE GAS computes this scenario.";
