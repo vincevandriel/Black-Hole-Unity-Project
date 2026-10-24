@@ -2,6 +2,8 @@
 
 M4 adds an **assumed gas illustration around the retained SXS:BBH:0305 horizon replay**. Its ring, stream and remnant geometry is computed directly from absolute event time. This makes seeking reversible and bounds storage without keeping a movie of gas frames. The field is three-dimensional and independent of the visitor's viewpoint. It is not a hydrodynamic or GRMHD solution, does not conserve gas, and is not a reconstruction of observed gas in GW150914.
 
+The current field is `assumed-SXS0305-reduced-binary-flow-v2-plunge`. Version 2 includes an explicitly assumed emitting plunge region and a shared transition ring. Version 1's `6 mi` inner cutoff left narrow annuli, removed a component's disk before merger, and made all inner gas vanish at common-horizon formation. Those were consequences of the illustration's choices, not predictions from measured gas. The numerical horizon motion and gravitational-wave data are unchanged.
+
 The authoritative formulas are in `ReducedBinaryFlowModel.cs`; `ReducedBinaryFlow.hlsl` implements the same density and bolometric emission functions. Both use the [M2 data and unit contract](Data/SXS0305/README.md). No other binary's gas simulation has been attached to these horizon positions. The [M3 isolated reference](PHYSICS_M3.md) remains a separate control.
 
 ## Units and retained numerical input
@@ -28,12 +30,15 @@ Outside that support, the ring contributes zero. Both envelopes reach zero with 
 | Component | Center | Inner / outer radii | Aspect | Strength | Temperature scale |
 |---|---|---|---|---|---|
 | Reservoir | Fixed SXS coordinate origin | `1.8 a0` / `3 a0` | 0.18 | 0.55 | 0.35 |
-| Each minidisk | Its retained individual horizon position | `6 mi` / `0.3 a(t)` | 0.24 | `3 B smoothstep(rout-rin)` | 1.1 |
-| Remnant ring | Retained common-horizon position | `6 mremnant` / `16 rg` | 0.24 | `2 C` | 1.1 |
+| Each minidisk plus assumed plunge | Its retained individual horizon position | `1.25 rhorizon` / `0.3 a(t)` | 0.24 | `3 B smoothstep(rout-rin)` | 1.1 |
+| Shared transition ring | Fixed SXS coordinate origin | `4 rg` / `16 rg` | 0.24 | `1.5 D` | 1.1 |
+| Remnant ring plus assumed plunge | Retained common-horizon position | `1.25 rhorizon` / `16 rg` | 0.24 | `2 C` | 1.1 |
 
-Here `smoothstep(v) = s²(3-2s)`, `s = clamp(v,0,1)`. The minidisk width in its strength expression is divided by the declared width scale of `1 rg`. If `rout<=rin`, the minidisk is absent. Thus a shrinking tidal-size illustration cannot retain a bright ring where its assumed inner and outer radii have crossed. The `6 mi` inner cutoffs borrow a nonspinning circular-orbit scale for an illustration; the actual SXS component spins do not make them a computed Kerr ISCO or a binary stability boundary.
+Here `smoothstep(v) = s²(3-2s)`, `s = clamp(v,0,1)`. The minidisk width in its strength expression is divided by the declared width scale of `1 rg`. If `rout<=rin`, the minidisk is absent. The outer radius is never expanded to force an overlapping disk between converging holes. The adjustable experiment keeps its mass-ratio-dependent Roche-lobe outer radius. The `1.25 rhorizon` inner boundary is an assumed emission cutoff outside the proxy, not a computed Kerr ISCO, binary stability boundary, or stable circular disk within the ISCO.
 
-Only the reservoir has an angular modulation: `pattern = 1 + 0.2 cos(2(phi-phase))`, where `phase = tau/Rmid^(3/2)` and `Rmid=(rin+rout)/2`. The shader uses `(x²-z²)/R²` and `2xz/R²` with state-supplied `cos(2phase)` and `sin(2phase)` instead of an `atan2`. This is a rigid prescribed pattern. Its pattern speed is not a claim that the complete density field solves the continuity equation.
+Emission inside the ISCO is physically possible in accreting black-hole models: [Mummery et al. (2024), Continuum emission from within the plunging region of black hole discs](https://doi.org/10.1093/mnras/stae1160) includes such emission and compares models with MAXI J1820+070. [Mummery and Stone (2024), The three-dimensional structure of black hole accretion flows within the plunging region](https://doi.org/10.1093/mnras/stae1643) compares analytic flow descriptions and GRMHD simulations, including spiral structure. These sources motivate allowing an emitting plunge, but do not supply our cutoff, temperature, luminosity, binary transition, or the gas in GW150914. Our coordinate velocities are still a prescribed illustration, not those papers' plunge solution.
+
+The reservoir and transition ring have an angular modulation: `pattern = 1 + 0.2 cos(2(phi-phase))`, where `phase = tau/Rmid,reservoir^(3/2)`. The shader uses `(x²-z²)/R²` and `2xz/R²` with state-supplied `cos(2phase)` and `sin(2phase)` instead of an `atan2`. This is a rigid prescribed pattern. Its pattern speed is not a claim that the complete density field solves the continuity equation.
 
 Ring coordinate velocity is `v/c = vcenter/c + (-Omega z - vr x/R, 0, Omega x - vr z/R)` with `Omega=sqrt(m/R³)`. Use `m=1`, `vr=0.004` for the reservoir; each ring's `mi` and `vr=0.008` for minidisks/remnant. No pressure, viscosity, magnetic torque, self-gravity or relativistic fluid update determines these velocities. No displayed sample marker is asserted to integrate them as a material trajectory.
 
@@ -53,13 +58,17 @@ The curve parameter is the projection onto its chord, not an iterative closest-p
 
 ## Merger transition and horizon proxies
 
-Set `B=1-smoothstep((tau0+120)/120)` and `C=smoothstep(tau0/160)`. Binary minidisks and streams therefore fade during the final `120 tg` before the first common horizon; the remnant ring grows over the first `160 tg` after it. The persistent outer reservoir remains visible. Both transition envelopes have zero value and slope at the horizon switch. The brief inner-cavity interval is part of this assumed model, not an inferred measured gas transient or a predicted electromagnetic flash.
+Set `B=1-smoothstep((tau0+120)/120)`, `C=smoothstep(tau0/160)`, and `D=smoothstep((tau0+600)/600)(1-C)`. Binary minidisks and streams fade during the final `120 tg`; the shared transition ring begins growing `600 tg` before common horizon and is fully present at that switch. It fades as the remnant ring grows over the next `160 tg`. The persistent outer reservoir remains present. These C1 envelopes prevent an artificial blackout; they do not predict gas survival, a measured gas transient, or an electromagnetic flash. The adjustable experiment retains its own conceptual binary fade while sharing the same `D` bridge.
 
-The combined density and emission are multiplied by `smoothstep((distance/rhorizon-1)/0.2)` for each currently supplied horizon proxy. This gives vacuum inside its coordinate equal-area sphere, with a smooth transition over the next 20% in radius. It is not the deformed apparent-horizon surface, event horizon, photon capture boundary or optical shadow. Because both inner components vanish smoothly at the switch and the reservoir lies outside all masks, the source field does not jump when M2 changes its horizon set.
+The combined density and emission are multiplied by `smoothstep((distance/rhorizon-1)/0.2)` for each currently supplied horizon proxy. This gives vacuum inside its coordinate equal-area sphere, with a smooth transition over the next 20% in radius. It is not the deformed apparent-horizon surface, event horizon, photon capture boundary or optical shadow. The transition ring's inner radius lies outside the switching masks for this retained event; portable samples verify continuity across common-horizon formation.
 
 ## Emission, markers and fidelity
 
-Components add `rho` and `E = sum[rho (T/T0)^4]` separately. The displayed gray transfer source is `E/rho`. `TemperatureKelvin` returns the equivalent source temperature `T0(E/rho)^(1/4)`; overlapping components do not establish a solved thermodynamic mixture. Extinction is prescribed as `alpha = 0.16 rho / rg` before the scene's opacity control. The relative density scale `rho0` is unspecified; volume integrals cannot be called kilograms and `E` integrals cannot be called calibrated luminosities. Fixed transfer coefficients, camera exposure and a false-color mapping cannot establish a measured visible spectrum.
+Components add `rho` and `E = sum[rho (T/T0)^4]` separately. `TemperatureKelvin` returns the equivalent source temperature `T0(E/rho)^(1/4)`; overlapping components do not establish a solved thermodynamic mixture. Extinction is prescribed as `alpha = 0.16 rho / rg`. The relative density scale `rho0` is unspecified; volume integrals cannot be called kilograms and `E` integrals cannot be called calibrated luminosities.
+
+The visible transfer multiplies `E/rho` by a warm false-color palette, bounded spiral bands anchored to the event phase, and a thinner mid-plane emission window. These are display choices to make disk structure readable; the bands are not resolved turbulence, and displayed brightness is not a bolometric estimate. They leave the CPU/GPU density and `E` fixture values intact. Local quadrature uses eight subsegments near the compact emitting components, four in the broader cavity, and one outside. The ray count remains bounded by the selected fidelity. No wall-clock animation enters the gas, so pause, rewind and different viewpoints share the same field and display phase.
+
+The separate numerical fluid mode does not use these synthetic bands. Its transfer uses resolved density and velocity for false color/emission, with a mid-plane window and a circular emission aperture fading between 0.82 and 0.98 of the grid half-extent to hide the finite square boundary. Its stored density, momentum and full-domain mass ledger are unchanged.
 
 No grid resolution, particle count, viewpoint or quality setting changes `EvaluateState` or `Sample`. Fidelity controls can change the quadrature and image resolution used to display this fixed field. Optional point markers should be labeled **density samples**: a static spatial sample has weight `rho V/N` and samples the field at the current epoch. Changes in that weight are not particle creation, mass-conserving regrouping, or a material trajectory. The continuous source field does not derive its brightness from marker count.
 
@@ -80,25 +89,25 @@ The independent emission quadrature replaces the radial integral by `temperature
 
 | Epoch | Component mass reference | 96³ measured mass | 192³ measured mass | Component emission reference | 96³ measured emission | 192³ measured emission |
 |---|---:|---:|---:|---:|---:|---:|
-| Start | 7527.337314608161 | 7529.800740795233 | 7527.2020693897575 | 122.23709464970204 | 123.67304113573682 | 122.09462679209301 |
-| First common horizon | 7416.785784188264 | 7416.855002884078 | 7416.793368121912 | 46.962814740559374 | 46.96328556462263 | 46.96281854284812 |
-| Retained endpoint | 9563.774286157246 | 9563.870061904314 | 9563.74896888194 | 506.0546080626696 | 506.05800551154937 | 506.04267165186 |
+| Start | 7565.072379957854 | 7564.975835481643 | 7565.083092311621 | 67.42440638002064 | 67.4330225964646 | 67.42281196723798 |
+| First common horizon | 9040.355122936902 | 9040.336281810742 | 9040.37148262631 | 200.17057068097526 | 200.15869908583613 | 200.16802261272565 |
+| Retained endpoint | 9538.839355055887 | 9538.923198414466 | 9538.832620434654 | 92.19342723131109 | 92.19418480633543 | 92.19393467877272 |
 
-The gates are 0.1%/0.01% mass error and 2%/0.2% emission error at 96³/192³, plus improvement of the worst-epoch errors under refinement. An individual shifted compact feature's midpoint error need not decrease monotonically. A trial at 64³ underestimated initial emission by **11.57%** because narrow initial minidisks were poorly resolved. That failed trial prompted finer independent integration; it is evidence against treating a coarse density grid as automatically accurate. These CPU volume quadratures do not prove acceptable image error for any rendering preset; the actual GPU and image checks are separate.
+The unchanged gates are 0.1%/0.01% mass error and 2%/0.2% emission error at 96³/192³, plus improvement of the worst-epoch errors under refinement. The table is the v2 portable run. Tests also require positive integrated central emission at eight epochs from `-600` to `+160 tg` and sample continuity around the horizon switch. An individual shifted compact feature's midpoint error need not decrease monotonically. These CPU volume quadratures do not prove acceptable image error for any rendering preset; the actual GPU and image checks are separate.
 
 For an RGBAFloat GPU fixture, return `(rho,E,0,1)` directly from `SampleReducedFlow` without transfer, exposure, postprocessing or gamma conversion. Compare to CPU values at the same full-precision-derived positions after the normal float upload. Suggested points are:
 
 | Epoch / component | Position `(x,y,z)/rg` | Density | `E` |
 |---|---|---:|---:|
 | Start / reservoir | `(34.63492610086554,0,0)` | 0.66 | 0.004178302734374998 |
-| Start / minidisk A | `(-6.465198557671183,-0.000008524904502899349,3.4273834022595753)` | 3 | 2.841716332168965 |
+| Start / minidisk A | Body A plus `(0,0,(rin+rout)/2)` | `3 smoothstep(rout-rin)` | `rho 1.1^4 (rin/R)^3` |
 | Start / stream A | `(-17.181939144653676,-0.0000042624522514496745,-7.258443971232283)` | 0.9 | 0.16065562500000002 |
-| Endpoint / remnant | `(10.63009603241252,-0.00009667186740859651,-0.2642597678338739)` | 2 | 0.4265536727085955 |
+| Endpoint / remnant | Remnant plus `((rin+rout)/2,0,0)` | 2 | `2 1.1^4 (rin/R)^3` |
 
 Also compare vacuum points outside the bounding box and at each horizon center, and arbitrary interior samples away from profile boundaries. GPU fixture and player outcomes belong in the milestone validation receipt; this document does not itself certify a GPU pass.
 
 ## HLSL upload contract
 
-`_FlowA`, `_FlowB`, `_FlowRemnant`: mapped position xyz and mass fraction w. `_FlowARadii`, `_FlowBRadii`, `_FlowRemnantRadii`: inner, outer, horizon-proxy radius, unused. `_FlowReservoir`: inner, outer, `cos(2phase)`, `sin(2phase)`. `_FlowWeights`: binary weight, remnant weight, common-horizon flag, unused. `_FlowBounds`: half-extent XZ, half-extent Y, unused, unused. `_FlowStreamAStart/End` and B counterparts: xyz, unused. `_FlowStreamABow` and B counterpart: unit normal xyz, chord length squared w. These form one immutable epoch; upload all parameters before drawing the new time.
+`_FlowA`, `_FlowB`, `_FlowRemnant`: mapped position xyz and mass fraction w. `_FlowARadii`, `_FlowBRadii`, `_FlowRemnantRadii`: inner, outer, horizon-proxy radius, unused. `_FlowReservoir`: inner, outer, `cos(2phase)`, `sin(2phase)`. `_FlowWeights`: binary weight, remnant weight, common-horizon flag, transition-ring weight. `_FlowBounds`: half-extent XZ, half-extent Y, unused, unused. `_FlowStreamAStart/End` and B counterparts: xyz, unused. `_FlowStreamABow` and B counterpart: unit normal xyz, chord length squared w. These form one immutable epoch; upload all parameters before drawing the new time.
 
 M4 omits a gas equation of state, pressure forces, magnetic fields, shocks, self-gravity, radiative cooling/heating, conserved boundary fluxes, a binary spacetime metric and null-ray transfer through that metric. Its inverse-square-inspired circular rates and borrowed inner radius do not supply those missing equations. Scientific gas histories and binary observer optics remain separate milestones.

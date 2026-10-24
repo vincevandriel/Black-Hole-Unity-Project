@@ -1,18 +1,45 @@
 # Native desktop distribution
 
-The desktop releases open the interactive observatory and its fidelity selector when the user double-clicks `DTET_Binary_Explorer.exe` on Windows or `DTET_Binary_Explorer.app` on macOS. Unity Editor, a command script and mode arguments are not required. Extract the complete ZIP; retain the Windows runtime/data directories and keep the Mac app bundle intact.
+The current visual-repair release opens the interactive observatory and fidelity selector directly from `DTET_Binary_Explorer.exe` on Windows or `DTET_Binary_Explorer.app` on macOS. Unity Editor and mode arguments are not required. Extract the complete ZIP and retain each application's runtime files.
 
-## Distribution status, 24 October 2026
+## Current release, 24 October 2026
 
-The clean **Windows x64** release is built, archive-verified and tested. Its extracted executable passed a default-launch startup check. The final Windows integration runs passed all **495 checks** across the normal and fallback texture formats.
+**DTET_Binary_Explorer_VisualFix.zip** contains Windows x64 and a universal Intel/Apple Silicon app for macOS 12.0 or later. Size: **86,827,666 bytes**, **339 files**. SHA-256:
 
-The **Mac application is built and included** in the combined desktop ZIP. All six native files contain both Intel `x86_64` and Apple Silicon `arm64` code; **macOS 12.0 or later** is required. Static bundle, native dependency and embedded code-page hash checks passed. The app is **ad-hoc signed and not notarized**. It has not been run on a Mac; Metal rendering, macOS signature/resource-seal validation and Gatekeeper acceptance remain untested. The package README links to Apple's per-app first-launch instructions.
+`2d33e1bbd7c11d111457e86bcc5a601cac2dc41b1416faa70238d391fa87f547`
 
-## Build and runtime provenance
+Both platform runtimes were built from `070827f36f18fc16faa29e62b68600c7d14e0f14` with Unity **6000.3.25f1**. This replaces the earlier desktop ZIP's visuals. The older ZIP and its historical receipts remain outside the repository; they are not the repaired release.
 
-Windows runtime source and observatory QA: `f667a0a27d984891a36cd5a80356a94cae415296`. Mac build checkout: `07ad7df7ca5c4b328d369bcad9d8d7c5d1e27d29`; its non-development runtime source is unchanged from the Windows revision. The intervening fluid QA-only follow-up is `90e80bfb66f013d151f327e8e9ea8cd0cb0a0383`. Windows-only packaging source: `f553d54`; combined packaging source: `5ab32b4`, which records separate platform revisions. Unity version: **6000.3.25f1**. Release builds use Mono and `BuildOptions.None`; the development counterpart retains the opt-in test harnesses. All use the per-build `DTET_DESKTOP_RELEASE` define for the same default-startup selection. Explicit `--event-lessons`, `--reference-lab` and `--reduced-exhibit` modes remain available.
+The repair removes detached static optical copies of gas, keeps the illustrative disks legible through inspiral and merger, and makes waveform-driven image distortion visible. The wrist starts lowered, with PLAY INSPIRAL, RESTART and WATCH MERGER controls in the main view. See [visual repair validation](VISUAL_REPAIR_VALIDATION.md) and [controls](INTERACTIVE_OBSERVATORY.md).
 
-Batch commands, using the installed Unity executable and absolute paths:
+Windows development-player integration, extracted release startup and archive verification passed. The Mac build and static inspections passed; it is **ad-hoc signed, not notarized and not runtime-tested on a Mac**. Metal rendering, native signature/resource-seal validation and Gatekeeper acceptance remain untested. The included README links to Apple's per-app first-launch instructions.
+
+## Validation
+
+The final portable model suite exited zero. The QA player and both non-development releases built successfully with no matched C# or shader warnings/errors. All final development-player runs completed with success and no failed check records:
+
+| Windows QA run | Non-capture assertions | Capture-write checks | Saved images |
+| --- | ---: | ---: | ---: |
+| Observatory, Float | 210 | 162 | 166 |
+| Observatory, forced supported Half | 212 | 42 | 46 |
+| Generated fluid, Float | 31 | 10 | 10 |
+| Generated fluid, forced supported Half | 32 | 10 | 10 |
+
+This totals **485 non-capture assertions**. The Float observatory additionally saves 120 frames for the merger preview, included in its capture counts. Four ray-projection overlays in each observatory run are saved separately from capture-write checks. These are repeated checks across formats, not 485 distinct scientific claims.
+
+The GPU checks cover actual camera projection, shared star-deflection math, all 512 waveform bins, both visible disks, transition gas, parameter/graph binding, rewind, fluid density and velocity, history coverage, cancellation and disposal. Saved default, orbital, merger and fluid views were visually inspected, including selected frames of the rendered sequence. Details and the rejected interim candidates are recorded in the [repair receipt](VISUAL_REPAIR_VALIDATION.md).
+
+The final normal and Half fluid histories took 96.21 and 94.61 seconds on the desktop. Their retained array payload is 14,277,720 bytes. These are correctness runs with independent work occurring on the host, not controlled performance comparisons. The physical fluid grid and cadence remain independent of image quality.
+
+The freshly extracted non-development Windows executable was launched without a mode argument. It logged `DTET_DESKTOP_OBSERVATORY_INSTALLED`, remained running for the 15-second smoke interval, and showed no matched exception, shader-error or project-failure marker. The owned smoke process was then stopped. The engine's unavailable Direct3D debug info-queue message remains; it did not prevent startup. This is a hidden startup check, not native-window or human usability validation.
+
+Both release assemblies retain the direct-launch marker and production classes, and exclude `InteractiveExhibitQaCapture`, `GeneratedFluidQaCapture`, `DTET_FORCE_HALF_TEXTURES_QA` and the QA-only texture accessor.
+
+The Mac static audit found six native Mach-O files, all with `x86_64` and `arm64` slices. Dependencies resolve within the bundle or to system paths. All twelve architecture slices have ad-hoc signatures and matching supported embedded code-page hashes; no Developer ID CMS signature is present. `Info.plist` identifies `org.dtet.binaryexplorer`, executable `DT-ET Binary Explorer`, and macOS 12.0 minimum. `_CodeSignature/CodeResources` is retained. This Windows inspection does not replace Apple's `codesign`, Gatekeeper, Metal or runtime tests.
+
+## Build and test reproduction
+
+Release builds use Mono, `BuildOptions.None`, and the per-build `DTET_DESKTOP_RELEASE` define. The Mac builder requests `x64arm64`. Explicit `--event-lessons`, `--reference-lab` and `--reduced-exhibit` modes remain available. The editor must already be running with the requested build target; matching platform modules and an active Unity license are required.
 
 ```powershell
 & <Unity.exe> -batchmode -nographics -quit -buildTarget StandaloneWindows64 `
@@ -20,70 +47,31 @@ Batch commands, using the installed Unity executable and absolute paths:
   -executeMethod DTET.VisualPrototype.Editor.PrototypeBuild.BuildDesktopWindowsPlayer `
   -logFile <windows-build.log>
 
-# Requires the matching Mac Build Support (Mono) module:
 & <Unity.exe> -batchmode -nographics -quit -buildTarget StandaloneOSX `
   -projectPath <BinaryBlackHole> `
   -executeMethod DTET.VisualPrototype.Editor.PrototypeBuild.BuildDesktopMacPlayer `
   -logFile <mac-build.log>
 ```
 
-The Mac builder requests `Architecture=x64arm64` and a native `.app` rather than an Xcode project. The editor must already be running with the requested build target. The builder checks all thirteen custom shaders, then requires Unity build success. Review and restore only incidental editor changes after building; preserve unrelated user edits.
+Outputs are `BinaryBlackHole/Builds/DesktopWindows/DTET_Binary_Explorer.exe` and `BinaryBlackHole/Builds/DesktopMac/DTET_Binary_Explorer.app`. Review and restore only incidental editor settings after building; preserve unrelated changes.
 
-Outputs are `BinaryBlackHole/Builds/DesktopWindows/DTET_Binary_Explorer.exe` and `BinaryBlackHole/Builds/DesktopMac/DTET_Binary_Explorer.app`.
+Build the development counterpart with `BuildDesktopWindowsQaPlayer`. Copy its complete output to a separate test directory before another build, so live files cannot be overwritten. Run the copied executable with `DTET_INTERACTIVE_QA_PATH` or `DTET_GENERATED_FLUID_QA_PATH` pointing to a new receipt directory. Use `-batchmode` but retain graphics; do not pass `-nographics` to the QA player. Set `DTET_INTERACTIVE_QA_BENCHMARK_SECONDS=2` for the observatory checks. Repeat sequentially with `DTET_FORCE_HALF_TEXTURES_QA=1`, then remove it. Optional `DTET_VISUAL_MOVIE=1` saves the 120-frame merger sequence during observatory QA. These switches and capture harnesses are excluded from releases.
 
-## Graphics compatibility
+Float field/wave textures require both sampling and linear-filter support, with a checked Half fallback. Half waveform storage uses display normalization to prevent physical strains underflowing, while CPU scientific values retain their precision. Testing Half on this Windows GPU checks format conversion, not Metal or any particular Mac.
 
-Floating-point texture availability alone does not guarantee linear filtering. The generated-fluid fields and wave-history texture now require both sampling and linear-filter support for Float, then try the supported Half format. The CPU fluid history and waveform/graph values retain their original precision. Physical strains stored in Half use the existing display normalization before quantization so visible wave distortion does not disappear through underflow. If neither format is supported, generated fluid is unavailable and the optical renderer retains its existing lens-only fallback.
-
-Unity's installed 6000.3 API supplies `SystemInfo.IsFormatSupported` with separate `GraphicsFormatUsage.Sample` and `Linear` checks. Metal likewise exposes [32-bit float filtering capability](https://developer.apple.com/documentation/metal/mtldevice/supports32bitfloatfiltering). Exercising the Half path on the Windows GPU is a format-conversion check, not a test of Metal or a particular Mac.
-
-## Validation and retained evidence
-
-Both final Windows QA and non-development release builds succeeded without matched C# or shader warnings/errors. The freshly extracted release started without a mode argument, logged `DTET_DESKTOP_OBSERVATORY_INSTALLED`, remained running for the 15-second smoke interval, and had no matched exception, shader-error or project-failure marker. This is a startup check, not a native-window visual/usability assessment. The engine also logs an unavailable Direct3D debug info-queue interface; this did not prevent startup. The release assembly excludes the two integration-capture classes and the development-only forced-Half environment switch.
-
-The Mac build exited zero and logged `DTET_DESKTOP_BUILD_SUCCEEDED`, with no matched C# or shader warnings/errors. `Info.plist` identifies `org.dtet.binaryexplorer` and the executable `DT-ET Binary Explorer`. Every required native library resolves inside the bundle or to a macOS system path. All twelve architecture slices have ad-hoc CodeDirectory signatures and matching supported embedded code-page hashes; no Developer ID CMS signature is present. `_CodeSignature/CodeResources` is retained, but this Windows inspection does not replace Apple's `codesign` or Gatekeeper checks. The Mac assembly retains the direct-launch marker and excludes the development capture types, forced-Half switch and QA-only texture accessor.
-
-Final integration status: **passed**. All four receipts report success with every check passing and fresh captures:
-
-| Windows development-player check | Normal Float | Forced supported Half |
-| --- | --- | --- |
-| Generated fluid through default launch | 41 passed / 10 captures | 42 passed / 10 captures |
-| Observatory and GPU wave-history regression | 205 passed / 30 captures | 207 passed / 30 captures |
-
-The QA build uses the same startup define. Wave fixtures read the actual GPU texture and decode with the real display uniform before comparing against CPU retarded-wave values. Half tolerance is 0.2% plus an absolute sampling allowance; CPU scientific values are not reduced to Half. The worst Half wave errors in the tested replay/adjustable samples were approximately `1.21e-4` and `6.08e-5` in normalized display units; Float errors were below `1.5e-8`. Generated-fluid checks compare GPU density and velocity, deterministic rewind, covered history, cancellation and resource release. The initial fluid histories took 96.18 seconds with Half rendering and 94.47 seconds with Float rendering on this desktop; these runs are correctness checks, not a controlled performance comparison.
-
-Build the development counterpart using `BuildDesktopWindowsQaPlayer`, then run each harness sequentially. Set `DTET_FORCE_HALF_TEXTURES_QA=1` in the launching process to exercise the Half path, and remove it for the normal-format run. This switch is compiled out of non-development players:
+## Packaging and evidence
 
 ```powershell
-$env:DTET_FORCE_HALF_TEXTURES_QA = '1'
-.\Scripts\Test-GeneratedFluid.ps1 -DefaultLaunch -OutputDirectory <fresh-half-fluid> -TimeoutSeconds 900
-.\Scripts\Test-InteractiveExhibit.ps1 -OutputDirectory <fresh-half-observatory> -BenchmarkSeconds 2
-[Environment]::SetEnvironmentVariable('DTET_FORCE_HALF_TEXTURES_QA', $null, 'Process')
-# Repeat the two harnesses in fresh output directories for the normal format.
-```
-
-The local research workspace retains `outputs/Desktop-release-validation/`: build logs, `source-build.json`, `mac-source-build.json`, `macos-static-verification.json`, its read-only verifier, `verified-half-fluid/`, `final-half-observatory/`, `verified-float-fluid/`, `final-float-observatory/`, and the extracted Windows startup receipt. The earlier `final-half-fluid/` run is a failed development diagnostic and is superseded by the owned-texture checks: the original material-property lookup did not expose the sampler texture, so the fixture now inspects the renderer's actual owned texture. The production rendering path did not change. Build-to-source association is the release operator's assertion; hashes establish the identity of the tested/copied bytes. Existing numerical/model validation is documented in [generated fluid validation](GENERATED_FLUID_VALIDATION.md); this packaging change does not claim new convergence, GRMHD, measured bright GW150914 gas or XR validation.
-
-## Clean archive
-
-The combined ZIP is `DTET_Binary_Explorer_Desktop.zip`, **86,814,985 bytes**, containing **339 files**. SHA-256: `c0b7c7704b9f7dfb7a5811995aa403663eb10448a522a95f49e6aaaa4615354e`.
-
-The earlier Windows-only ZIP remains `DTET_Binary_Explorer_Windows.zip`, **39,138,371 bytes**, containing **170 files**. SHA-256: `fa6747fe49d74251cd043060f8ee9a2faa4ec70da7abc5a07d1375a532769844`.
-
-```powershell
-.\Scripts\Package-DesktopPlayers.ps1 -WindowsOnly `
-  -WindowsBuildDirectory <DesktopWindows> `
-  -SourceRevision f667a0a27d984891a36cd5a80356a94cae415296 `
-  -OutputDirectory <delivery> -PackageName DTET_Binary_Explorer_Windows
-
-# Combined native players:
 .\Scripts\Package-DesktopPlayers.ps1 `
-  -WindowsBuildDirectory <DesktopWindows> -MacAppPath <DTET_Binary_Explorer.app> `
-  -SourceRevision f667a0a27d984891a36cd5a80356a94cae415296 `
-  -MacSourceRevision 07ad7df7ca5c4b328d369bcad9d8d7c5d1e27d29 `
-  -OutputDirectory <new-delivery-folder> -MacSigningStatus ad-hoc
+  -WindowsBuildDirectory <DesktopWindows> `
+  -MacAppPath <DTET_Binary_Explorer.app> `
+  -SourceRevision 070827f36f18fc16faa29e62b68600c7d14e0f14 `
+  -OutputDirectory <new-delivery-folder> `
+  -PackageName DTET_Binary_Explorer_VisualFix -MacSigningStatus ad-hoc
 ```
 
-The packager includes only the selected applications, runtime dependencies, short instructions and necessary retained notices. It excludes source, caches, debug symbols, build logs and QA captures. Every ZIP entry is hash-checked, then an independently extracted inventory is compared. Both archives passed these checks. The combined archive marks all six native Mac files executable. Manifests, verification extractions and test receipts remain outside the user ZIP.
+The packager includes only the two applications, runtime dependencies, short instructions and retained notices. Source, caches, symbols, logs, test captures and the optional preview video remain outside the ZIP. Every archive path, size and SHA-256 matches its input inventory; an independently extracted inventory also matches. All six Mac native entries retain Unix 0755 permissions. This bundle contains no symbolic links, so the verification extraction is complete. Future link entries are preserved and explicitly reported if Windows cannot extract them; they are never flattened.
 
-The current Mac bundle contains no symbolic links, so its Windows verification extraction is complete. The packager also supports future bundles with links: on a Windows account without symlink privileges, it records deferred link extraction explicitly while preserving and checking the real link entries in the ZIP; it never flattens them. Archive checks do not verify Mac execution, signing or notarization. Unity documents the cross-build details in [Building macOS applications](https://docs.unity3d.com/6000.3/Documentation/Manual/macos-building.html) and [macOS code signing](https://docs.unity3d.com/6000.3/Documentation/Manual/macoscodesigning.html).
+The local workspace retains `outputs/Visual-fix-release/` for the ZIP, manifest, summary, verification extraction and separate preview MP4, and `outputs/Visual-fix-validation/` for test receipts, captures, build logs, platform assembly audits, static Mac verification and extracted Windows startup. Runtime source association is the release operator's assertion; hashes identify the actual tested and packaged bytes.
+
+The bright gas and amplified, spatially compressed optical waves are declared display assumptions. SXS0305 remains a representative replay, not a unique reconstruction of GW150914. The computed gas is a coarse 2D Newtonian/isothermal model; its detailed morphology is not resolution-converged. This release does not establish GRMHD, a solved binary spacetime, laptop certification, tracked XR or Mac runtime validation. See [generated fluid validation](GENERATED_FLUID_VALIDATION.md) and [desktop scope](FINAL_DESKTOP_SCOPE.md).
