@@ -115,7 +115,7 @@ namespace DTET.VisualPrototype
             // actual completion callback independently of exhibit.RenderFrame's manual bypass.
             var automaticRequest = new RenderPipeline.StandardRequest { destination = exhibit.SceneTarget };
             RenderPipeline.SubmitRenderRequest(exhibit.View, automaticRequest);
-            Check(exhibit.AutomaticOpticalFrames > previousCallbacks, "camera completion callback composites the generated field");
+            Check(exhibit.AutomaticOpticalFrames > previousCallbacks, "camera completion callback updates the generated scene optics");
             Capture("generated-warp.png");
             for (int i = 0; i < 25; i++)
             {
@@ -127,8 +127,35 @@ namespace DTET.VisualPrototype
             Check(!exhibit.GeneratedFluidActive && exhibit.GeneratedFluidReady, "illustration toggle retains reusable solved history");
             exhibit.UseGeneratedFluid(true); exhibit.RenderFrame();
             Check(exhibit.GeneratedFluidActive, "solved history can be reselected");
+            exhibit.WatchStarlight(); exhibit.SetWristPlaying(false);
+            exhibit.UseGeneratedFluid(false); exhibit.RenderFrame();
+            Check(exhibit.GasVisible && !exhibit.GeneratedFluidActive && exhibit.GeneratedFluidReady,
+                "illustrative gas selection restores gas hidden by starlight and retains the solved cache");
+            exhibit.SetWristGas(false); exhibit.UseGeneratedFluid(true); exhibit.RenderFrame();
+            Check(exhibit.GasVisible && exhibit.GeneratedFluidPlayer.RendererVisible,
+                "generated gas selection restores hidden gas inside its coverage");
+            exhibit.ShowAccretionView(); exhibit.RenderFrame();
+            Check(exhibit.GasVisible && !exhibit.GeneratedFluidActive && exhibit.GeneratedFluidReady
+                && exhibit.Snapshot.ElapsedSeconds == 0 && !exhibit.Session.IsPlaying && !exhibit.Wrist.Raised,
+                "accretion view exits generated mode into visible paused disks without discarding solved history");
+            var restoredDisks = Pixels(exhibit.SceneTarget);
+            exhibit.SetWristGas(false); exhibit.RenderFrame();
+            Check(Difference(restoredDisks, Pixels(exhibit.SceneTarget)) > .0001,
+                "restored accretion view emits visible gas after generated mode");
+            exhibit.SetWristGas(true); Capture("accretion-restored-from-fluid.png");
+            exhibit.UseGeneratedFluid(true); exhibit.RestartPresentation(); exhibit.RenderFrame();
+            Check(!exhibit.GeneratedFluidActive && exhibit.GasVisible && exhibit.Snapshot.ElapsedSeconds == 0,
+                "restart exits a selected computed history and restores the illustrative beginning");
+            exhibit.UseGeneratedFluid(true); exhibit.WatchMerger(); exhibit.SetWristPlaying(false); exhibit.RenderFrame();
+            Check(!exhibit.GeneratedFluidActive && exhibit.GasVisible && exhibit.Snapshot.ElapsedSeconds > 0,
+                "watch merger selects visible illustrative merger gas after generated mode");
+            exhibit.UseGeneratedFluid(true);
             exhibit.SelectWristScenario(false); yield return null;
             Check(!exhibit.GeneratedFluidReady && !exhibit.GeneratedFluidActive, "parameter generation invalidates prior fluid history");
+            float expectedFocus = Mathf.Max(16, (float)exhibit.Snapshot.SeparationRg * 1.6f);
+            var expectedCamera = new Vector3(0, expectedFocus * .85f, -expectedFocus * 1.3f);
+            Check(Vector3.Distance(exhibit.View.transform.position, expectedCamera) < 1e-4f,
+                "scenario switch frames the current binary after invalidating the wide generated reservoir");
             exhibit.StartGeneratedFluid(); watch.Restart();
             while (exhibit.IsGeneratingFluid && watch.Elapsed.TotalSeconds < 300) yield return null;
             Check(exhibit.GeneratedFluidReady, "adjustable binary generates its own matching fluid history");
@@ -143,6 +170,13 @@ namespace DTET.VisualPrototype
                 Check(exhibit.GeneratedFluidPlayer.IsCovered && exhibit.GeneratedFluidPlayer.RendererVisible,
                     "coverage-start control restores matching adjustable fluid");
                 Capture("generated-adjustable.png");
+                exhibit.RestartPresentation(); exhibit.RenderFrame();
+                Check(exhibit.Snapshot.ElapsedSeconds == 0 && exhibit.GasVisible && !exhibit.GeneratedFluidActive
+                    && exhibit.GeneratedFluidReady, "restart outside a bounded computed interval restores illustrative disks");
+                exhibit.SetWristGas(false); exhibit.UseGeneratedFluid(true); exhibit.RenderFrame();
+                Check(exhibit.GasVisible && exhibit.GeneratedFluidPlayer.RendererVisible
+                    && Math.Abs(exhibit.Snapshot.ElapsedSeconds - exhibit.GeneratedHistory.StartSeconds) < 1e-9,
+                    "reselecting generated fluid from an uncovered hidden epoch restores covered visible gas");
             }
             exhibit.StartGeneratedFluid(); exhibit.CancelGeneratedFluid(); yield return null;
             Check(!exhibit.IsGeneratingFluid && !exhibit.GeneratedFluidReady, "cancelled computation cannot publish stale data");

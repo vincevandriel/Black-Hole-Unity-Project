@@ -111,7 +111,7 @@ namespace DTET.VisualPrototype
             }
             launchDetail = ReducedExhibitUi.Label(p, "", 19, 100, 520, 1390, 100, ReducedExhibitUi.Muted);
             ReducedExhibitUi.Button(p, "ENTER OBSERVATORY", 100, 665, 390, 64, () => Launch(SelectedProfile));
-            ReducedExhibitUi.Button(p, "COMPATIBILITY", 520, 665, 300, 64, () => Launch(SelectedProfile, true));
+            ReducedExhibitUi.Button(p, "COMPATIBILITY / NO GAS", 520, 665, 300, 64, () => Launch(SelectedProfile, true));
             ReducedExhibitUi.Button(p, "EXIT", 850, 665, 160, 64, () => Application.Quit());
             ReducedExhibitUi.Label(p, "Select before loading. The simulation starts paused; V raises your wrist display.\nLower rendering budgets preserve event and experiment parameters. Compatibility disables gas and distortion.", 17, 100, 775, 1390, 75, ReducedExhibitUi.Muted);
             SelectProfile(SelectedProfile);
@@ -210,8 +210,9 @@ namespace DTET.VisualPrototype
                 () => SetWristPlaying(!Session.IsPlaying)).GetComponentInChildren<Text>();
             ReducedExhibitUi.Button(hud.transform, "RESTART", 231, 812, 120, 36, RestartPresentation);
             ReducedExhibitUi.Button(hud.transform, "WATCH MERGER", 361, 812, 185, 36, WatchMerger);
-            ReducedExhibitUi.Button(hud.transform, "STARLIGHT VIEW", 556, 812, 185, 36, WatchStarlight);
+            ReducedExhibitUi.Button(hud.transform, "STARLIGHT ONLY", 556, 812, 185, 36, WatchStarlight);
             bendingToggle = ReducedExhibitUi.Button(hud.transform, "BENDING: ON", 751, 812, 170, 36, ToggleStellarBending).GetComponentInChildren<Text>();
+            ReducedExhibitUi.Button(hud.transform, "ACCRETION VIEW", 931, 812, 200, 36, ShowAccretionView);
         }
 
         private void RebuildSamples()
@@ -404,7 +405,12 @@ namespace DTET.VisualPrototype
         {
             if (!Ready) return;
             var s = CaptureWristState();
-            phaseLabel.text = $"{s.ScenarioLabel}  ·  {s.StageLabel}  ·  {(GeneratedFluidActive ? "2D ISOTHERMAL FLUID / NEWTONIAN GRAVITY" : "ASSUMED GAS / ILLUSTRATIVE OPTICS")}";
+            string gasPresentation = !Profile.GasEnabled ? "COMPATIBILITY / GAS UNAVAILABLE"
+                : !GasVisible ? "GAS HIDDEN / ACCRETION VIEW RESTORES DISKS"
+                : GeneratedFluidActive ? (GeneratedFluidPlayer.IsCovered ? "GENERATED 2D FLUID / NEWTONIAN GRAVITY"
+                    : "NO GENERATED COVERAGE / ACCRETION VIEW RESTORES DISKS")
+                : "ILLUSTRATIVE ACCRETION DISKS / ASSUMED GAS";
+            phaseLabel.text = $"{s.ScenarioLabel}  ·  {s.StageLabel}  ·  {gasPresentation}";
             statusLabel.text = $"V wrist · WASD + Q/E move · right-drag look · 1–5 views · Space pause · {Profile.EffectiveProfile} {SceneTarget.width}×{SceneTarget.height} · {OpticalStyle}";
             transportPlay.text = Session.IsPlaying ? "PAUSE" : "PLAY INSPIRAL";
             bendingToggle.text = Optics != null && Optics.Active ? "BENDING: ON" : "BENDING: OFF";
@@ -413,6 +419,7 @@ namespace DTET.VisualPrototype
         public void WatchMerger()
         {
             if (!Ready || IsGeneratingFluid) return;
+            UseGeneratedFluid(false);
             SetWristGas(true);
             Session.Seek(Math.Max(0, Session.Model.MergerTimeSeconds - 600 * Snapshot.GravitationalTimeSeconds));
             Session.SetPlaybackRate(.01); Present(); SetViewPreset(0);
@@ -421,9 +428,18 @@ namespace DTET.VisualPrototype
 
         public void RestartPresentation()
         {
+            ShowAccretionView();
+        }
+
+        public void ShowAccretionView()
+        {
             if (!Ready || IsGeneratingFluid) return;
+            // Return to the visible prescribed disks without discarding an independently
+            // generated history or changing the selected binary and its physical parameters.
+            UseGeneratedFluid(false);
             SetWristGas(true);
-            ResetWristScenario(); Session.SetPlaybackRate(.05); SetViewPreset(0);
+            SetWristSamples(false);
+            ResetWristScenario(); Session.SetPlaybackRate(.05); Present(); SetViewPreset(0);
             Wrist.SetRaised(false, true); RefreshLabels();
         }
 
@@ -508,7 +524,7 @@ namespace DTET.VisualPrototype
         {
             if (!Ready) return;
             if (replay) Session.SelectReplay(); else Session.SelectExperiment(new InteractiveBinaryParameters(35, 30, 30));
-            ValidationMessage = ""; SetViewPreset(0); Present(); RefreshLabels();
+            ValidationMessage = ""; Present(); SetViewPreset(0); RefreshLabels();
         }
         public void ApplyWristExperiment(double m1, double m2, double separationRg)
         {
@@ -550,10 +566,15 @@ namespace DTET.VisualPrototype
         public void UseGeneratedFluid(bool value)
         {
             if (!Ready || GeneratedFluidPlayer == null) return;
+            // Consume pending completion/invalidation before applying the user's display
+            // choice, so a completed solve cannot immediately replace that choice.
+            Present();
             GeneratedFluidPlayer.Select(value);
+            GasVisible = Profile.GasEnabled;
+            if (GeneratedFluidActive && !GeneratedHistory.TryGetFrames(Snapshot.ElapsedSeconds, out _, out _, out _))
+                Session.Seek(GeneratedHistory.StartSeconds);
             if (GeneratedFluidActive) { SamplesVisible = false; if (sampleRenderer != null) sampleRenderer.enabled = false; }
-            SetViewPreset(0);
-            lastTime = double.NaN; Present(); RefreshLabels();
+            lastTime = double.NaN; Present(); SetViewPreset(0); RefreshLabels();
         }
         public void SeekGeneratedFluidStart()
         { if (!Ready || !GeneratedFluidReady) return; Session.Seek(GeneratedHistory.StartSeconds); Present(); RefreshLabels(); }

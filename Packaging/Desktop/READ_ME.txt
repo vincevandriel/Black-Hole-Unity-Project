@@ -15,10 +15,12 @@ for opening an app you trust are at https://support.apple.com/en-us/102445.
 Choose a fidelity setting before entering. Start with Laptop on modest hardware.
 The wrist starts lowered so both disks are visible. PLAY INSPIRAL starts the
 recorded motion; WATCH MERGER jumps to a close, slower view before coalescence.
-RESTART restores the beginning, framing and normal slow playback speed.
-STARLIGHT VIEW hides gas and plays the binary against the background stars.
-BENDING: ON/OFF compares the original stars with their bent images. RESTART or
-WATCH MERGER restores gas. G also toggles gas without changing the event time.
+ACCRETION VIEW or RESTART restores both illustrative disks, the beginning and
+close framing, even after gas was hidden or generated fluid was selected.
+STARLIGHT ONLY explicitly hides gas to inspect the background stars.
+BENDING: ON/OFF compares the original stars with their bent images.
+WATCH MERGER restores illustrative gas. G toggles gas without changing time.
+Use ENTER OBSERVATORY for disks; COMPATIBILITY / NO GAS disables them.
 Space plays/pauses; comma reverses; R resets; M seeks the merger; V toggles the
 wrist interface. WASD/QE move, right-drag looks, wheel approaches, Shift moves
 faster, and 1-5 select viewpoints. Esc pauses. Use the wrist controls to adjust
@@ -28,7 +30,9 @@ FLUID LAB > SOLVE GAS creates a fluid history on your computer. Generation may
 take several minutes; progress and cancellation are available. Then pause,
 rewind and explore from any viewpoint. The generated gas is an experimental
 2D isothermal Newtonian model with assumed thickness and brightness. Its
-detailed flow is not resolution-converged. This is not a measured GW150914 gas
+detailed flow is not resolution-converged; it shows a broad computed reservoir,
+not the detailed illustrative mini-disks. ACCRETION VIEW restores those disks.
+This is not a measured GW150914 gas
 reconstruction or a full relativistic fluid/metric simulation. Brightness and
 optical wave distortion are illustrative; the sky is synthetic.
 Both mass lensing and wave distortion act on background stellar light only.

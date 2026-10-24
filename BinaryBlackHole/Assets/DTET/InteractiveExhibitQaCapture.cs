@@ -68,6 +68,13 @@ namespace DTET.VisualPrototype
                 benchmarkSeconds = Math.Max(2, Math.Min(15, seconds));
             QualitySettings.vSyncCount = 0; Application.targetFrameRate = -1;
             yield return new WaitForSecondsRealtime(.75f);
+            // Initialize the presentation surface before measuring ordinary camera frames.
+            // A hidden Windows launch can defer that surface until the first resolution event.
+            // This does not draw a camera or substitute a manual render for the pixel checks.
+            Screen.SetResolution(1280, 720, FullScreenMode.Windowed);
+            yield return new WaitForSecondsRealtime(.2f);
+            Screen.SetResolution(1600, 900, FullScreenMode.Windowed);
+            yield return new WaitForSecondsRealtime(.2f);
             exhibit = FindFirstObjectByType<InteractiveBinaryExhibit>();
             if (exhibit == null) { Check(false, "interactive launch installs the new exhibit"); Application.Quit(1); yield break; }
             exhibit.EmulatedInputEnabled = false;
@@ -116,6 +123,7 @@ namespace DTET.VisualPrototype
                 Check(exhibit.LensGain == .35f && exhibit.WaveGain == 1.3f,
                     "first launch enables the declared mass and wave display gains");
             exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+            if (!fallback) yield return ValidateAutomaticAccretion(prefix);
             if (!fallback) Capture(prefix + "-first-view.png");
             exhibit.Wrist.SetRaised(true, true); exhibit.Wrist.RefreshNow();
             Check(exhibit.Wrist.PresentedGeneration == exhibit.Snapshot.Generation, prefix + " wrist shares the scenario generation");
@@ -218,7 +226,7 @@ namespace DTET.VisualPrototype
                 var automaticRequest = new RenderPipeline.StandardRequest { destination = exhibit.SceneTarget };
                 RenderPipeline.SubmitRenderRequest(exhibit.View, automaticRequest);
                 Check(exhibit.AutomaticOpticalFrames == callbacks + 1 && ReferenceEquals(exhibit.PresentedTexture, exhibit.Optics.Output),
-                    "normal end-camera callback composes the astronomical target");
+                    "explicit render request invokes the shared end-camera callback");
                 int uploads = exhibit.Optics.WaveUploadCount;
                 exhibit.RenderFrame(); exhibit.RenderFrame();
                 Check(exhibit.Optics.WaveUploadCount == uploads, "paused rendering reuses the waveform texture");
@@ -264,6 +272,7 @@ namespace DTET.VisualPrototype
                 ValidateVisibleScene();
                 ValidateStellarLight();
                 if (Environment.GetEnvironmentVariable("DTET_STAR_MOVIE") == "1") yield return CaptureStellarSequence();
+                if (Environment.GetEnvironmentVariable("DTET_DISK_MOVIE") == "1") yield return CaptureAccretionSequence();
                 if (Environment.GetEnvironmentVariable("DTET_VISUAL_MOVIE") == "1") yield return CaptureMergerSequence();
             }
             foreach (var scenario in new[] { "replay-paused", "experiment-playback", "camera-motion", "repeated-seek" }) yield return Measure(scenario);
@@ -273,6 +282,103 @@ namespace DTET.VisualPrototype
             foreach (var texture in Resources.FindObjectsOfTypeAll<RenderTexture>())
                 if (texture.name == "Bounded interactive scene" || texture.name == "Capped astronomical optics") noOwnedTargets = false;
             Check(noOwnedTargets, prefix + " no owned astronomical render targets survive unload");
+        }
+
+        private IEnumerator ValidateAutomaticAccretion(string profile)
+        {
+            // These images must come from ordinary enabled-camera frames. In particular,
+            // do not call RenderFrame or SubmitRenderRequest anywhere in this measurement.
+            // A batch/headless environment that suppresses normal rendering fails explicitly.
+            exhibit.View.enabled = true; exhibit.CaptureCamera.enabled = true;
+            Check(exhibit.GasVisible && exhibit.Snapshot.ElapsedSeconds == 0 && !exhibit.Session.IsPlaying,
+                profile + " ordinary startup has gas enabled at the paused initial epoch");
+            int initialCallbacks = exhibit.AutomaticOpticalFrames;
+            yield return null; yield return null; yield return new WaitForSecondsRealtime(.05f);
+            int initialFrames = exhibit.AutomaticOpticalFrames - initialCallbacks;
+            Check(initialFrames >= 2, profile + " initial disk capture receives genuine automatic camera frames / " + initialFrames);
+            var gas = ReadPixels(exhibit.SceneTarget);
+            CaptureAutomaticScene(profile + "-automatic-start-gas.png");
+
+            exhibit.SetWristGas(false);
+            int offCallbacks = exhibit.AutomaticOpticalFrames;
+            yield return null; yield return null; yield return new WaitForSecondsRealtime(.05f);
+            int offFrames = exhibit.AutomaticOpticalFrames - offCallbacks;
+            Check(offFrames >= 2, profile + " gas-off comparison receives genuine automatic camera frames / " + offFrames);
+            var noGas = ReadPixels(exhibit.SceneTarget);
+            CaptureAutomaticScene(profile + "-automatic-start-no-gas.png");
+            ValidateAutomaticDiskPixels(profile, gas, noGas);
+
+            exhibit.WatchStarlight(); exhibit.SetWristPlaying(false);
+            Check(!exhibit.GasVisible, profile + " starlight inspection explicitly hides gas");
+            exhibit.ShowAccretionView();
+            Check(exhibit.GasVisible && !exhibit.Session.IsPlaying && exhibit.Snapshot.ElapsedSeconds == 0
+                && !exhibit.Wrist.Raised && !exhibit.GeneratedFluidActive,
+                profile + " accretion view restores illustrative disks, paused start and lowered wrist");
+            int restoredCallbacks = exhibit.AutomaticOpticalFrames;
+            yield return null; yield return null; yield return new WaitForSecondsRealtime(.05f);
+            int restoredFrames = exhibit.AutomaticOpticalFrames - restoredCallbacks;
+            Check(restoredFrames >= 2, profile + " restored disks receive genuine automatic camera frames / " + restoredFrames);
+            var restored = ReadPixels(exhibit.SceneTarget);
+            double difference = PixelDifference(gas, restored);
+            fixtures.Add(new Fixture { label = profile + " automatic accretion restoration / RGB difference", measuredX = difference });
+            Check(difference < 1e-6, profile + " starlight to accretion restores the actual initial disk image");
+            CaptureAutomaticScene(profile + "-automatic-restored-gas.png");
+            Debug.Log("DTET_AUTOMATIC_DISKS " + profile + " / " + SystemInfo.graphicsDeviceType + " / "
+                + exhibit.SceneTarget.width + "x" + exhibit.SceneTarget.height + " / automatic frames "
+                + initialFrames + "," + offFrames + "," + restoredFrames + " / restore difference "
+                + difference.ToString("R", CultureInfo.InvariantCulture));
+        }
+
+        private void ValidateAutomaticDiskPixels(string profile, Color32[] gas, Color32[] noGas)
+        {
+            int width = exhibit.SceneTarget.width, height = exhibit.SceneTarget.height, warm = 0;
+            for (int i = 0; i < gas.Length; i++)
+                if (gas[i].r - noGas[i].r > 20 && gas[i].r > gas[i].b * 1.15f) warm++;
+            fixtures.Add(new Fixture { label = profile + " automatic initial warm gas pixels", measuredX = warm,
+                expectedX = gas.Length * .003 });
+            Check(warm > gas.Length * .003, profile + " automatic initial image contains resolved warm gas / " + warm);
+            int bodyIndex = 0;
+            foreach (var body in new[] { exhibit.Snapshot.GasState.BodyA, exhibit.Snapshot.GasState.BodyB })
+            {
+                Vector3 centre = exhibit.View.WorldToViewportPoint(V(body.PositionRg));
+                Vector3 edge = exhibit.View.WorldToViewportPoint(V(body.PositionRg)
+                    + exhibit.View.transform.right * (float)body.OuterRadiusRg);
+                float radius = Mathf.Abs(edge.x-centre.x) * width;
+                float cx = centre.x * width, cy = centre.y * height;
+                bool visible = centre.z > 0 && radius >= 4 && cx-radius > 0 && cx+radius < width
+                    && cy-radius > 0 && cy+radius < height;
+                Check(visible, profile + " automatic initial compact disk is framed and resolved / body " + bodyIndex);
+                int resolved = 0;
+                for (int y = Mathf.Max(0, (int)(cy-radius)); y < Mathf.Min(height, cy+radius); y++)
+                for (int x = Mathf.Max(0, (int)(cx-radius)); x < Mathf.Min(width, cx+radius); x++)
+                {
+                    if ((x-cx)*(x-cx)+(y-cy)*(y-cy) > radius*radius) continue;
+                    int i = y * width + x;
+                    if (gas[i].r-noGas[i].r > 20 && gas[i].r > gas[i].b*1.15f) resolved++;
+                }
+                // Require a fraction of each projected disk, not a few shared stream pixels.
+                double minimum = Math.Max(16, .025 * Math.PI * radius * radius);
+                fixtures.Add(new Fixture { label = profile + " automatic initial disk " + bodyIndex + " warm pixels / radius",
+                    expectedX = minimum, measuredX = resolved, measuredY = radius });
+                Check(resolved > minimum, profile + " automatic initial compact disk has warm emission / body "
+                    + bodyIndex + " / " + resolved + " pixels, required " + minimum.ToString("F1", CultureInfo.InvariantCulture));
+                bodyIndex++;
+            }
+        }
+
+        private void CaptureAutomaticScene(string name)
+        {
+            // Direct diagnostic readback of the already rendered linear scene target;
+            // no manual draw, alternate camera target, UI render, or display tone map.
+            var active = RenderTexture.active; RenderTexture.active = exhibit.SceneTarget;
+            var image = new Texture2D(exhibit.SceneTarget.width, exhibit.SceneTarget.height, TextureFormat.RGB24, false, true);
+            try
+            {
+                image.ReadPixels(new Rect(0, 0, image.width, image.height), 0, 0); image.Apply();
+                File.WriteAllBytes(Path.Combine(output, name), image.EncodeToPNG()); images.Add(name);
+                Check(new FileInfo(Path.Combine(output, name)).Length > 100, "capture " + name);
+            }
+            finally { Destroy(image); RenderTexture.active = active; }
         }
 
         private void ValidateVisibleScene()
@@ -538,6 +644,20 @@ namespace DTET.VisualPrototype
                 Capture("starlight-movie/frame-" + i.ToString("D3") + ".png"); yield return null;
             }
             exhibit.RestartPresentation();
+        }
+
+        private IEnumerator CaptureAccretionSequence()
+        {
+            Directory.CreateDirectory(Path.Combine(output, "accretion-movie"));
+            exhibit.SelectWristScenario(true); exhibit.ShowAccretionView();
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f); exhibit.SetViewPreset(0);
+            double end = Math.Min(.5, exhibit.Session.Model.MergerTimeSeconds * .7);
+            for (int i = 0; i < 120; i++)
+            {
+                exhibit.Session.Seek(end * i / 119); exhibit.Present();
+                Capture("accretion-movie/frame-" + i.ToString("D3") + ".png"); yield return null;
+            }
+            exhibit.ShowAccretionView();
         }
 
         private IEnumerator Measure(string scenario)
