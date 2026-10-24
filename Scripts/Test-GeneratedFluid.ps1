@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$OutputDirectory,
     [string]$PlayerPath,
+    [switch]$DefaultLaunch,
     [ValidateRange(120,1200)][int]$TimeoutSeconds = 480
 )
 $ErrorActionPreference = 'Stop'
@@ -18,7 +19,9 @@ $dtetStarted = [DateTime]::UtcNow
 try {
     foreach ($dtetName in $dtetNames) { [Environment]::SetEnvironmentVariable($dtetName, $null, 'Process') }
     [Environment]::SetEnvironmentVariable('DTET_GENERATED_FLUID_QA_PATH', $dtetOutput, 'Process')
-    $dtetProcess = Start-Process -FilePath $PlayerPath -ArgumentList @('--interactive-exhibit','-screen-width','1600','-screen-height','900','-screen-fullscreen','0','-logFile',('"'+$dtetLog+'"')) -WindowStyle Hidden -PassThru
+    $dtetArguments = @('-screen-width','1600','-screen-height','900','-screen-fullscreen','0','-logFile',('"'+$dtetLog+'"'))
+    if (!$DefaultLaunch) { $dtetArguments = @('--interactive-exhibit') + $dtetArguments }
+    $dtetProcess = Start-Process -FilePath $PlayerPath -ArgumentList $dtetArguments -WindowStyle Hidden -PassThru
 } finally {
     foreach ($dtetName in $dtetNames) { [Environment]::SetEnvironmentVariable($dtetName, $dtetPrevious[$dtetName], 'Process') }
 }

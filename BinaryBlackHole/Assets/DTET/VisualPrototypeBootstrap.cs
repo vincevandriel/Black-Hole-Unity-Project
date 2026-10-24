@@ -175,6 +175,10 @@ namespace DTET.VisualPrototype
             bool interactiveExhibit = Array.IndexOf(Environment.GetCommandLineArgs(), "--interactive-exhibit") >= 0;
             bool reducedExhibit = Array.IndexOf(Environment.GetCommandLineArgs(), "--reduced-exhibit") >= 0;
             bool referenceLab = Array.IndexOf(Environment.GetCommandLineArgs(), "--reference-lab") >= 0;
+#if DTET_DESKTOP_RELEASE
+            interactiveExhibit |= !reducedExhibit && !referenceLab
+                && Array.IndexOf(Environment.GetCommandLineArgs(), "--event-lessons") < 0;
+#endif
 #if UNITY_EDITOR
             int editorExhibit = UnityEditor.SessionState.GetInt("DTET.StartupExhibit", 0);
             interactiveExhibit |= editorExhibit == 3;
@@ -185,6 +189,9 @@ namespace DTET.VisualPrototype
             {
                 if (FindFirstObjectByType<InteractiveBinaryExhibit>() == null)
                     new GameObject("DT-ET interactive suit observatory").AddComponent<InteractiveBinaryExhibit>();
+#if DTET_DESKTOP_RELEASE
+                Debug.Log("DTET_DESKTOP_OBSERVATORY_INSTALLED");
+#endif
                 return;
             }
             if (reducedExhibit)
