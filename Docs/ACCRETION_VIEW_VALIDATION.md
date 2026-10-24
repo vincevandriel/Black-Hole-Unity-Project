@@ -1,5 +1,7 @@
 # Accretion view: controls and automatic-render validation
 
+This receipt describes the earlier disk-control repair. [Outgoing-wave validation](OUTGOING_WAVES_VALIDATION.md) and [desktop distribution](DESKTOP_DISTRIBUTION.md) describe the current source, regression runs and packages.
+
 Runtime source: `2f1d3a76c235cc41d7d1ac578a1e14044370232f`, 24 October 2026. The final Windows observatory run passes **281 non-capture assertions and 185 capture-write checks**, with **189 PNGs** present. It verifies visible initial disks and recovery from the gas-hidden starlight mode on Laptop, Balanced and High profiles using genuine automatic camera frames **after a windowed-resolution warmup**. It does not establish untouched hidden cold-start rendering or reproduce the user's exact installation and display state.
 
 This change repairs presentation controls and extends integration QA. It does not change the gas shader, physics formulas, fluid solver, waveform data or stellar-light mapping. The existing scientific and optical model boundaries remain those in [INTERACTIVE_OPTICS.md](INTERACTIVE_OPTICS.md), [STELLAR_LIGHT_VALIDATION.md](STELLAR_LIGHT_VALIDATION.md) and [GENERATED_FLUID_MODEL.md](GENERATED_FLUID_MODEL.md).

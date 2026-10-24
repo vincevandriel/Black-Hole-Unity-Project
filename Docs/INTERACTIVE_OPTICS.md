@@ -4,16 +4,25 @@ The optical display bends background stellar light using the active scenario's m
 
 ## Rendering order and resources
 
-1. `InteractiveOptics.Prepare(...)` binds camera/lens uniforms and retarded waveform history before the astronomical camera renders. It also maintains the existing diagnostic shader used by QA fixtures.
-2. `ReducedExhibitSky` renders distant points through `ExhibitSky.shader`. Each immutable star centre receives a bounded forward mass shift and the negative of the first-order inverse wave shift, then its normalized pixel-integrated point-spread function (PSF) is constructed.
-3. `FeaturedBackgroundStar.shader` evaluates a finite stellar source through the inverse thin-lens equation and the same wave lookup. Extended images, including arcs and secondary images where the mapping permits them, derive from that source's light.
-4. Horizon proxies and prescribed/generated gas render over the background. `ExhibitDisplay` maps the linear scene for presentation. Spacesuit, wrist, graph text and input targets are composed later.
+1. `InteractiveOptics.Prepare(...)` binds camera/lens uniforms and retarded waveform history before the astronomical camera renders.
+2. `ReducedExhibitSky` draws `StellarBackdrop.shader`: fixed world-direction faint stars and unresolved synthetic galactic light. An inverse lookup applies the shared retarded wave displacement and bounded mass deflections before sampling that radiance.
+3. `ExhibitSky.shader` draws the original distant points. Each immutable star centre receives a bounded forward mass shift and the negative of the first-order inverse wave shift, then its normalized pixel-integrated point-spread function (PSF) is constructed.
+4. `FeaturedBackgroundStar.shader` evaluates a finite stellar source through the inverse thin-lens equation and the same wave lookup. Extended images derive from that source's light.
+5. Horizon proxies and prescribed/generated gas render over the background. `ExhibitDisplay` maps the linear scene for presentation. Spacesuit, wrist, graph text and input targets are composed later.
 
 Normal camera rendering and explicit `RenderFrame()` captures prepare stellar uniforms before drawing. Default mass gain is **0.35** and wave gain **1.3**, with both controls bounded to 0–2. Off zeroes both stellar effects. Display gains do not change source geometry or intrinsic emission, binary evolution, gas fields or scientific graphs.
 
 There is **no additional optical image target or post-render image blit**. `InteractiveOptics.Output` and `RenderNow()` return the existing scene target. The distant-sky mesh is uploaded once; lensing changes uniforms without a per-frame mesh rebuild. The featured star uses one immutable screen quad and material, analytic source evaluation and no source image texture. Its full-screen evaluation adds fragment work, but no image-sized buffer or particle population.
 
 The shared **512-entry** readable waveform texture plus fixed CPU `Color` array use approximately **24 KiB** with RGBAFloat or **16 KiB** with RGBAHalf, including texture payload/readable copy but excluding Unity/driver overhead. RGBAFloat requires sampling and linear-filter support; RGBAHalf is the checked fallback. If neither works, wave gain is zero while independently supported mass lensing may remain active. Shader availability/status is reported and owned resources are released on exit. This stellar display requires no compute shader, 3D texture or foreground gas-depth quadrature.
+
+## Fixed stellar backdrop
+
+`StellarBackdrop.shader` evaluates two dense faint-star layers and a synthetic galactic band from the world ray direction. Four bounded noise evaluations provide fixed cloud/dust structure. There is no independent time variable: only camera movement and the shared mass/wave lookup change its apparent image. The shader includes the render-target vertical sign and refreshes camera basis/FOV even when bending is off.
+
+The backdrop adds one draw, one material and a 60-byte mesh payload, excluding Unity/driver overhead. It imports no sky texture and allocates no additional render target. Its continuous structure makes alternating compression and stretching visible between isolated point stars. `ReducedExhibitSky.Visible` hides both its original point batch and this layer, preserving foreground-isolation checks.
+
+**OUTGOING WAVES** starts at `max(0, merger_time - 250*tg)`, rate 0.01, gains 0.35/2 and 1.6 times the usual binary-view camera distance. It keeps illustrative gas visible. The waveform formula, normalization and 12:1 compression below are unchanged. Adjustable-mode start precedes its waveform cutoff by 50 gravitational time units.
 
 ## Distant stars: brightness, apparent size and mass shifts
 
@@ -67,7 +76,7 @@ The mapping is exact only for the implemented bounded equation, not for the phys
 
 Prior full-image effects could remap foreground gas and black proxies into detached arcs, repeated disks and false silhouettes. Current mass and wave effects operate only while rendering stellar sources. Neither samples the completed gas image. Gas retains its renderer's density, emission and geometry; existing scene order lets horizon proxies occlude the background.
 
-This implements background-starlight bending, not strong-field disk-emission bending. With both stellar renderers hidden, changing lens/wave controls must leave foreground gas unchanged; integration QA contains that isolation check. **STARLIGHT ONLY** hides gas to expose the stellar images. **ACCRETION VIEW** and **RESTART** restore visible illustrative disks and the opening camera, including after generated-fluid mode was selected.
+This implements background-starlight bending, not strong-field disk-emission bending. With all stellar layers hidden, changing lens/wave controls must leave foreground gas unchanged; integration QA contains that isolation check. **STARLIGHT ONLY** hides gas to expose the stellar images. **ACCRETION VIEW** and **RESTART** restore visible illustrative disks and the opening camera, including after generated-fluid mode was selected.
 
 ## Retarded waveform and 12:1 display compression
 
@@ -97,8 +106,10 @@ An explicit texture LOD permits the same history helper in vertex and fragment s
 
 Portable tests check weak-field coefficients, mass/impact trends, bounded mapping and forward signs, catalogue determinism, opening-view bright/faint/color/size variation, independently integrated PSF flux, zero-gain identities, transverse plus/cross response and delayed-wave coverage. `StellarLensTests` checks physical source dimensions under mass rescaling, source-depth geometry, independent analytic point-mass image locations, the Einstein ring and bounded core. These test declared formulas, not a physical binary metric.
 
-The optical diagnostic shader retains modes 1–4 for bounded inverse offsets, signed wave offsets, analytical horizon projection and the shared forward star helper. These are QA branches, not exhibit post-processing. GPU history checks compare all 512 actual bins to CPU values in Float/Half conventions. The featured shader has a direct deflection fixture. Independent projection checks compare emitted pixels with Unity's world-to-screen projection, including both vertical signs to detect render-target flips.
+Development builds retain optical fixture modes 1–4, direct stellar deflection, gas-field sampling and the reference slab fixture. Their executable code is guarded by `DTET_QA_FIXTURES` in five shaders. `ShaderFixtureStripper` removes keyword-enabled variants from non-development builds; `PrototypeBuild` enables them only for development builds and clears the flag in `finally`. Hidden ShaderLab property names and the reference material's unused layout field can remain as metadata; they do not enable executable release fixtures. QA call sites enable the keyword only where needed and restore prior state.
+
+GPU history checks compare all 512 actual bins with CPU values in Float/Half conventions. Independent projection checks compare emitted pixels with Unity's world-to-screen projection, including both vertical signs to detect render-target flips.
 
 Updated integration QA checks foreground isolation with stars hidden, modest unbent source area, visible mass/wave response, fixed source position under camera movement, deterministic rewind and starlight/restart controls. Epoch/viewpoint captures and an optional rendered sequence support visual review. Formula agreement and image differences alone do not establish good appearance.
 
-Fresh results, reviewed captures and platform limits belong in [STELLAR_LIGHT_VALIDATION.md](STELLAR_LIGHT_VALIDATION.md); this contract does not assert a fresh Unity or Mac runtime pass. [VISUAL_REPAIR_VALIDATION.md](VISUAL_REPAIR_VALIDATION.md) records the preceding repair, whose composite-image wave path has now been replaced. Builds and hidden captures do not establish headset operation, laptop certification, native presentation performance or validated relativistic fluid/metric simulation.
+Current results, reviewed captures and platform limits are recorded in [OUTGOING_WAVES_VALIDATION.md](OUTGOING_WAVES_VALIDATION.md); [STELLAR_LIGHT_VALIDATION.md](STELLAR_LIGHT_VALIDATION.md) retains the earlier stellar-source matrix. [VISUAL_REPAIR_VALIDATION.md](VISUAL_REPAIR_VALIDATION.md) records the preceding repair, whose composite-image wave path has now been replaced. Builds and hidden captures do not establish headset operation, laptop certification, native presentation performance or validated relativistic fluid/metric simulation.
