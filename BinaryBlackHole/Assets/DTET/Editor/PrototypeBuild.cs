@@ -76,7 +76,7 @@ namespace DTET.VisualPrototype.Editor
             string architecture = EditorUserBuildSettings.GetPlatformSettings(platform, "Architecture");
             string product = PlayerSettings.productName;
             string identifier = PlayerSettings.GetApplicationIdentifier(named);
-            bool xcode = EditorUserBuildSettings.macOSCreateXcodeProject;
+            string xcode = EditorUserBuildSettings.GetPlatformSettings(platform, "CreateXcodeProject");
             try
             {
                 PlayerSettings.SetScriptingBackend(named, ScriptingImplementation.Mono2x);
@@ -87,7 +87,7 @@ namespace DTET.VisualPrototype.Editor
                     target == BuildTarget.StandaloneOSX ? "x64arm64" : "x64");
                 if (target == BuildTarget.StandaloneOSX)
                 {
-                    EditorUserBuildSettings.macOSCreateXcodeProject = false;
+                    EditorUserBuildSettings.SetPlatformSettings(platform, "CreateXcodeProject", "false");
                 }
                 BuildPlayer(development ? "VisualQA" : (target == BuildTarget.StandaloneOSX ? "DesktopMac" : "DesktopWindows"),
                     development ? "BinaryBlackHole_VisualQA.exe" : (target == BuildTarget.StandaloneOSX ? "DTET_Binary_Explorer.app" : "DTET_Binary_Explorer.exe"),
@@ -100,7 +100,8 @@ namespace DTET.VisualPrototype.Editor
                 EditorUserBuildSettings.SetPlatformSettings(platform, "Architecture", architecture);
                 PlayerSettings.productName = product;
                 PlayerSettings.SetApplicationIdentifier(named, identifier);
-                EditorUserBuildSettings.macOSCreateXcodeProject = xcode;
+                if (target == BuildTarget.StandaloneOSX)
+                    EditorUserBuildSettings.SetPlatformSettings(platform, "CreateXcodeProject", xcode);
             }
         }
 
