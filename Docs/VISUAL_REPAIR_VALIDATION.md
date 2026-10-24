@@ -1,5 +1,7 @@
 # Disk, inspiral and outgoing-wave visual repair
 
+Historical receipt for the VisualFix package. The later [stellar-light update](STELLAR_LIGHT_VALIDATION.md) replaces the wave composite described below: mass and wave effects now act only on background stellar sources. Use [desktop distribution](DESKTOP_DISTRIBUTION.md) for the current package.
+
 Runtime source: `070827f36f18fc16faa29e62b68600c7d14e0f14`, 24 October 2026. Unity **6000.3.25f1**, Windows Direct3D12, NVIDIA GeForce RTX 3060 Ti. This receipt covers the revised desktop observatory and shared gas display. It does not replace the numerical convergence limits in [generated fluid validation](GENERATED_FLUID_VALIDATION.md).
 
 ## Defects and resulting behavior
