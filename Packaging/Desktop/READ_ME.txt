@@ -16,6 +16,9 @@ Choose a fidelity setting before entering. Start with Laptop on modest hardware.
 The wrist starts lowered so both disks are visible. PLAY INSPIRAL starts the
 recorded motion; WATCH MERGER jumps to a close, slower view before coalescence.
 RESTART restores the beginning, framing and normal slow playback speed.
+STARLIGHT VIEW hides gas and plays the binary against the background stars.
+BENDING: ON/OFF compares the original stars with their bent images. RESTART or
+WATCH MERGER restores gas. G also toggles gas without changing the event time.
 Space plays/pauses; comma reverses; R resets; M seeks the merger; V toggles the
 wrist interface. WASD/QE move, right-drag looks, wheel approaches, Shift moves
 faster, and 1-5 select viewpoints. Esc pauses. Use the wrist controls to adjust
@@ -28,7 +31,11 @@ rewind and explore from any viewpoint. The generated gas is an experimental
 detailed flow is not resolution-converged. This is not a measured GW150914 gas
 reconstruction or a full relativistic fluid/metric simulation. Brightness and
 optical wave distortion are illustrative; the sky is synthetic.
-Wave distortion bends the rendered star/gas image rather than emitting light.
+Both mass lensing and wave distortion act on background stellar light only.
+The featured source is a hypothetical Sun-sized star at 1 AU, appearing about
+half a degree across before lensing. Its arcs and multiple images change as
+the black holes move. It is not a measured star near GW150914. Other stars have
+varied brightness, colours and apparent sizes. Foreground disks stay undistorted.
 Its amplitude is magnified and its displayed radial spacing is compressed 12:1
 so passing fronts can be inspected. Wrist waveform/frequency values retain their
 original scale; the WAVE GAIN control changes only the display strength.

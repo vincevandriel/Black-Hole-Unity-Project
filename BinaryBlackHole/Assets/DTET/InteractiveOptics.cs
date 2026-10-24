@@ -4,13 +4,13 @@ using UnityEngine;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>A bounded astronomical-image approximation, composed before the suit and UI.</summary>
+    /// <summary>Shared lens and retarded-wave uniforms for background stellar light.</summary>
     public sealed class InteractiveOptics : MonoBehaviour
     {
         private Material material;
         private Texture2D waveTexture;
         private readonly Color[] wavePixels = new Color[InteractiveOpticsReference.WaveSamples];
-        private RenderTexture source, target;
+        private RenderTexture source;
         private Camera view;
         private InteractiveBinaryScenario model;
         private InteractiveBinarySnapshot snapshot;
@@ -23,7 +23,7 @@ namespace DTET.VisualPrototype
         private bool hasActiveStatus, statusHasWaveTexture;
         private float statusLensGain, statusWaveGain;
         private int statusCoveredSamples;
-        public RenderTexture Output => active && target != null ? target : source;
+        public RenderTexture Output => source;
         public bool Active => active;
         public bool Supported => material != null && material.shader.isSupported;
         public bool GasVisible { get => gasVisible; set => gasVisible = value; }
@@ -37,11 +37,20 @@ namespace DTET.VisualPrototype
         public double WaveRadiusRg => radialExtent;
         public double DisplayWaveRadiusRg => radialExtent / InteractiveOpticsReference.WaveRadialCompression;
         public Material WarpMaterial => material;
-        public long AllocatedBytes => (target == null ? 0 : (long)target.width * target.height * (target.format == RenderTextureFormat.ARGBHalf ? 8 : 4))
-            + (waveTexture == null ? 0 : 2L * InteractiveOpticsReference.WaveSamples * (waveTexture.format == TextureFormat.RGBAHalf ? 8 : 16))
+        public long AllocatedBytes => (waveTexture == null ? 0 : 2L * InteractiveOpticsReference.WaveSamples * (waveTexture.format == TextureFormat.RGBAHalf ? 8 : 16))
             + InteractiveOpticsReference.WaveSamples * 16;
 
         public RenderTexture Apply(RenderTexture input, Camera camera, InteractiveBinaryScenario scenario,
+            InteractiveBinarySnapshot state, bool enabled, float requestedLensGain, float requestedWaveGain, bool gasIsVisible = true,
+            GeneratedFluidPlayer generatedField = null)
+        {
+            Prepare(input, camera, scenario, state, enabled, requestedLensGain, requestedWaveGain, gasIsVisible, generatedField);
+            RenderNow();
+            return Output;
+        }
+
+        // Must run before drawing the background stars, including explicit QA renders.
+        public void Prepare(RenderTexture input, Camera camera, InteractiveBinaryScenario scenario,
             InteractiveBinarySnapshot state, bool enabled, float requestedLensGain, float requestedWaveGain, bool gasIsVisible = true,
             GeneratedFluidPlayer generatedField = null)
         {
@@ -53,22 +62,18 @@ namespace DTET.VisualPrototype
             ContextVersion = state.ContextVersion;
             lensGain = Mathf.Clamp(requestedLensGain, 0, 2); waveGain = Mathf.Clamp(requestedWaveGain, 0, 2);
             active = enabled && (lensGain > 0 || waveGain > 0);
-            if (!active) { hasActiveStatus = false; Status = "Optical approximation off: original astronomical target."; return source; }
-            if (!EnsureResources()) { active = false; hasActiveStatus = false; return source; }
+            if (!active) { hasActiveStatus = false; Status = "Stellar lensing off: original background sources."; return; }
+            if (!EnsureResources()) { active = false; hasActiveStatus = false; return; }
             BindSnapshot();
-            RenderNow();
-            return Output;
+            BindCamera();
         }
 
         /// <summary>Call after explicitly rendering the astronomical camera, including hidden QA captures.</summary>
         public RenderTexture RenderNow()
         {
-            if (!active || source == null || target == null || material == null || view == null) return source;
-            BindCamera();
-            var previousTarget = RenderTexture.active;
-            try { Graphics.Blit(source, target, material); }
-            finally { RenderTexture.active = previousTarget; }
-            return target;
+            // Source shaders have already applied the optical effects. No intermediate
+            // image, image sampling or extra render target is needed for the completed scene.
+            return source;
         }
 
         private bool EnsureResources()
@@ -84,14 +89,6 @@ namespace DTET.VisualPrototype
                 waveTexture = new Texture2D(InteractiveOpticsReference.WaveSamples, 1, waveFormat, false, true)
                     { name = "Retarded signed waveform / coverage", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
                 material.SetTexture("_WaveHistory", waveTexture); sampledTime = double.NaN;
-            }
-            var format = source.format == RenderTextureFormat.ARGBHalf ? RenderTextureFormat.ARGBHalf : RenderTextureFormat.ARGB32;
-            if (target == null || target.width != source.width || target.height != source.height || target.format != format)
-            {
-                if (target != null) { target.Release(); Destroy(target); }
-                target = new RenderTexture(source.width, source.height, 0, format, RenderTextureReadWrite.Linear)
-                    { name = "Capped astronomical optics", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, antiAliasing = 1 };
-                if (!target.Create()) { Destroy(target); target = null; Status = "Optical approximation unavailable: target allocation."; return false; }
             }
             return true;
         }
@@ -147,7 +144,7 @@ namespace DTET.VisualPrototype
             if (!hasActiveStatus || statusLensGain != lensGain || statusWaveGain != effectiveWaveGain
                 || statusCoveredSamples != CoveredWaveSamples || statusHasWaveTexture != hasWaveTexture)
             {
-                Status = $"Bounded star lenses {lensGain:0.00}; amplified wave distortion {effectiveWaveGain:0.00}, distance compressed 12x; {CoveredWaveSamples}/{wavePixels.Length} covered radii."
+                Status = $"Background-star lensing {lensGain:0.00}; stellar wave shift {effectiveWaveGain:0.00}, distance compressed 12x; {CoveredWaveSamples}/{wavePixels.Length} covered radii."
                     + (hasWaveTexture ? " No binary metric or ray geodesics." : " Wave texture unavailable; wave distortion off.");
                 hasActiveStatus = true; statusLensGain = lensGain; statusWaveGain = effectiveWaveGain;
                 statusCoveredSamples = CoveredWaveSamples; statusHasWaveTexture = hasWaveTexture;
@@ -196,6 +193,18 @@ namespace DTET.VisualPrototype
             && (waveTexture == null || waveTexture.format != TextureFormat.RGBAHalf)
             ? (float)(1 / InteractiveBinaryScenario.ReferenceStrainAmplitude) : 1;
 
+        public static void CopyStellarUniforms(Material destination, Material sourceMaterial, bool enabled)
+        {
+            if (destination == null) return;
+            if (sourceMaterial == null || !enabled) { destination.SetVector("_Optics", Vector4.zero); return; }
+            foreach (string name in StellarVectors) destination.SetVector(name, sourceMaterial.GetVector(name));
+            var wave = sourceMaterial.GetTexture("_WaveHistory");
+            destination.SetTexture("_WaveHistory", wave);
+            destination.SetVector("_WaveHistory_TexelSize", wave == null ? Vector4.zero : new Vector4(1f / wave.width, 1f / wave.height, wave.width, wave.height));
+        }
+        private static readonly string[] StellarVectors = { "_CameraOrigin", "_CameraRight", "_CameraUp", "_CameraForward",
+            "_LensA", "_LensB", "_LensR", "_LensRadii", "_Optics", "_WaveParameters", "_WaveBasisX", "_WaveBasisY", "_Polarization" };
+
         private Vector4 Lens(InteractiveBinaryBody? body)
         {
             if (!body.HasValue) return Vector4.zero;
@@ -212,7 +221,6 @@ namespace DTET.VisualPrototype
         public void Release()
         {
             active = false; source = null; view = null; model = null; generatedFluid = null;
-            if (target != null) { target.Release(); Destroy(target); } target = null;
             if (waveTexture != null) Destroy(waveTexture); waveTexture = null;
             if (material != null) Destroy(material); material = null;
             sampledTime = double.NaN; sampledGeneration = long.MinValue; CoveredWaveSamples = 0;

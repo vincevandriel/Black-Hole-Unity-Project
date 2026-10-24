@@ -18,6 +18,7 @@ namespace DTET.VisualPrototype
         // Excludes Unity/driver object overhead; no CPU-readable mesh is retained after upload.
         public long EstimatedMeshBytes => 156L * StarCount;
         public bool Ready => material != null && batch != null;
+        public bool Visible { get => batch != null && batch.activeSelf; set { if (batch != null) batch.SetActive(value); } }
         public string Status { get; private set; } = "Sky has not been initialized.";
 
         public void Initialize(Camera camera, int starCount)
@@ -85,6 +86,9 @@ namespace DTET.VisualPrototype
                 (float)(snapshot.BodyB?.HorizonRadiusRg ?? 0), (float)(snapshot.Remnant?.HorizonRadiusRg ?? 0), 0));
             UpdateRenderSize();
         }
+
+        public void SetStellarWaves(Material opticsMaterial, bool enabled)
+        { InteractiveOptics.CopyStellarUniforms(material, opticsMaterial, enabled); }
 
         private static Vector4 LensBody(InteractiveBinaryBody? body)
         {

@@ -49,18 +49,45 @@ namespace BlackHole.Staging.Simulation
             double radius = Math.Sqrt(Math.Max(0, 1 - y * y));
             double magnitude = -1.46 + (5.0 / 3) * Math.Log10(1 + 12.0 * index);
             double temperature = 2800 + 9200 * Math.Pow(Uniform(ref state), 2);
+            double x = radius * Math.Cos(phi), z = radius * Math.Sin(phi);
+            // A few deliberately composed synthetic sources put the existing bright flux
+            // range in the opening view. Their angular offsets stay fixed in world space;
+            // they do not follow the camera or identify a measured GW150914 star field.
+            if (index < 8)
+            {
+                double horizontal, vertical;
+                switch (index)
+                {
+                    case 0: horizontal = -.48; vertical = .24; temperature = 4400; break;
+                    case 1: horizontal = .40; vertical = .26; temperature = 10000; break;
+                    case 2: horizontal = -.24; vertical = -.28; temperature = 3200; break;
+                    case 3: horizontal = .32; vertical = -.24; temperature = 6500; break;
+                    case 4: horizontal = -.58; vertical = -.08; temperature = 8500; break;
+                    case 5: horizontal = .55; vertical = .06; temperature = 3800; break;
+                    case 6: horizontal = .09; vertical = .33; temperature = 7200; break;
+                    default: horizontal = -.07; vertical = -.34; temperature = 5200; break;
+                }
+                double viewLength = Math.Sqrt(.85 * .85 + 1.3 * 1.3);
+                x = horizontal; y = (-.85 + 1.3 * vertical) / viewLength;
+                z = (1.3 + .85 * vertical) / viewLength;
+                double length = Math.Sqrt(x * x + y * y + z * z);
+                x /= length; y /= length; z /= length;
+            }
             // Three Planck samples, normalized against 6500 K, gently desaturated for display.
             // This is a colour cue, not integration through measured photometric passbands.
             double r = PlanckRatio(610e-9, temperature), g = PlanckRatio(545e-9, temperature), b = PlanckRatio(460e-9, temperature);
             double luminance = .2126 * r + .7152 * g + .0722 * b;
             r = .4 + .6 * r / luminance; g = .4 + .6 * g / luminance; b = .4 + .6 * b / luminance;
-            return new SyntheticSkyStar(radius * Math.Cos(phi), y, radius * Math.Sin(phi), magnitude, temperature, r, g, b);
+            return new SyntheticSkyStar(x, y, z, magnitude, temperature, r, g, b);
         }
 
         public static double PsfSigmaPixels(double flux, int renderHeight)
         {
             if (!Finite(flux) || flux <= 0 || renderHeight < 2) throw new ArgumentOutOfRangeException(nameof(flux));
-            return Math.Max(.65, (.65 + .55 * Math.Pow(flux, .25)) * renderHeight / ReferenceImageHeight);
+            // This is a display point-spread width, not a resolved stellar radius. Bright
+            // sources get broader compact cores while the faint population stays pinpoint.
+            // Pixel integration below conserves prescribed flux at every width.
+            return Math.Max(.65, Math.Min(3, .52 + 1.8 * Math.Sqrt(flux)) * renderHeight / ReferenceImageHeight);
         }
 
         /// <summary>Pixel-integrated, square-truncated Gaussian. Summing a complete pixel lattice

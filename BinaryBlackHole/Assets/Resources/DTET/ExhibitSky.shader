@@ -14,11 +14,12 @@ Shader "DTET/ExhibitSky"
             Blend One One
             ZWrite Off ZTest Always Cull Off
             HLSLPROGRAM
-            #pragma target 2.5
+            #pragma target 3.0
             #pragma vertex Vertex
             #pragma fragment Fragment
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "BoundedBinaryLensing.hlsl"
+            #include "StellarWaveWarp.hlsl"
             CBUFFER_START(UnityPerMaterial)
                 float _Exposure;
                 float4 _RenderSize;
@@ -48,7 +49,7 @@ Shader "DTET/ExhibitSky"
                 // Rotation only. Translating freely around the binary produces no fake stellar parallax.
                 float3 directionVS = mul((float3x3)UNITY_MATRIX_V, i.direction.xyz);
                 o.visible = -directionVS.z - 0.00001;
-                if(o.visible>0&&_SkyLensGain>0)
+                if(o.visible>0)
                 {
                     float depth=-directionVS.z;
                     float2 theta=directionVS.xy/depth;
@@ -59,10 +60,13 @@ Shader "DTET/ExhibitSky"
                     // pixel-integrated PSF retains its width/flux without stretching stars,
                     // and the later gas pass cannot be sampled into false extra disks.
                     directionVS.xy+=delta*depth;
+                    // First-order forward placement is the negative inverse wave lookup.
+                    // Only the background star centres move; foreground emission is stable.
+                    directionVS.xy-=StellarWaveDisplacement(directionVS.xy/depth)*depth;
                 }
                 float4 center = mul(UNITY_MATRIX_P, float4(directionVS, 0));
                 float heightScale = _RenderSize.y / 900.0;
-                o.sigma = max(.65, (.65 + .55 * sqrt(sqrt(max(i.color.a, 0)))) * heightScale);
+                o.sigma = max(.65, min(3, .52 + 1.8 * sqrt(max(i.color.a, 0))) * heightScale);
                 o.localPixels = i.corner * (3 * o.sigma + .5);
                 // All four corners have equal W, so the fragment coordinate is linear in pixels.
                 o.position = float4(center.xy / max(.00001, center.w) + 2 * o.localPixels * _RenderSize.zw, 0, 1);

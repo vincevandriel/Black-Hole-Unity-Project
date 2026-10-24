@@ -86,80 +86,8 @@ Shader "DTET/InteractiveOptics"
                 // Keep equal-area proxy silhouettes stable. This does not calculate a relativistic shadow.
                 if(hit<1e19)return original;
 
-                float gasLum=0,depthMoment=0,trans=1;
-                if(_WaveParameters.z>.5)
-                {
-                    float3 safe=sign(rd+1e-20)*max(abs(rd),1e-7);
-                    float3 bounds=float3(_FlowBounds.x,_FlowBounds.y,_FlowBounds.x);
-                    float3 a=(-bounds-ro)/safe,b=(bounds-ro)/safe;
-                    float3 n=min(a,b),f=max(a,b);
-                    float start=max(0,max(n.x,max(n.y,n.z))),end=min(f.x,min(f.y,f.z));
-                    if(end>start)
-                    {
-                        float ds=(end-start)/24;
-                        [loop] for(int k=0;k<24;k++)
-                        {
-                            float distance=start+(k+.5)*ds;
-                            float3 position=ro+rd*distance;
-                            float2 field;
-                            float4 generated=0;
-                            if(_GeneratedGas>.5) {generated=SampleGeneratedFluid(position);field=float2(generated.y,generated.y);}
-                            else field=SampleReducedFlow(position);
-                            float3 emission=_GeneratedGas>.5?GeneratedFluidDisplayEmission(position,generated)
-                                :ReducedFlowDisplayEmission(position,field);
-                            float opacity=_GeneratedGas>.5?_GeneratedOpacity:.16;
-                            float exposure=_GeneratedGas>.5?_GeneratedExposure:2.5;
-                            float absorbed=1-exp(-max(0,opacity*field.x*ds));
-                            float contribution=trans*absorbed*Luma(emission)*exposure;
-                            float depth=distance*dot(rd,_CameraForward.xyz);
-                            gasLum+=contribution;depthMoment+=contribution*depth;
-                            trans*=1-absorbed;
-                        }
-                    }
-                }
-
-                float2 wave=0;
-                if(_Optics.y>0&&_WaveParameters.x>0)
-                {
-                    // Probe the outgoing spherical history at the ray's closest approach,
-                    // or at foreground emission. Unlike a fixed camera-facing plane this
-                    // stays finite when orbiting, looking sideways, or flying past the pair.
-                    float closest=max(0,-dot(ro,rd));
-                    float representative=gasLum>1e-7?min(closest,depthMoment/gasLum/max(.01,dot(rd,_CameraForward.xyz))):closest;
-                    float3 probe=ro+rd*representative;
-                    // An explicitly declared display compression brings the real waveform's
-                    // long wavelengths into the scene. Its source timing is never accelerated
-                    // or substituted with a decorative shader sine.
-                    float radius=length(probe)*_WaveParameters.w;
-                    float coordinate=radius/_WaveParameters.x;
-                    if(coordinate<=1)
-                    {
-                        float4 history=tex2D(_WaveHistory,float2((coordinate*(_WaveHistory_TexelSize.z-1)+.5)*_WaveHistory_TexelSize.x,.5));
-                        // No extrapolation or mixing across an unavailable history boundary.
-                        if(history.b>.999)
-                        {
-                            float2 normalized=history.rg*_WaveParameters.y;
-                            float2 e1=_Polarization.xy,e2=_Polarization.zw;
-                            float2 local=float2(dot(probe,_WaveBasisX.xyz),dot(probe,_WaveBasisY.xyz))/max(1,_WaveBasisX.w);
-                            float2 localDelta=Wave(local,normalized,_Optics.y);
-                            float horizonFade=HorizonWaveFade(theta,_LensA,_LensRadii.x)
-                                *HorizonWaveFade(theta,_LensB,_LensRadii.y)*HorizonWaveFade(theta,_LensR,_LensRadii.z);
-                            wave=(localDelta.x*e1+localDelta.y*e2)*(1-smoothstep(.85,1,coordinate))*horizonFade;
-                        }
-                    }
-                }
-                float edge=smoothstep(0,.04,min(min(uv.x,uv.y),min(1-uv.x,1-uv.y)));
-                // Static mass deflection already moved only the immutable background star
-                // centres in ExhibitSky. This pass can never reimage the gas with that lens.
-                float2 displaced=uv+edge*wave/(2*_Optics.zw);
-                float2 halfPixel=abs(_MainTex_TexelSize.xy)*.5;
-                displaced=clamp(displaced,halfPixel,1-halfPixel);
-                // The screen pass has no hidden data behind a hole. Do not duplicate an
-                // already-composited proxy silhouette into neighbouring gas or stars.
-                float2 displacedTheta=(displaced*2-1)*_Optics.zw;
-                float3 displacedRay=normalize(_CameraForward.xyz+displacedTheta.x*_CameraRight.xyz+displacedTheta.y*_CameraUp.xyz);
-                if(min(Hit(ro,displacedRay,_HorizonA),min(Hit(ro,displacedRay,_HorizonB),Hit(ro,displacedRay,_HorizonR)))<1e19)return original;
-                return tex2D(_MainTex,displaced);
+                // Production optics act on background source shaders before gas.
+                return original;
             }
             ENDHLSL
         }

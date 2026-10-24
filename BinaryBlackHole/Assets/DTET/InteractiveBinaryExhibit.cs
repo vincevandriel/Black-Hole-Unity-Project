@@ -22,6 +22,8 @@ namespace DTET.VisualPrototype
         public Camera CaptureCamera { get; private set; }
         public InteractiveWristDisplay Wrist { get; private set; }
         public InteractiveOptics Optics { get; private set; }
+        public FeaturedBackgroundStar FeaturedStar { get; private set; }
+        public bool BackgroundStarsVisible { get => sky != null && sky.Visible; set { if (sky != null) sky.Visible = value; if (FeaturedStar != null) FeaturedStar.Visibility = value; } }
         public RenderTexture SceneTarget { get; private set; }
         public Texture PresentedTexture => sceneImage == null ? null : sceneImage.texture;
         public bool EmulatedInputEnabled { get; set; } = true;
@@ -48,7 +50,7 @@ namespace DTET.VisualPrototype
             : GeneratedFluidPlayer == null ? "Enter the observatory to generate fluid." : GeneratedFluidPlayer.Status;
 
         private GameObject launcher, sceneRoot, hud, sampleObject;
-        private Text launchDetail, phaseLabel, statusLabel, transportPlay;
+        private Text launchDetail, phaseLabel, statusLabel, transportPlay, bendingToggle;
         private RawImage sceneImage;
         private Transform bodyA, bodyB, remnant, gasBox;
         private Material bodyMaterial, gasMaterial, sampleMaterial, displayMaterial;
@@ -158,6 +160,7 @@ namespace DTET.VisualPrototype
             if (Profile.GasEnabled) BuildGas();
             BuildHud();
             Optics = sceneRoot.AddComponent<InteractiveOptics>();
+            FeaturedStar = sceneRoot.AddComponent<FeaturedBackgroundStar>(); FeaturedStar.Initialize(View);
             GeneratedFluidPlayer = sceneRoot.AddComponent<GeneratedFluidPlayer>(); GeneratedFluidPlayer.Initialize(Profile.RaySteps);
             Ready = true; GasVisible = Profile.GasEnabled; SamplesVisible = false;
             Wrist = hud.AddComponent<InteractiveWristDisplay>(); Wrist.Initialize(CaptureCamera, this);
@@ -207,6 +210,8 @@ namespace DTET.VisualPrototype
                 () => SetWristPlaying(!Session.IsPlaying)).GetComponentInChildren<Text>();
             ReducedExhibitUi.Button(hud.transform, "RESTART", 231, 812, 120, 36, RestartPresentation);
             ReducedExhibitUi.Button(hud.transform, "WATCH MERGER", 361, 812, 185, 36, WatchMerger);
+            ReducedExhibitUi.Button(hud.transform, "STARLIGHT VIEW", 556, 812, 185, 36, WatchStarlight);
+            bendingToggle = ReducedExhibitUi.Button(hud.transform, "BENDING: ON", 751, 812, 170, 36, ToggleStellarBending).GetComponentInChildren<Text>();
         }
 
         private void RebuildSamples()
@@ -358,8 +363,17 @@ namespace DTET.VisualPrototype
         }
         private void BindSkyLensing()
         {
-            if (sky != null) sky.SetLensing(Snapshot,
-                Profile.GasEnabled && OpticalStyle != InteractiveOpticalStyle.Off ? LensGain : 0);
+            bool enabled = Profile.GasEnabled && OpticalStyle != InteractiveOpticalStyle.Off;
+            if (Optics != null) Optics.Prepare(SceneTarget, View, Session.Model, Snapshot, enabled, LensGain, WaveGain);
+            // A selected style can still have both gains at zero. In that state Prepare
+            // intentionally skips binding; never copy its previous active frame's uniforms.
+            enabled = enabled && Optics != null && Optics.Active;
+            if (sky != null)
+            {
+                sky.SetLensing(Snapshot, enabled ? LensGain : 0);
+                sky.SetStellarWaves(Optics == null ? null : Optics.WarpMaterial, enabled);
+            }
+            if (FeaturedStar != null) FeaturedStar.Bind(Snapshot, Optics == null ? null : Optics.WarpMaterial, enabled);
         }
         private void HandleInput()
         {
@@ -393,11 +407,13 @@ namespace DTET.VisualPrototype
             phaseLabel.text = $"{s.ScenarioLabel}  ·  {s.StageLabel}  ·  {(GeneratedFluidActive ? "2D ISOTHERMAL FLUID / NEWTONIAN GRAVITY" : "ASSUMED GAS / ILLUSTRATIVE OPTICS")}";
             statusLabel.text = $"V wrist · WASD + Q/E move · right-drag look · 1–5 views · Space pause · {Profile.EffectiveProfile} {SceneTarget.width}×{SceneTarget.height} · {OpticalStyle}";
             transportPlay.text = Session.IsPlaying ? "PAUSE" : "PLAY INSPIRAL";
+            bendingToggle.text = Optics != null && Optics.Active ? "BENDING: ON" : "BENDING: OFF";
         }
 
         public void WatchMerger()
         {
             if (!Ready || IsGeneratingFluid) return;
+            SetWristGas(true);
             Session.Seek(Math.Max(0, Session.Model.MergerTimeSeconds - 600 * Snapshot.GravitationalTimeSeconds));
             Session.SetPlaybackRate(.01); Present(); SetViewPreset(0);
             Wrist.SetRaised(false, true); Session.Play(); RefreshLabels();
@@ -406,8 +422,26 @@ namespace DTET.VisualPrototype
         public void RestartPresentation()
         {
             if (!Ready || IsGeneratingFluid) return;
+            SetWristGas(true);
             ResetWristScenario(); Session.SetPlaybackRate(.05); SetViewPreset(0);
             Wrist.SetRaised(false, true); RefreshLabels();
+        }
+
+        public void WatchStarlight()
+        {
+            if (!Ready || IsGeneratingFluid) return;
+            Session.Reset(); Session.SetPlaybackRate(.03);
+            SetWristGas(false); SetWristSamples(false); Present(); SetViewPreset(0);
+            Wrist.SetRaised(false, true); Session.Play(); RefreshLabels();
+        }
+
+        public void ToggleStellarBending()
+        {
+            if (!Ready) return;
+            bool hasGain = LensGain > 0 || WaveGain > 0;
+            bool enabled = OpticalStyle != InteractiveOpticalStyle.Off && hasGain;
+            SetWristOptics(enabled ? InteractiveOpticalStyle.Off : InteractiveOpticalStyle.Enhanced,
+                hasGain ? LensGain : .35f, hasGain ? WaveGain : 1.3f);
         }
 
         public InteractiveWristState CaptureWristState()
@@ -564,7 +598,7 @@ namespace DTET.VisualPrototype
             sceneRoot = hud = sampleObject = null; SceneTarget = null; sceneImage = null;
             bodyMaterial = gasMaterial = sampleMaterial = displayMaterial = null; sampleMesh = null;
             samplePositions = null; sampleColours = null; sampleRenderer = gasRenderer = null;
-            Session = null; Wrist = null; Optics = null; View = null; sky = null;
+            Session = null; Wrist = null; Optics = null; FeaturedStar = null; View = null; sky = null;
             lastGeneration = -1; lastTime = double.NaN; GasVisible = SamplesVisible = false;
             if (launcher != null && !disposed) { launcher.SetActive(true); SelectProfile(SelectedProfile); }
         }

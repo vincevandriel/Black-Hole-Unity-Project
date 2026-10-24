@@ -121,6 +121,7 @@ namespace DTET.VisualPrototype.Editor
                 "Assets/Resources/DTET/ReducedBinaryVolume.shader",
                 "Assets/Resources/DTET/ReducedDensitySamples.shader",
                 "Assets/Resources/DTET/ExhibitSky.shader",
+                "Assets/Resources/DTET/FeaturedBackgroundStar.shader",
                 "Assets/Resources/DTET/ExhibitDisplay.shader",
                 "Assets/Resources/DTET/InteractiveOptics.shader",
                 "Assets/Resources/DTET/GeneratedFluidVolume.shader",
