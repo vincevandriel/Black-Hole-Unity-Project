@@ -53,7 +53,7 @@ Softened Newtonian gravity has no physical innermost stable circular orbit. Its 
 
 ## Appearance, movement and time
 
-Runtime interpolation reads recorded density and velocity at the requested event epoch. Optional markers advect through that field; they do not generate the field. Density patterns may be nearly stationary while fluid moves through them, so visible tracer motion is useful in addition to changing emissivity. Backward playback samples recorded epochs rather than reversing the dissipative/numerically dissipative integration.
+Runtime interpolation reads recorded density and velocity at the requested event epoch. The present default renders a continuous volume; it does not include an advected tracer-particle layer. Such a future layer could sample the existing velocity field without becoming the fluid solver. Density patterns may be nearly stationary while fluid moves through them. Backward playback samples recorded epochs rather than reversing the dissipative/numerically dissipative integration.
 
 Each cache frame is independently gzip-compressed and stores binary16 surface density and planar velocities. Velocities at `Sigma <= 1e-6` are encoded as zero to avoid giving the near-vacuum atmosphere an optical velocity; this changes the display cache, not the evolved momentum. Record encoded mass and dense-velocity errors against the solver before distribution. Playback retains the index and small decode/texture buffers rather than the full history in RAM.
 
@@ -70,8 +70,8 @@ The Newtonian solver can produce relativistically large or even superluminal num
 
 ## Required evidence
 
-The implementation and verification are in progress. This document does not establish a passed default-cache, GPU, visual, convergence, laptop or headset check. Record actual results in a separate validation receipt, including failures and limits.
+The selected cache and application now have executed numerical and graphics evidence: see [the numerical receipt](MINIDISK_NUMERICS.md) and [the application/graphics receipt](MINIDISK_VALIDATION.md). The final default Float and forced Half player runs passed their 43 technical records on the development RTX 3060 Ti; sampled stills and recorded frames were inspected. These checks do not establish physical convergence, continuous native playback, laptop/headset support or expert approval.
 
-Before release, verify finite positive fields; mass accounting including sinks/outflow/floor; prograde body-relative rotation; actual temporal density evolution; immutable cache sampling and coverage; identical scientific body/waveform state when gas is toggled; reverse-seek image reproducibility; and bounded texture/cache memory. Inspect face-on, edge-on and underside images from multiple epochs. A renderer test must compare a controlled far-side source with curvature enabled/disabled and independently test the Doppler sign using the actual shader helper. A nonblank screenshot alone proves neither effect.
+Executed gates include finite positive fields and mass accounting, prograde seed/actual temporal evolution, immutable cache sampling/coverage, preserved scientific bodies/radiation, reverse-seek image reproducibility, bounded playback payloads, multiple viewpoints, a controlled far-side curved/straight emitter and a production-shader Doppler sign fixture. The receipts state the exact configurations and limits. A nonblank screenshot alone proves neither optical effect.
 
 Report each disk's inventory and resolved extent at sampled epochs instead of assuming it survives until merger. Compare spatial and temporal refinements and inner-boundary choices. Any substantial disagreement remains an explicit numerical limitation; none of these checks substitutes for a compatible relativistic-fluid/metric calculation.
