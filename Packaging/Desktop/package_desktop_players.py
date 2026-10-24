@@ -264,12 +264,14 @@ def main() -> None:
     parser.add_argument("--mac-app", type=Path)
     parser.add_argument("--windows-only", action="store_true", help="Explicitly package Windows only; omit --mac-app")
     parser.add_argument("--source-revision", required=True)
+    parser.add_argument("--mac-source-revision", help="Mac runtime source commit; defaults to --source-revision")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--package-name", default="DTET_Binary_Explorer_Desktop")
     parser.add_argument("--mac-signing-status", choices=("unknown", "unsigned", "ad-hoc", "developer-id-notarized"), default="unknown")
     args = parser.parse_args()
     require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}", args.package_name) is not None, "Unsafe package name")
     require(not (args.windows_only and args.mac_app), "Do not supply --mac-app with --windows-only")
+    require(not (args.windows_only and args.mac_source_revision), "Do not supply --mac-source-revision with --windows-only")
     require(args.windows_only or args.mac_app is not None, "--mac-app is required unless --windows-only is selected")
     repo, windows, output = (value.resolve() for value in (args.repo, args.windows_build, args.output))
     app = None if args.windows_only else args.mac_app.resolve()
@@ -280,6 +282,13 @@ def main() -> None:
     require(not within(output, windows) and (app is None or not within(output, app)),
             "Output must be outside the input player directories")
     revision, epoch = source_record(repo, args.source_revision)
+    mac_revision = None
+    if app is not None:
+        mac_revision, _ = source_record(repo, args.mac_source_revision or revision)
+    platform_revisions = {"Windows x64": revision}
+    if mac_revision is not None:
+        platform_revisions["macOS"] = mac_revision
+    common_revision = revision if mac_revision in (None, revision) else None
     commit_time = dt.datetime.fromtimestamp(epoch, dt.timezone.utc)
     require(1980 <= commit_time.year <= 2107, "Commit timestamp is outside the ZIP range")
     timestamp = tuple(commit_time.timetuple()[:5]) + (commit_time.second // 2 * 2,)
@@ -311,7 +320,12 @@ def main() -> None:
             collect_tree(path, root + "Windows/" + name, windows, False, entries)
     if app is not None:
         collect_tree(app, root + "macOS/" + app.name, app, True, entries)
+    source_notice = ("Caller-declared runtime source revision: " + revision if app is None else
+                     "Caller-declared Windows runtime source revision: " + revision + "\n" +
+                     "Caller-declared Mac runtime source revision: " + mac_revision)
     replacements = {"@@SOURCE_URL@@": SOURCE_URL, "@@SOURCE_REVISION@@": revision,
+                    "@@WINDOWS_SOURCE_REVISION@@": revision, "@@MAC_SOURCE_REVISION@@": mac_revision or "",
+                    "@@RUNTIME_SOURCE_NOTICE@@": source_notice,
                     "@@MAC_ARCHITECTURES@@": " and ".join(architectures), "@@MAC_MINIMUM_VERSION@@": minimum_os or "",
                     "@@MAC_SIGNING_STATUS@@": args.mac_signing_status}
     template_dir = repo / "Packaging/Desktop"
@@ -347,7 +361,8 @@ def main() -> None:
             "Independent extracted file inventory and ZIP link records do not match source payload")
     manifest = dict(schema="dtet.desktop-package.v1", packageName=args.package_name,
                     includedPlatforms=["Windows x64"] + (["macOS"] if app is not None else []),
-                    callerDeclaredRuntimeSourceRevision=revision, sourceUrl=SOURCE_URL,
+                    callerDeclaredRuntimeSourceRevision=common_revision,
+                    callerDeclaredPlatformRuntimeSourceRevisions=platform_revisions, sourceUrl=SOURCE_URL,
                     files=[public_entry(entry) for entry in entries])
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     summary = dict(success=True, package=str(zip_path), bytes=zip_path.stat().st_size, sha256=file_hash(zip_path),
@@ -362,7 +377,8 @@ def main() -> None:
                    macArchitectures=architectures, macMinimumVersion=minimum_os,
                    callerDeclaredMacSigningStatus=args.mac_signing_status if app is not None else None,
                    macRuntimeTested=False, macSignatureVerified=False,
-                   callerDeclaredRuntimeSourceRevision=revision,
+                   callerDeclaredRuntimeSourceRevision=common_revision,
+                   callerDeclaredPlatformRuntimeSourceRevisions=platform_revisions,
                    verification=["All ZIP paths, sizes and SHA-256 hashes match the input inventory",
                                  "ZIP Unix executable and symbolic-link attributes match the intended payload",
                                  "Independent extracted file/directory inventory and separately read ZIP link records match",

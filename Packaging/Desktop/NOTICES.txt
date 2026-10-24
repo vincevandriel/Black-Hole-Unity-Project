@@ -12,4 +12,4 @@ implementation; the notice is retained for source provenance.
 Unity engine/runtime files retain their original embedded notices and licensing.
 This package does not grant new rights to Unity, unrelated code or third-party
 artwork. Project source: @@SOURCE_URL@@
-Caller-declared runtime source revision: @@SOURCE_REVISION@@
+@@RUNTIME_SOURCE_NOTICE@@

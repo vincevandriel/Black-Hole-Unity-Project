@@ -8,7 +8,8 @@ executable permissions and symbolic links, validates every ZIP entry, and extrac
 and independently inventories its payload. If Windows denies symbolic-link
 creation, their ZIP records are verified separately and the extraction is marked
 incomplete; no link is flattened to a regular file. Reports stay outside the ZIP.
-SourceRevision is caller-declared provenance, not proof of binary-to-source identity.
+SourceRevision is the caller-declared Windows revision; MacSourceRevision defaults
+to it. These declarations are not proof of binary-to-source identity.
 #>
 [CmdletBinding()]
 param(
@@ -16,6 +17,7 @@ param(
     [string]$MacAppPath,
     [switch]$WindowsOnly,
     [Parameter(Mandatory=$true)][ValidatePattern('^[0-9a-fA-F]{40}$')][string]$SourceRevision,
+    [ValidatePattern('^[0-9a-fA-F]{40}$')][string]$MacSourceRevision,
     [Parameter(Mandatory=$true)][string]$OutputDirectory,
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$')][string]$PackageName = 'DTET_Binary_Explorer_Desktop',
     [string]$PythonPath = 'python',
@@ -29,10 +31,12 @@ $dtetArguments = @($dtetPackager, '--repo', $dtetRepo, '--windows-build', $Windo
     '--source-revision', $SourceRevision, '--output', $OutputDirectory, '--package-name', $PackageName)
 if ($WindowsOnly) {
     if ($MacAppPath) { throw 'Do not supply MacAppPath with WindowsOnly.' }
+    if ($MacSourceRevision) { throw 'Do not supply MacSourceRevision with WindowsOnly.' }
     $dtetArguments += '--windows-only'
 } else {
     if ([string]::IsNullOrWhiteSpace($MacAppPath)) { throw 'MacAppPath is required unless WindowsOnly is selected.' }
     $dtetArguments += @('--mac-app', $MacAppPath, '--mac-signing-status', $MacSigningStatus)
+    if ($MacSourceRevision) { $dtetArguments += @('--mac-source-revision', $MacSourceRevision) }
 }
 & $PythonPath @dtetArguments
 if ($LASTEXITCODE -ne 0) { throw "Desktop packaging failed with exit code $LASTEXITCODE." }

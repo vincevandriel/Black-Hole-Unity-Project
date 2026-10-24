@@ -30,5 +30,6 @@ The numerical replay uses representative SXS:BBH:0305 data. Adjustable binaries
 use a separate educational inspiral and conceptual merger. GW150914 was observed
 by LIGO; no Einstein Telescope event readings are claimed.
 
-Source: @@SOURCE_URL@@/tree/@@SOURCE_REVISION@@
+Windows source: @@SOURCE_URL@@/tree/@@WINDOWS_SOURCE_REVISION@@
+Mac source: @@SOURCE_URL@@/tree/@@MAC_SOURCE_REVISION@@
 Attribution and retained licence notices: Notices/
