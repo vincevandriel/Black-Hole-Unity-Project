@@ -110,6 +110,42 @@ namespace DTET.VisualPrototype.Editor
         {
             if (AssetDatabase.LoadAssetAtPath<SceneAsset>(Scene) == null)
                 throw new InvalidOperationException("DT-ET staging scene is missing: " + Scene);
+            if (interactiveDefault)
+            {
+                using (var disks = BlackHole.Staging.Simulation.MiniDiskCache.Open(
+                    Path.Combine(Application.streamingAssetsPath, "DTET", "MiniDisks", "sxs0305.mdf")))
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                {
+                    var source = Resources.Load<TextAsset>("Physics/SXS0305");
+                    if (source == null) throw new InvalidOperationException("The bundled numerical replay is missing.");
+                    try
+                    {
+                        byte[] bytes = source.bytes;
+                        string hash = BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant();
+                        BlackHole.Staging.Simulation.InteractiveBinaryScenario model;
+                        using (var stream = new MemoryStream(bytes, false))
+                            model = new BlackHole.Staging.Simulation.InteractiveBinaryScenario(
+                                BlackHole.Staging.Simulation.NumericalEventHistory.Load(stream));
+                        var initial = model.Evaluate(0);
+                        bool Near(double a, double b) => Math.Abs(a - b) <= 1e-8 * Math.Max(1, Math.Abs(b));
+                        if (disks.SourceSha256 != hash || disks.SourceModelId != initial.ScenarioId
+                            || disks.ScenarioMode != initial.Mode || !Near(disks.TotalMassSolar, initial.TotalMassSolar)
+                            || !Near(disks.Mass1Solar, initial.Mass1Solar) || !Near(disks.Mass2Solar, initial.Mass2Solar)
+                            || !Near(disks.GravitationalRadiusMeters, initial.GravitationalRadiusMeters)
+                            || !Near(disks.GravitationalTimeSeconds, initial.GravitationalTimeSeconds)
+                            || !Near(disks.InitialSeparationRg, initial.SeparationRg)
+                            || !Near(disks.MergerTimeSeconds, model.MergerTimeSeconds)
+                            || disks.StartSeconds < 0 || disks.EndSeconds > model.DurationSeconds + 1e-9)
+                            throw new InvalidOperationException("Prepared disks do not match the bundled numerical replay.");
+                        int cells = checked(disks.GridSize * disks.GridSize);
+                        var sigma = new float[cells]; var vx = new float[cells]; var vz = new float[cells];
+                        disks.ReadFrame(0, sigma, vx, vz);
+                        disks.ReadFrame(disks.FrameCount - 1, sigma, vx, vz);
+                        Debug.Log($"DTET_MINIDISK_PREFLIGHT_PASSED sourceSha={hash} grid={disks.GridSize} frames={disks.FrameCount} start={disks.StartSeconds:R} end={disks.EndSeconds:R} checkedFrames=first,last");
+                    }
+                    finally { Resources.UnloadAsset(source); }
+                }
+            }
 
             var shaderPaths = new[]
             {
@@ -124,6 +160,7 @@ namespace DTET.VisualPrototype.Editor
                 "Assets/Resources/DTET/StellarBackdrop.shader",
                 "Assets/Resources/DTET/WaveSurface.shader",
                 "Assets/Resources/DTET/MergerSurface.shader",
+                "Assets/Resources/DTET/CurvedDiskVolume.shader",
                 "Assets/Resources/DTET/FeaturedBackgroundStar.shader",
                 "Assets/Resources/DTET/ExhibitDisplay.shader",
                 "Assets/Resources/DTET/InteractiveOptics.shader",
@@ -142,6 +179,7 @@ namespace DTET.VisualPrototype.Editor
                     throw new InvalidOperationException("Missing or invalid DT-ET shader: " + path);
                 }
             }
+            Debug.Log($"DTET_SHADER_PREFLIGHT_PASSED count={shaderPaths.Length}");
 
             var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
             var destination = Path.Combine(projectRoot, "Builds", folder, executable);

@@ -53,6 +53,7 @@ namespace DTET.VisualPrototype
             yield return new WaitForSecondsRealtime(.75f);
             exhibit = FindFirstObjectByType<InteractiveBinaryExhibit>();
             if (exhibit == null) { Check(false, "interactive exhibit exists"); Application.Quit(1); yield break; }
+            exhibit.LegacyGasForQa = true;
             exhibit.EmulatedInputEnabled = false;
             exhibit.Launch(ExhibitQualityProfile.Laptop); yield return null;
             Check(!exhibit.GeneratedFluidReady && !exhibit.IsGeneratingFluid, "generation is opt-in after quality admission");

@@ -17,10 +17,10 @@ on a Mac. For a first-launch developer-verification warning, Apple's instruction
 for opening an app you trust are at https://support.apple.com/en-us/102445.
 
 Choose a fidelity setting before entering. Start with Laptop on modest hardware.
-The wrist starts lowered so both disks are visible. PLAY INSPIRAL starts the
-recorded motion; WATCH MERGER jumps to a close, slower view before coalescence.
-ACCRETION VIEW or RESTART restores both illustrative disks, the beginning and
-close framing, even after gas was hidden or generated fluid was selected.
+The wrist starts lowered and the prepared fluid replay begins slowly.
+Space pauses it; WATCH MERGER jumps to a slower view before coalescence.
+ACCRETION VIEW or RESTART restores the evolving disks at their recorded beginning
+with close framing, even after gas was hidden or the reservoir experiment selected.
 STARLIGHT ONLY explicitly hides gas to inspect the background stars.
 OUTGOING WAVES starts a slow, gas-visible view of outward background-light
 distortion. Its fixed synthetic stellar field reveals the passing wave fronts.
@@ -28,31 +28,42 @@ WAVE MAP (top right) shows a colored, exaggerated strain surface with gas hidden
 FIND SUN-LIKE STAR centers a hypothetical solar-sized star in a telescope view;
 BENDING compares its original disk with lensed images. ACCRETION VIEW returns.
 Pause, rewind and free camera controls remain available.
-BENDING: ON/OFF compares the original stars with their bent images.
-WATCH MERGER restores illustrative gas. G toggles gas without changing time.
+BENDING: ON/OFF compares curved and straight gas light as well as stellar bending.
+WATCH MERGER restores evolved gas. G toggles gas without changing time.
 The silhouettes join smoothly around merger; the brief shape blend is illustrative.
-Long orange links are assumed gas feeding streams, not outgoing jets.
+The default disks contain no pre-drawn feeding streams. Tails or bridges that
+develop in the fluid are responses to the model's pressure and gravity.
 Use ENTER OBSERVATORY for disks; COMPATIBILITY / NO GAS disables them.
 Space plays/pauses; comma reverses; R resets; M seeks the merger; V toggles the
 wrist interface. WASD/QE move, right-drag looks, wheel approaches, Shift moves
 faster, and 1-5 select viewpoints. Esc pauses. Use the wrist controls to adjust
 time, seek and configure an educational binary.
 
-FLUID LAB > SOLVE GAS creates a fluid history on your computer. Generation may
-take several minutes; progress and cancellation are available. Then pause,
-rewind and explore from any viewpoint. The generated gas is an experimental
-2D isothermal Newtonian model with assumed thickness and brightness. Its
-detailed flow is not resolution-converged; it shows a broad computed reservoir,
-not the detailed illustrative mini-disks. ACCRETION VIEW restores those disks.
-This is not a measured GW150914 gas
-reconstruction or a full relativistic fluid/metric simulation. Brightness and
-optical wave distortion are illustrative; the sky is synthetic.
-Both mass lensing and wave distortion act on background stellar light only.
+The default replay streams a prepared 2D pressure-and-gravity fluid calculation.
+Its finite gas is initialized 1000 gravitational times before common-horizon
+formation, then evolves to the source-history end. Earlier source epochs contain
+no simulated gas; ACCRETION VIEW returns to the gas initialization time.
+All fidelity settings share its evolving density and velocity. Only two frames
+are loaded for rendering; pause and rewind reproduce the same gas history.
+Changing masses or separation prepares matching disks in the background and
+pauses playback. This can take several minutes; FLUID LAB shows progress and
+cancellation. Adjustable gas covers at most the final 4000 gravitational times;
+outside that interval the display explicitly shows no cached gas.
+FLUID LAB > SOLVE RESERVOIR is a separate coarse outer-reservoir experiment.
+DEFAULT DISKS or ACCRETION VIEW returns to the mini-disks.
+
+The gas is conditional, isothermal and Newtonian, with no magnetic field or
+energy equation. Thickness, opacity and brightness are assumed. Curved gas rays
+use a single-hole optical formula extended approximately to the binary, plus
+velocity-based Doppler brightness. This is not measured GW150914 gas or a full
+relativistic fluid/metric simulation. Detailed flow is not resolution-converged.
+The sky is synthetic; gravitational-wave distortion is deliberately exaggerated.
 The featured source is a hypothetical Sun-sized star at 1 AU, appearing about
 half a degree across before lensing. Its arcs and multiple images change as
 the black holes move. It is not a measured star near GW150914. Other stars have
-varied brightness, colours and apparent sizes. Foreground disks stay undistorted.
-Its amplitude is magnified and its displayed radial spacing is compressed 12:1
+varied brightness, colours and apparent sizes. Wave distortion affects starlight;
+gas has its own curved-ray pass. Wave amplitude is magnified and its displayed
+radial spacing is compressed 12:1
 so passing fronts can be inspected. Wrist waveform/frequency values retain their
 original scale; the WAVE GAIN control changes only the display strength.
 

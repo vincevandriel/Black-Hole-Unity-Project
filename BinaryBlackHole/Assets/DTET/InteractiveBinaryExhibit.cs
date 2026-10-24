@@ -25,6 +25,12 @@ namespace DTET.VisualPrototype
         public FeaturedBackgroundStar FeaturedStar { get; private set; }
         public WaveSurfaceView WaveSurface { get; private set; }
         public MergerSurfaceView MergerSurface { get; private set; }
+        public CachedMiniDiskPlayer MiniDisks { get; private set; }
+        public bool EvolvedDisksSelected => useEvolvedDisks && !GeneratedFluidActive;
+        public bool IsPreparingDisks => diskPreparation != null && diskPreparation.Running;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        internal bool LegacyGasForQa { get; set; }
+#endif
         public bool WaveMapVisible { get; private set; }
         public bool StarFinderVisible { get; private set; }
         public bool BackgroundStarsVisible { get => sky != null && sky.Visible; set { if (sky != null) sky.Visible = value; if (FeaturedStar != null) FeaturedStar.Visibility = value; } }
@@ -70,6 +76,8 @@ namespace DTET.VisualPrototype
         private long lastGeneration = -1;
         private double lastTime = double.NaN, nextLabels;
         private bool disposed, manualRendering;
+        private bool useEvolvedDisks = true;
+        private MiniDiskPreparation diskPreparation;
         private InteractiveOpticalStyle beforeStarStyle;
         private float beforeStarLens, beforeStarWave;
         private readonly RenderPipeline.StandardRequest sceneRequest = new RenderPipeline.StandardRequest();
@@ -111,7 +119,7 @@ namespace DTET.VisualPrototype
             ReducedExhibitUi.Label(p, "DT / ET     SPACESUIT OBSERVATORY", 18, 100, 85, 1400, 45, ReducedExhibitUi.Accent);
             ReducedExhibitUi.Label(p, "BINARY EXPLORER", 64, 95, 155, 1400, 95, Color.white);
             ReducedExhibitUi.Label(p, "A real event to explore. A laboratory to experiment in.", 26, 100, 275, 1400, 50, ReducedExhibitUi.Muted);
-            ReducedExhibitUi.Label(p, "Numerical replay  /  adjustable experiment  /  illustrative gas and light warping", 18, 100, 340, 1400, 50, Gold);
+            ReducedExhibitUi.Label(p, "Numerical replay  /  gas initialized in late inspiral  /  approximate curved light", 18, 100, 340, 1400, 50, Gold);
             var choices = new[] { ExhibitQualityProfile.Auto, ExhibitQualityProfile.Laptop, ExhibitQualityProfile.Balanced, ExhibitQualityProfile.High };
             for (int i = 0; i < choices.Length; i++)
             {
@@ -122,7 +130,7 @@ namespace DTET.VisualPrototype
             ReducedExhibitUi.Button(p, "ENTER OBSERVATORY", 100, 665, 390, 64, () => Launch(SelectedProfile));
             ReducedExhibitUi.Button(p, "COMPATIBILITY / NO GAS", 520, 665, 300, 64, () => Launch(SelectedProfile, true));
             ReducedExhibitUi.Button(p, "EXIT", 850, 665, 160, 64, () => Application.Quit());
-            ReducedExhibitUi.Label(p, "Select before loading. The simulation starts paused; V raises your wrist display.\nLower rendering budgets preserve event and experiment parameters. Compatibility disables gas and distortion.", 17, 100, 775, 1390, 75, ReducedExhibitUi.Muted);
+            ReducedExhibitUi.Label(p, "Select before loading. Space pauses; V raises your wrist display.\nEvery profile replays the same evolved gas. Compatibility disables gas and distortion.", 17, 100, 775, 1390, 75, ReducedExhibitUi.Muted);
             SelectProfile(SelectedProfile);
         }
 
@@ -130,7 +138,7 @@ namespace DTET.VisualPrototype
         {
             SelectedProfile = value;
             var profile = ExhibitQuality.Resolve(value, Capabilities(false));
-            launchDetail.text = $"SELECTED {value} → {profile.EffectiveProfile}\nScene up to {profile.MaxRenderWidth} × {profile.MaxRenderHeight} · {profile.RaySteps} base gas samples + inner refinement\n{profile.Reason}";
+            launchDetail.text = $"SELECTED {value} → {profile.EffectiveProfile}\nScene up to {profile.MaxRenderWidth} × {profile.MaxRenderHeight} · bounded curved-light budget\n{profile.Reason}";
         }
 
         public void Launch(ExhibitQualityProfile profile, bool fallback = false)
@@ -142,7 +150,12 @@ namespace DTET.VisualPrototype
         private void LaunchInternal(ExhibitQualityProfile profile, bool fallback)
         {
             if (Ready) ReturnToLauncher();
-            var gasShader = Resources.Load<Shader>("DTET/ReducedBinaryVolume");
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            useEvolvedDisks = !LegacyGasForQa;
+#else
+            useEvolvedDisks = true;
+#endif
+            var gasShader = Resources.Load<Shader>(useEvolvedDisks ? "DTET/CurvedDiskVolume" : "DTET/ReducedBinaryVolume");
             Profile = ExhibitQuality.Resolve(profile, Capabilities(fallback || gasShader == null || !gasShader.isSupported));
             SelectedProfile = profile;
             var data = Resources.Load<TextAsset>("Physics/SXS0305");
@@ -169,16 +182,20 @@ namespace DTET.VisualPrototype
             bodyRendererA = bodyA.GetComponent<Renderer>(); bodyRendererB = bodyB.GetComponent<Renderer>();
             remnantRenderer = remnant.GetComponent<Renderer>();
             MergerSurface = sceneRoot.AddComponent<MergerSurfaceView>(); MergerSurface.Initialize();
-            if (Profile.GasEnabled) BuildGas();
+            if (Profile.GasEnabled && !useEvolvedDisks) BuildGas();
             BuildHud();
             Optics = sceneRoot.AddComponent<InteractiveOptics>();
             FeaturedStar = sceneRoot.AddComponent<FeaturedBackgroundStar>(); FeaturedStar.Initialize(View);
             WaveSurface = sceneRoot.AddComponent<WaveSurfaceView>();
             GeneratedFluidPlayer = sceneRoot.AddComponent<GeneratedFluidPlayer>(); GeneratedFluidPlayer.Initialize(Profile.RaySteps);
+            MiniDisks = sceneRoot.AddComponent<CachedMiniDiskPlayer>(); MiniDisks.Initialize(View, Profile.RaySteps);
+            diskPreparation = new MiniDiskPreparation();
             Ready = true; GasVisible = Profile.GasEnabled; SamplesVisible = false;
+            PrepareMiniDisks();
             Wrist = hud.AddComponent<InteractiveWristDisplay>(); Wrist.Initialize(CaptureCamera, this);
             lastGeneration = -1; lastTime = double.NaN;
             launcher.SetActive(false); SetViewPreset(0); Present(); Wrist.SetRaised(false, true);
+            if (EvolvedDisksSelected && MiniDisks.Ready) { Session.SetPlaybackRate(.02); Session.Play(); RefreshLabels(); }
         }
 
         private void ResizeTarget()
@@ -270,6 +287,18 @@ namespace DTET.VisualPrototype
         public void Present()
         {
             if (!Ready) return;
+            bool wasPreparingDisks = IsPreparingDisks;
+            if (diskPreparation != null && diskPreparation.TryComplete(Session.Model, Session.Generation, out string diskPath))
+            {
+                if (MiniDisks.Load(diskPath, Session.Generation))
+                {
+                    MiniDisks.BindScenario(Session.Model); Session.Seek(MiniDisks.Cache.StartSeconds); Session.Pause();
+                    ValidationMessage = "Evolved disks ready. Play, pause or rewind to inspect.";
+                }
+                else ValidationMessage = MiniDisks.Status;
+                lastTime = double.NaN;
+            }
+            else if (wasPreparingDisks && !IsPreparingDisks) ValidationMessage = diskPreparation.Status;
             if (GeneratedFluidPlayer != null && GeneratedFluidPlayer.Poll(Session.Model, Session.Generation))
             {
                 Session.Seek(GeneratedHistory.StartSeconds); Session.Pause();
@@ -280,7 +309,8 @@ namespace DTET.VisualPrototype
             var s = Snapshot;
             if (s.Generation != lastGeneration)
             {
-                lastGeneration = s.Generation; lastTime = double.NaN; RebuildSamples();
+                lastGeneration = s.Generation; lastTime = double.NaN;
+                if (!useEvolvedDisks) RebuildSamples();
                 if (gasMaterial != null)
                 {
                     float x = (float)Session.Model.HalfExtentXZ, y = (float)Session.Model.HalfExtentY;
@@ -289,11 +319,20 @@ namespace DTET.VisualPrototype
                 }
             }
             if (GeneratedFluidPlayer != null) GeneratedFluidPlayer.Present(s, GasVisible);
+            if (MergerSurface.SurfaceRenderer != null) MergerSurface.SurfaceRenderer.forceRenderingOff = false;
             MergerSurface.Present(Session.Model, s);
             MergerSurface.BindTo(gasMaterial); MergerSurface.BindTo(GeneratedFluidMaterial);
-            bodyRendererA.enabled = bodyRendererB.enabled = remnantRenderer.enabled = !MergerSurface.Visible;
-            if (gasRenderer != null) gasRenderer.enabled = GasVisible && !GeneratedFluidActive;
-            if (sampleRenderer != null) sampleRenderer.enabled = SamplesVisible && !GeneratedFluidActive;
+            if (MiniDisks != null)
+            {
+                MiniDisks.CurvedLight = OpticalStyle != InteractiveOpticalStyle.Off && (LensGain > 0 || WaveGain > 0);
+                MergerSurface.BindTo(MiniDisks.Material);
+                MiniDisks.Present(s, EvolvedDisksSelected && GasVisible && !IsPreparingDisks);
+            }
+            bool curvedPass = MiniDisks != null && MiniDisks.RendererVisible;
+            bodyRendererA.enabled = bodyRendererB.enabled = remnantRenderer.enabled = !MergerSurface.Visible && !curvedPass;
+            if (curvedPass && MergerSurface.SurfaceRenderer != null) MergerSurface.SurfaceRenderer.forceRenderingOff = true;
+            if (gasRenderer != null) gasRenderer.enabled = GasVisible && !GeneratedFluidActive && !useEvolvedDisks;
+            if (sampleRenderer != null) sampleRenderer.enabled = SamplesVisible && !GeneratedFluidActive && !useEvolvedDisks;
             if (s.ElapsedSeconds == lastTime) return;
             lastTime = s.ElapsedSeconds; PresentedGeneration = s.Generation;
             PresentBody(bodyA, s.BodyA); PresentBody(bodyB, s.BodyB); PresentBody(remnant, s.Remnant);
@@ -304,7 +343,7 @@ namespace DTET.VisualPrototype
                 gasMaterial.SetVector("_HorizonA", Horizon(s.BodyA)); gasMaterial.SetVector("_HorizonB", Horizon(s.BodyB)); gasMaterial.SetVector("_HorizonR", Horizon(s.Remnant));
             }
             SampleWeight = 0;
-            if (GeneratedFluidActive) return;
+            if (GeneratedFluidActive || useEvolvedDisks) return;
             double cell = 8 * Session.Model.HalfExtentXZ * Session.Model.HalfExtentXZ * Session.Model.HalfExtentY / samplePositions.Length;
             for (int i = 0; i < samplePositions.Length; i++)
             {
@@ -335,8 +374,13 @@ namespace DTET.VisualPrototype
             StarFinderVisible = false; View.fieldOfView = 52;
             float r = (float)(GeneratedFluidActive ? GeneratedHistory.HalfExtentRg : Session.Model.HalfExtentXZ);
             // Explicit binary view preset; never track automatically or advance time.
-            float focus = GeneratedFluidActive ? r : Mathf.Max(16, (float)Snapshot.SeparationRg * 1.6f);
+            float focus = GeneratedFluidActive ? r : Mathf.Max(10, (float)Snapshot.SeparationRg * (useEvolvedDisks ? 1.05f : 1.6f));
             Vector3[] points = { new Vector3(0, focus * .85f, -focus * 1.3f), new Vector3(0, focus * 1.55f, -.01f), new Vector3(0, focus * .14f, -focus * 1.55f), new Vector3(0, -focus * .85f, -focus * 1.3f), new Vector3(0, r * .95f, -r * 1.8f) };
+            if (EvolvedDisksSelected)
+            {
+                points[0] = new Vector3(0, focus * .65f, -focus * 1.8f);
+                points[1] = new Vector3(0, focus * 2.2f, -.01f);
+            }
             if (index < 0 || index >= points.Length) throw new ArgumentOutOfRangeException(nameof(index));
             View.transform.position = points[index]; View.transform.LookAt(Vector3.zero); MoveCamera(Vector3.zero);
         }
@@ -359,7 +403,7 @@ namespace DTET.VisualPrototype
             if (lastWidth != Screen.width || lastHeight != Screen.height) ResizeTarget();
             if (EmulatedInputEnabled) HandleInput();
             if (!Ready) return;
-            if (IsGeneratingFluid) Session.Pause();
+            if (IsGeneratingFluid || IsPreparingDisks) Session.Pause();
             Session.Tick(Time.unscaledDeltaTime); Present();
             BindSkyLensing();
             if (Time.unscaledTimeAsDouble >= nextLabels) { RefreshLabels(); nextLabels = Time.unscaledTimeAsDouble + .1; }
@@ -447,6 +491,9 @@ namespace DTET.VisualPrototype
                 : !GasVisible ? "GAS HIDDEN / ACCRETION VIEW RESTORES DISKS"
                 : GeneratedFluidActive ? (GeneratedFluidPlayer.IsCovered ? "GENERATED 2D FLUID / NEWTONIAN GRAVITY"
                     : "NO GENERATED COVERAGE / ACCRETION VIEW RESTORES DISKS")
+                : useEvolvedDisks ? (IsPreparingDisks ? $"COMPUTING DISK FLUID {100 * diskPreparation.Progress:0}%"
+                    : MiniDisks.Ready ? (MiniDisks.IsCovered ? (MiniDisks.CurvedLight ? "LATE-INSPIRAL GAS / APPROXIMATE CURVED LIGHT" : "LATE-INSPIRAL GAS / STRAIGHT LIGHT") : "OUTSIDE EVOLVED DISK COVERAGE")
+                    : "DISK DATA UNAVAILABLE / OPEN WRIST FOR STATUS")
                 : "ILLUSTRATIVE ACCRETION DISKS / ASSUMED GAS";
             phaseLabel.text = $"{s.ScenarioLabel}  ·  {s.StageLabel}  ·  {gasPresentation}";
             if (MergerSurface != null && MergerSurface.Visible) phaseLabel.text += "  ·  ILLUSTRATIVE SMOOTH JOIN";
@@ -465,7 +512,7 @@ namespace DTET.VisualPrototype
 
         public void WatchMerger()
         {
-            if (!Ready || IsGeneratingFluid) return;
+            if (!Ready || IsGeneratingFluid || IsPreparingDisks) return;
             WaveMapVisible = false;
             UseGeneratedFluid(false);
             SetWristGas(true);
@@ -481,9 +528,9 @@ namespace DTET.VisualPrototype
 
         public void ShowAccretionView()
         {
-            if (!Ready || IsGeneratingFluid) return;
+            if (!Ready || IsGeneratingFluid || IsPreparingDisks) return;
             WaveMapVisible = false;
-            // Select prescribed disks without discarding solved fluid or changing the scenario.
+            // Return to the default cached gas for this scenario.
             UseGeneratedFluid(false);
             SetWristGas(true);
             SetWristSamples(false);
@@ -493,7 +540,7 @@ namespace DTET.VisualPrototype
 
         public void WatchStarlight()
         {
-            if (!Ready || IsGeneratingFluid) return;
+            if (!Ready || IsGeneratingFluid || IsPreparingDisks) return;
             WaveMapVisible = false;
             Session.Reset(); Session.SetPlaybackRate(.03);
             SetWristGas(false); SetWristSamples(false); Present(); SetViewPreset(0);
@@ -502,7 +549,7 @@ namespace DTET.VisualPrototype
 
         public void WatchOutgoingWaves()
         {
-            if (!Ready || IsGeneratingFluid) return;
+            if (!Ready || IsGeneratingFluid || IsPreparingDisks) return;
             ShowAccretionView();
             Session.Seek(Math.Max(0, Session.Model.MergerTimeSeconds - 250 * Snapshot.GravitationalTimeSeconds));
             Session.SetPlaybackRate(.01);
@@ -513,7 +560,7 @@ namespace DTET.VisualPrototype
 
         public void ToggleWaveMap()
         {
-            if (!Ready || IsGeneratingFluid || !Profile.GasEnabled) return;
+            if (!Ready || IsGeneratingFluid || IsPreparingDisks || !Profile.GasEnabled) return;
             if (WaveMapVisible)
             {
                 WaveMapVisible = false; SetWristGas(true); SetViewPreset(0); BindSkyLensing(); RefreshLabels(); return;
@@ -529,7 +576,7 @@ namespace DTET.VisualPrototype
 
         public void ShowStarView()
         {
-            if (!Ready || IsGeneratingFluid || FeaturedStar == null || !FeaturedStar.Ready) return;
+            if (!Ready || IsGeneratingFluid || IsPreparingDisks || FeaturedStar == null || !FeaturedStar.Ready) return;
             if (!StarFinderVisible) { beforeStarStyle = OpticalStyle; beforeStarLens = LensGain; beforeStarWave = WaveGain; }
             WaveMapVisible = false; Session.Pause(); SetWristGas(false); SetWristSamples(false);
             BackgroundStarsVisible = true; SetWristOptics(InteractiveOpticalStyle.Off, .35f, 0);
@@ -569,6 +616,10 @@ namespace DTET.VisualPrototype
                 StageLabel = PhaseLabel(s.Phase), SignalLabel = replay ? "Normalized numerical Re(H22)" : "Leading-order h+ at D = 10^12 m, i = 60 deg",
                 Status = !Profile.GasEnabled ? "Compatibility: gas and optical distortion are disabled."
                     : GeneratedFluidActive ? (GeneratedFluidPlayer.IsCovered ? "2D isothermal fluid / assumed gas / Newtonian gravity" : "Outside generated fluid coverage: no fluid is displayed.")
+                    : useEvolvedDisks ? (IsPreparingDisks ? $"Computing matching gas: {100 * diskPreparation.Progress:0}%"
+                        : !MiniDisks.Ready ? MiniDisks.Status : MiniDisks.IsCovered
+                        ? $"Gas seeded at {MiniDisks.Cache.StartSeconds:0.000} s / 2D Newtonian / " + (MiniDisks.CurvedLight ? "curved light" : "straight light")
+                        : $"Gas covers {MiniDisks.Cache.StartSeconds:0.000}–{MiniDisks.Cache.EndSeconds:0.000} s. ACCRETION VIEW returns to it.")
                     : Optics != null && OpticalStyle != InteractiveOpticalStyle.Off && !Optics.Active ? "Optical effect unavailable or gains zero; original scene shown."
                     : replay ? "Recorded binary; comparison-epoch alignment" : "Quantitative inspiral ends at 10 rg; merger is illustrative",
                 OpticalStyle = !Profile.GasEnabled || (Optics != null && !Optics.Active) ? InteractiveOpticalStyle.Off : OpticalStyle,
@@ -615,7 +666,7 @@ namespace DTET.VisualPrototype
         {
             if (!Ready) return;
             if (replay) Session.SelectReplay(); else Session.SelectExperiment(new InteractiveBinaryParameters(35, 30, 30));
-            ValidationMessage = ""; Present(); SetViewPreset(0); RefreshLabels();
+            ValidationMessage = ""; PrepareMiniDisks(); Present(); SetViewPreset(0); RefreshLabels();
         }
         public void ApplyWristExperiment(double m1, double m2, double separationRg)
         {
@@ -626,13 +677,16 @@ namespace DTET.VisualPrototype
                 double oldRg = Snapshot.GravitationalRadiusMeters;
                 Session.SelectExperiment(parameters);
                 View.transform.position *= (float)(oldRg / Snapshot.GravitationalRadiusMeters);
-                ValidationMessage = "Applied together; paused at the new scenario's start.";
+                ValidationMessage = "Applied together; preparing matching disk dynamics.";
+                PrepareMiniDisks();
                 Present(); RefreshLabels();
             }
             catch (ArgumentException e) { ValidationMessage = e.Message; }
         }
-        public void ResetWristScenario() { if (!Ready) return; Session.Reset(); Present(); RefreshLabels(); }
-        public void SetWristPlaying(bool playing) { if (!Ready) return; if (playing && !IsGeneratingFluid) Session.Play(); else Session.Pause(); RefreshLabels(); }
+        public void ResetWristScenario() { if (!Ready) return; Session.Reset();
+            if (EvolvedDisksSelected && MiniDisks.Ready) Session.Seek(MiniDisks.Cache.StartSeconds);
+            Present(); RefreshLabels(); }
+        public void SetWristPlaying(bool playing) { if (!Ready) return; if (playing && !IsGeneratingFluid && !IsPreparingDisks) Session.Play(); else Session.Pause(); RefreshLabels(); }
         public void SeekWrist(double fraction) { if (!Ready) return; Session.Seek(Math.Max(0, Math.Min(1, fraction)) * Snapshot.DurationSeconds); Present(); RefreshLabels(); }
         public void SetWristRate(double rate) { if (!Ready) return; Session.SetPlaybackRate(rate); RefreshLabels(); }
         public void SetWristOptics(InteractiveOpticalStyle style, float lensGain, float waveGain)
@@ -642,18 +696,39 @@ namespace DTET.VisualPrototype
             if (Ready) { RenderOptics(); RefreshLabels(); }
         }
         public void SetWristGas(bool value) { GasVisible = value && Ready && Profile.GasEnabled; if (Ready) Present(); }
-        public void SetWristSamples(bool value) { SamplesVisible = value && Ready && !GeneratedFluidActive; if (sampleRenderer != null) sampleRenderer.enabled = SamplesVisible; }
+        public void SetWristSamples(bool value) { SamplesVisible = value && Ready && !GeneratedFluidActive && !useEvolvedDisks; if (sampleRenderer != null) sampleRenderer.enabled = SamplesVisible; }
         public void SetWristView(int index) => SetViewPreset(index);
         public void LeaveWristExhibit() => ReturnToLauncher();
+
+        private void PrepareMiniDisks()
+        {
+            if (!useEvolvedDisks || !Profile.GasEnabled || MiniDisks == null) return;
+            Session.Pause(); MiniDisks.Initialize(View, Profile.RaySteps); diskPreparation.Cancel();
+            MiniDisks.BindScenario(Session.Model);
+            if (Snapshot.Mode == InteractiveScenarioMode.RepresentativeReplay)
+            {
+                string path = Path.Combine(Application.streamingAssetsPath, "DTET", "MiniDisks", "sxs0305.mdf");
+                if (MiniDisks.Load(path, Session.Generation)) Session.Seek(MiniDisks.Cache.StartSeconds);
+                else ValidationMessage = MiniDisks.Status;
+            }
+            else
+            {
+                diskPreparation.Start(Session.Model, Session.Generation,
+                    Path.Combine(Application.temporaryCachePath, "DTET-DiskPreparation"));
+                ValidationMessage = "Computing matching disk fluid; playback will remain paused.";
+            }
+        }
 
         public void StartGeneratedFluid()
         {
             if (!Ready || !Profile.GasEnabled) return;
+            if (IsPreparingDisks) return;
             Session.Pause(); GeneratedFluidPlayer.StartGeneration(Session.Model, Session.Generation);
             lastTime = double.NaN; Present(); RefreshLabels();
         }
         public void CancelGeneratedFluid()
-        { if (GeneratedFluidPlayer == null) return; GeneratedFluidPlayer.CancelGeneration(); if (Ready) RefreshLabels(); }
+        { if (IsPreparingDisks) { diskPreparation.Cancel(); ValidationMessage = "Disk solve cancelled. Reapply the scenario to prepare its gas."; }
+            if (GeneratedFluidPlayer != null) GeneratedFluidPlayer.CancelGeneration(); if (Ready) RefreshLabels(); }
         public void UseGeneratedFluid(bool value)
         {
             if (!Ready || GeneratedFluidPlayer == null) return;
@@ -663,6 +738,9 @@ namespace DTET.VisualPrototype
             GasVisible = Profile.GasEnabled;
             if (GeneratedFluidActive && !GeneratedHistory.TryGetFrames(Snapshot.ElapsedSeconds, out _, out _, out _))
                 Session.Seek(GeneratedHistory.StartSeconds);
+            if (!GeneratedFluidActive && useEvolvedDisks && MiniDisks.Ready
+                && !MiniDisks.Cache.TryGetFrames(Snapshot.ElapsedSeconds, out _, out _, out _))
+                Session.Seek(MiniDisks.Cache.StartSeconds);
             if (GeneratedFluidActive) { SamplesVisible = false; if (sampleRenderer != null) sampleRenderer.enabled = false; }
             lastTime = double.NaN; Present(); SetViewPreset(0); RefreshLabels();
         }
@@ -679,6 +757,13 @@ namespace DTET.VisualPrototype
                 Coverage = "No generated timeline. One physical grid is shared by all render profiles.",
                 Metrics = "96 × 96 cells / up to 129 cached frames / final ≤ 4000 tg\nBackground CPU solve; deterministic cached playback."
             };
+            if (IsPreparingDisks)
+            {
+                state.Generating = true; state.Progress = diskPreparation.Progress; state.Status = diskPreparation.Status;
+                state.Coverage = "Preparing the final bounded interval for the adjusted binary.";
+                state.Metrics = "128² fluid grid / 513 epochs / scenario-specific gravity\nOnly completed histories can be displayed.";
+                return state;
+            }
             if (history != null)
             {
                 bool covered = history.TryGetFrames(Snapshot.ElapsedSeconds, out int lower, out int upper, out double blend);
@@ -700,6 +785,8 @@ namespace DTET.VisualPrototype
         public void ReturnToLauncher()
         {
             Ready = false;
+            if (MiniDisks != null) MiniDisks.Release(); MiniDisks = null;
+            if (diskPreparation != null) diskPreparation.Dispose(); diskPreparation = null;
             if (GeneratedFluidPlayer != null) GeneratedFluidPlayer.Release(); GeneratedFluidPlayer = null;
             if (sceneRoot != null) sceneRoot.SetActive(false);
             if (hud != null) hud.SetActive(false);

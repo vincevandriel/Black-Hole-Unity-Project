@@ -76,6 +76,7 @@ namespace DTET.VisualPrototype
             exhibit = FindFirstObjectByType<InteractiveBinaryExhibit>();
             if (exhibit == null) { Check(false, "interactive launch installs the new exhibit"); Application.Quit(1); yield break; }
             exhibit.EmulatedInputEnabled = false;
+            exhibit.LegacyGasForQa = true;
             Check(!exhibit.Ready && exhibit.SceneTarget == null, "quality launcher precedes scene allocation");
             Check(FindFirstObjectByType<ReducedBinaryExhibit>() == null && FindFirstObjectByType<ReferenceFlowLab>() == null && FindFirstObjectByType<VisualPrototypeBootstrap>() == null,
                 "interactive entry does not instantiate a competing simulation");

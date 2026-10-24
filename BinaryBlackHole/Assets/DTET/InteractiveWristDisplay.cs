@@ -236,11 +236,11 @@ namespace DTET.VisualPrototype
             Button(root, "FLUID LAB  /  SOLVE GAS", 36, 196, 300, 32,
                 () => fluidPanel.gameObject.SetActive(!fluidPanel.gameObject.activeSelf));
             fluidPanel = Box(root, "Generated fluid laboratory", 36, 240, 392, 386, new Color(.018f, .050f, .078f, .97f));
-            TextAt(fluidPanel, "EXPERIMENTAL 2D FLUID", 15, Cyan, 12, 10, 368, 22);
+            TextAt(fluidPanel, "GAS COMPUTATION", 15, Cyan, 12, 10, 368, 22);
             TextAt(fluidPanel, "Assumed gas / Newtonian gravity / false colour", 11, Gold, 12, 34, 368, 20);
-            fluidSolve = Button(fluidPanel, "SOLVE GAS", 12, 63, 178, 30, () => fluidPresenter.StartGeneratedFluid());
+            fluidSolve = Button(fluidPanel, "SOLVE RESERVOIR", 12, 63, 178, 30, () => fluidPresenter.StartGeneratedFluid());
             fluidCancel = Button(fluidPanel, "CANCEL", 202, 63, 178, 30, () => fluidPresenter.CancelGeneratedFluid());
-            fluidIllustrative = Button(fluidPanel, "ILLUSTRATIVE GAS", 12, 102, 178, 30, () => fluidPresenter.UseGeneratedFluid(false));
+            fluidIllustrative = Button(fluidPanel, "DEFAULT DISKS", 12, 102, 178, 30, () => fluidPresenter.UseGeneratedFluid(false));
             fluidGenerated = Button(fluidPanel, "GENERATED FLUID", 202, 102, 178, 30, () => fluidPresenter.UseGeneratedFluid(true));
             fluidStart = Button(fluidPanel, "GO TO COVERAGE START", 12, 141, 368, 30, () => fluidPresenter.SeekGeneratedFluidStart());
             fluidStatus = TextAt(fluidPanel, "", 12, White, 12, 181, 368, 60);
