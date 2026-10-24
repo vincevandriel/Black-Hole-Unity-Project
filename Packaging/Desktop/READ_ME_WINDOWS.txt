@@ -1,0 +1,26 @@
+DT-ET Binary Explorer - Windows 64-bit
+
+Extract the complete ZIP, open Windows, then double-click DTET_Binary_Explorer.exe.
+Keep the executable with its neighbouring data and engine files.
+Unity Editor is not required. This package contains the Windows application only.
+
+Choose a fidelity setting before entering. Start with Laptop on modest hardware.
+Space plays/pauses; comma reverses; R resets; M seeks the merger; V toggles the
+wrist interface. WASD/QE move, right-drag looks, wheel approaches, Shift moves
+faster, and 1-5 select viewpoints. Esc pauses. Use the wrist controls to adjust
+time, seek and configure an educational binary.
+
+FLUID LAB > SOLVE GAS creates a fluid history on your computer. Generation may
+take several minutes; progress and cancellation are available. Then pause,
+rewind and explore from any viewpoint. The generated gas is an experimental
+2D isothermal Newtonian model with assumed thickness and brightness. Its
+detailed flow is not resolution-converged. This is not a measured GW150914 gas
+reconstruction or a full relativistic fluid/metric simulation. Brightness and
+optical wave distortion are illustrative; the sky is synthetic.
+
+The numerical replay uses representative SXS:BBH:0305 data. Adjustable binaries
+use a separate educational inspiral and conceptual merger. GW150914 was observed
+by LIGO; no Einstein Telescope event readings are claimed.
+
+Source: @@SOURCE_URL@@/tree/@@SOURCE_REVISION@@
+Attribution and retained licence notices: Notices/

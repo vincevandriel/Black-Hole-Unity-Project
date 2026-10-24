@@ -1,0 +1,15 @@
+DT-ET Binary Explorer - attribution and retained notices
+
+SXS:BBH:0305 selected numerical data are redistributed under Creative Commons
+Attribution 4.0 International. SXS0305.txt identifies creators, the pinned DOI,
+licence links and the DT-ET transformations. These terms apply to that dataset;
+they do not relicense the entire application.
+
+Bruneton-BSD-3-Clause.txt retains the full BSD 3-Clause notice from Eric Bruneton's
+black-hole-shader reference. DT-ET's C# optical reference is an independent
+implementation; the notice is retained for source provenance.
+
+Unity engine/runtime files retain their original embedded notices and licensing.
+This package does not grant new rights to Unity, unrelated code or third-party
+artwork. Project source: @@SOURCE_URL@@
+Caller-declared runtime source revision: @@SOURCE_REVISION@@
