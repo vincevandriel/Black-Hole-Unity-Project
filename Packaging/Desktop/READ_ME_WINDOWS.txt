@@ -15,6 +15,10 @@ STARLIGHT ONLY intentionally hides gas. PLAY INSPIRAL begins playback;
 WATCH MERGER restores illustrative gas and jumps to the final approach.
 OUTGOING WAVES starts a slow view of outward distortion in the synthetic stellar
 background while keeping the disks visible. Wave strength is visually amplified.
+WAVE MAP (top right) shows a colored, exaggerated strain surface with gas hidden.
+FIND SUN-LIKE STAR centers a hypothetical solar-sized star in a telescope view;
+BENDING compares its original disk with lensed images. ACCRETION VIEW returns.
+Pause, rewind and free camera controls remain available.
 BENDING: ON/OFF compares original and bent background stellar light.
 Space plays/pauses; comma reverses; R resets; M seeks the merger; V toggles the
 wrist interface. WASD/QE move, right-drag looks, wheel approaches, Shift moves

@@ -24,6 +24,10 @@ close framing, even after gas was hidden or generated fluid was selected.
 STARLIGHT ONLY explicitly hides gas to inspect the background stars.
 OUTGOING WAVES starts a slow, gas-visible view of outward background-light
 distortion. Its fixed synthetic stellar field reveals the passing wave fronts.
+WAVE MAP (top right) shows a colored, exaggerated strain surface with gas hidden.
+FIND SUN-LIKE STAR centers a hypothetical solar-sized star in a telescope view;
+BENDING compares its original disk with lensed images. ACCRETION VIEW returns.
+Pause, rewind and free camera controls remain available.
 BENDING: ON/OFF compares the original stars with their bent images.
 WATCH MERGER restores illustrative gas. G toggles gas without changing time.
 Use ENTER OBSERVATORY for disks; COMPATIBILITY / NO GAS disables them.

@@ -23,6 +23,9 @@ namespace DTET.VisualPrototype
         public InteractiveWristDisplay Wrist { get; private set; }
         public InteractiveOptics Optics { get; private set; }
         public FeaturedBackgroundStar FeaturedStar { get; private set; }
+        public WaveSurfaceView WaveSurface { get; private set; }
+        public bool WaveMapVisible { get; private set; }
+        public bool StarFinderVisible { get; private set; }
         public bool BackgroundStarsVisible { get => sky != null && sky.Visible; set { if (sky != null) sky.Visible = value; if (FeaturedStar != null) FeaturedStar.Visibility = value; } }
         public RenderTexture SceneTarget { get; private set; }
         public Texture PresentedTexture => sceneImage == null ? null : sceneImage.texture;
@@ -50,7 +53,9 @@ namespace DTET.VisualPrototype
             : GeneratedFluidPlayer == null ? "Enter the observatory to generate fluid." : GeneratedFluidPlayer.Status;
 
         private GameObject launcher, sceneRoot, hud, sampleObject;
-        private Text launchDetail, phaseLabel, statusLabel, transportPlay, bendingToggle;
+        private Text launchDetail, phaseLabel, statusLabel, transportPlay, bendingToggle, waveMapToggle, viewLegend;
+        private GameObject viewLegendPanel;
+        private StarSourceLocator starLocator;
         private RawImage sceneImage;
         private Transform bodyA, bodyB, remnant, gasBox;
         private Material bodyMaterial, gasMaterial, sampleMaterial, displayMaterial;
@@ -63,6 +68,8 @@ namespace DTET.VisualPrototype
         private long lastGeneration = -1;
         private double lastTime = double.NaN, nextLabels;
         private bool disposed, manualRendering;
+        private InteractiveOpticalStyle beforeStarStyle;
+        private float beforeStarLens, beforeStarWave;
         private readonly RenderPipeline.StandardRequest sceneRequest = new RenderPipeline.StandardRequest();
         private readonly RenderPipeline.StandardRequest interfaceRequest = new RenderPipeline.StandardRequest();
         private static readonly Color Gold = new Color(1, .72f, .35f);
@@ -161,6 +168,7 @@ namespace DTET.VisualPrototype
             BuildHud();
             Optics = sceneRoot.AddComponent<InteractiveOptics>();
             FeaturedStar = sceneRoot.AddComponent<FeaturedBackgroundStar>(); FeaturedStar.Initialize(View);
+            WaveSurface = sceneRoot.AddComponent<WaveSurfaceView>();
             GeneratedFluidPlayer = sceneRoot.AddComponent<GeneratedFluidPlayer>(); GeneratedFluidPlayer.Initialize(Profile.RaySteps);
             Ready = true; GasVisible = Profile.GasEnabled; SamplesVisible = false;
             Wrist = hud.AddComponent<InteractiveWristDisplay>(); Wrist.Initialize(CaptureCamera, this);
@@ -214,6 +222,19 @@ namespace DTET.VisualPrototype
             bendingToggle = ReducedExhibitUi.Button(hud.transform, "BENDING: ON", 751, 812, 170, 36, ToggleStellarBending).GetComponentInChildren<Text>();
             ReducedExhibitUi.Button(hud.transform, "ACCRETION VIEW", 931, 812, 200, 36, ShowAccretionView);
             ReducedExhibitUi.Button(hud.transform, "OUTGOING WAVES", 1141, 812, 190, 36, WatchOutgoingWaves);
+            var waveButton = ReducedExhibitUi.Button(hud.transform, "WAVE MAP: OFF", 1290, 110, 274, 38, ToggleWaveMap);
+            waveButton.interactable = Profile.GasEnabled; waveMapToggle = waveButton.GetComponentInChildren<Text>();
+            ReducedExhibitUi.Button(hud.transform, "FIND SUN-LIKE STAR", 1290, 158, 274, 38, ShowStarView);
+            viewLegendPanel = ReducedExhibitUi.Panel(hud.transform, "View guide", 1130, 210, 434, 128, ReducedExhibitUi.Ink);
+            viewLegend = ReducedExhibitUi.Label(viewLegendPanel.transform, "", 16, 14, 10, 405, 112, ReducedExhibitUi.Accent);
+            viewLegendPanel.GetComponent<Image>().raycastTarget = false;
+            viewLegendPanel.SetActive(false);
+            var marker = new GameObject("Solar source direction", typeof(RectTransform), typeof(CanvasRenderer), typeof(StarSourceLocator));
+            marker.transform.SetParent(hud.transform, false); marker.layer = 5;
+            var rect = marker.GetComponent<RectTransform>(); rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one; rect.offsetMin = rect.offsetMax = Vector2.zero;
+            starLocator = marker.GetComponent<StarSourceLocator>();
+            starLocator.Initialize(ReducedExhibitUi.Label(hud.transform, "", 16, 850, 420, 345, 52, Gold));
+            starLocator.enabled = false;
         }
 
         private void RebuildSamples()
@@ -299,6 +320,11 @@ namespace DTET.VisualPrototype
         public void SetViewPreset(int index)
         {
             if (View == null || Session == null) return;
+            if (StarFinderVisible)
+            {
+                OpticalStyle = beforeStarStyle; LensGain = beforeStarLens; WaveGain = beforeStarWave;
+            }
+            StarFinderVisible = false; View.fieldOfView = 52;
             float r = (float)(GeneratedFluidActive ? GeneratedHistory.HalfExtentRg : Session.Model.HalfExtentXZ);
             // Explicit binary view preset; never track automatically or advance time.
             float focus = GeneratedFluidActive ? r : Mathf.Max(16, (float)Snapshot.SeparationRg * 1.6f);
@@ -364,8 +390,10 @@ namespace DTET.VisualPrototype
         }
         private void BindSkyLensing()
         {
-            bool enabled = Profile.GasEnabled && OpticalStyle != InteractiveOpticalStyle.Off;
-            if (Optics != null) Optics.Prepare(SceneTarget, View, Session.Model, Snapshot, enabled, LensGain, WaveGain);
+            bool enabled = Profile.GasEnabled && OpticalStyle != InteractiveOpticalStyle.Off && (LensGain > 0 || WaveGain > 0);
+            bool historyNeeded = WaveMapVisible && Profile.GasEnabled;
+            if (Optics != null) Optics.Prepare(SceneTarget, View, Session.Model, Snapshot, enabled || historyNeeded,
+                enabled ? LensGain : 0, enabled ? WaveGain : (historyNeeded ? 1 : 0));
             // Zero gains skip binding; do not reuse stale active uniforms.
             enabled = enabled && Optics != null && Optics.Active;
             if (sky != null)
@@ -374,6 +402,9 @@ namespace DTET.VisualPrototype
                 sky.SetStellarWaves(Optics == null ? null : Optics.WarpMaterial, enabled);
             }
             if (FeaturedStar != null) FeaturedStar.Bind(Snapshot, Optics == null ? null : Optics.WarpMaterial, enabled);
+            if (WaveSurface != null) WaveSurface.Bind(Optics == null ? null : Optics.WarpMaterial, WaveMapVisible && Profile.GasEnabled);
+            if (starLocator != null && FeaturedStar != null)
+                starLocator.Project(View, FeaturedStar.SourcePositionRg, FeaturedStar.SourceRadiusRg, StarFinderVisible, enabled && (LensGain > 0 || WaveGain > 0));
         }
         private void HandleInput()
         {
@@ -412,12 +443,21 @@ namespace DTET.VisualPrototype
             phaseLabel.text = $"{s.ScenarioLabel}  ·  {s.StageLabel}  ·  {gasPresentation}";
             statusLabel.text = $"V wrist · WASD + Q/E move · right-drag look · 1–5 views · Space pause · {Profile.EffectiveProfile} {SceneTarget.width}×{SceneTarget.height} · {OpticalStyle}";
             transportPlay.text = Session.IsPlaying ? "PAUSE" : "PLAY INSPIRAL";
-            bendingToggle.text = Optics != null && Optics.Active ? "BENDING: ON" : "BENDING: OFF";
+            bendingToggle.text = OpticalStyle != InteractiveOpticalStyle.Off && (LensGain > 0 || WaveGain > 0) && Optics != null && Optics.Active ? "BENDING: ON" : "BENDING: OFF";
+            waveMapToggle.text = WaveMapVisible ? "WAVE MAP: ON" : "WAVE MAP: OFF";
+            viewLegendPanel.SetActive(WaveMapVisible || StarFinderVisible);
+            if (WaveMapVisible)
+                viewLegend.text = "GRAVITATIONAL WAVE MAP\nCyan / amber: opposite strain phases\nIllustrative height; distance compressed 12x\n"
+                    + (GasVisible ? "Gas visible" : "Gas hidden") + " / Space pauses / fly to inspect";
+            else if (StarFinderVisible)
+                viewLegend.text = "SUN-LIKE STAR / ASSUMED SOURCE\n1 solar radius; 1 AU from the binary centre\n12-degree telescope view / " + (GasVisible ? "gas visible" : "gas hidden")
+                    + "\nBENDING compares original and lensed light";
         }
 
         public void WatchMerger()
         {
             if (!Ready || IsGeneratingFluid) return;
+            WaveMapVisible = false;
             UseGeneratedFluid(false);
             SetWristGas(true);
             Session.Seek(Math.Max(0, Session.Model.MergerTimeSeconds - 600 * Snapshot.GravitationalTimeSeconds));
@@ -433,6 +473,7 @@ namespace DTET.VisualPrototype
         public void ShowAccretionView()
         {
             if (!Ready || IsGeneratingFluid) return;
+            WaveMapVisible = false;
             // Select prescribed disks without discarding solved fluid or changing the scenario.
             UseGeneratedFluid(false);
             SetWristGas(true);
@@ -444,6 +485,7 @@ namespace DTET.VisualPrototype
         public void WatchStarlight()
         {
             if (!Ready || IsGeneratingFluid) return;
+            WaveMapVisible = false;
             Session.Reset(); Session.SetPlaybackRate(.03);
             SetWristGas(false); SetWristSamples(false); Present(); SetViewPreset(0);
             Wrist.SetRaised(false, true); Session.Play(); RefreshLabels();
@@ -458,6 +500,37 @@ namespace DTET.VisualPrototype
             SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 2);
             Present(); SetViewPreset(0); MoveCamera(View.transform.position * .6f);
             Session.Play(); RefreshLabels();
+        }
+
+        public void ToggleWaveMap()
+        {
+            if (!Ready || IsGeneratingFluid || !Profile.GasEnabled) return;
+            if (WaveMapVisible)
+            {
+                WaveMapVisible = false; SetWristGas(true); SetViewPreset(0); BindSkyLensing(); RefreshLabels(); return;
+            }
+            WatchOutgoingWaves(); SetWristGas(false);
+            if (!WaveSurface.Ready) WaveSurface.Initialize(Profile);
+            WaveMapVisible = WaveSurface.Ready;
+            BindSkyLensing();
+            float radius = Mathf.Max(30, WaveSurface.DisplayRadiusRg);
+            View.transform.position = new Vector3(.08f * radius, .78f * radius, -1.25f * radius);
+            View.transform.LookAt(Vector3.zero); MoveCamera(Vector3.zero); BindSkyLensing(); RefreshLabels();
+        }
+
+        public void ShowStarView()
+        {
+            if (!Ready || IsGeneratingFluid || FeaturedStar == null || !FeaturedStar.Ready) return;
+            if (!StarFinderVisible) { beforeStarStyle = OpticalStyle; beforeStarLens = LensGain; beforeStarWave = WaveGain; }
+            WaveMapVisible = false; Session.Pause(); SetWristGas(false); SetWristSamples(false);
+            BackgroundStarsVisible = true; SetWristOptics(InteractiveOpticalStyle.Off, .35f, 0);
+            FeaturedStar.Bind(Snapshot, null, false);
+            Vector3 direction = FeaturedStar.SourcePositionRg.normalized;
+            Vector3 side = Vector3.Cross(Vector3.up, direction).normalized;
+            float distance = Mathf.Max(180, 12 * (float)Snapshot.SeparationRg);
+            View.transform.position = -distance * direction + .08f * distance * side;
+            View.transform.LookAt(FeaturedStar.SourcePositionRg); View.fieldOfView = 12;
+            StarFinderVisible = true; Wrist.SetRaised(false, true); Present(); BindSkyLensing(); RefreshLabels();
         }
 
         public void ToggleStellarBending()
@@ -628,6 +701,8 @@ namespace DTET.VisualPrototype
             bodyMaterial = gasMaterial = sampleMaterial = displayMaterial = null; sampleMesh = null;
             samplePositions = null; sampleColours = null; sampleRenderer = gasRenderer = null;
             Session = null; Wrist = null; Optics = null; FeaturedStar = null; View = null; sky = null;
+            WaveSurface = null; starLocator = null; viewLegendPanel = null;
+            WaveMapVisible = StarFinderVisible = false;
             lastGeneration = -1; lastTime = double.NaN; GasVisible = SamplesVisible = false;
             if (launcher != null && !disposed) { launcher.SetActive(true); SelectProfile(SelectedProfile); }
         }

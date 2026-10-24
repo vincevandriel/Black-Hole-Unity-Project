@@ -122,6 +122,7 @@ namespace DTET.VisualPrototype.Editor
                 "Assets/Resources/DTET/ReducedDensitySamples.shader",
                 "Assets/Resources/DTET/ExhibitSky.shader",
                 "Assets/Resources/DTET/StellarBackdrop.shader",
+                "Assets/Resources/DTET/WaveSurface.shader",
                 "Assets/Resources/DTET/FeaturedBackgroundStar.shader",
                 "Assets/Resources/DTET/ExhibitDisplay.shader",
                 "Assets/Resources/DTET/InteractiveOptics.shader",
@@ -133,7 +134,12 @@ namespace DTET.VisualPrototype.Editor
             {
                 var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
                 if (shader == null || ShaderUtil.ShaderHasError(shader))
+                {
+                    if (shader != null)
+                        foreach (var message in ShaderUtil.GetShaderMessages(shader))
+                            Debug.LogError($"{path}:{message.line}: {message.message}");
                     throw new InvalidOperationException("Missing or invalid DT-ET shader: " + path);
+                }
             }
 
             var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
