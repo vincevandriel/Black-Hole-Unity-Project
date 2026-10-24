@@ -225,12 +225,12 @@ namespace DTET.VisualPrototype
             TextAt(panel, "LENS GAIN", 10, Muted, 20, 589, 85, 18);
             lensGain = Slider(panel, "Mass bending visual gain", 111, 592, 190, 12, 0, 1, _ => OpticsChanged());
             TextAt(panel, "WAVE GAIN", 10, Muted, 332, 589, 90, 18);
-            waveGain = Slider(panel, "Magnified wave visual gain", 432, 592, 190, 12, 0, 1, _ => OpticsChanged());
+            waveGain = Slider(panel, "Magnified wave visual gain", 432, 592, 190, 12, 0, 2, _ => OpticsChanged());
             gasText = Button(panel, "GAS ON", 20, 620, 145, 29, () => presenter.SetWristGas(!presenter.CaptureWristState().GasEnabled)).GetComponentInChildren<Text>();
             samplesText = Button(panel, "SAMPLES OFF", 173, 620, 145, 29, () => presenter.SetWristSamples(!presenter.CaptureWristState().SamplesEnabled)).GetComponentInChildren<Text>();
             Button(panel, "ABOVE", 326, 620, 92, 29, () => presenter.SetWristView(1));
             Button(panel, "EDGE", 426, 620, 92, 29, () => presenter.SetWristView(2));
-            Button(panel, "OVERVIEW", 526, 620, 96, 29, () => presenter.SetWristView(0));
+            Button(panel, "BINARY", 526, 620, 96, 29, () => presenter.SetWristView(0));
             validation = TextAt(panel, "", 10, Gold, 20, 656, 602, 23);
             status = TextAt(panel, "", 10, Muted, 20, 682, 602, 22);
         }
@@ -318,12 +318,12 @@ namespace DTET.VisualPrototype
         }
         public void SetOpticalStyle(InteractiveOpticalStyle style)
         {
-            float lens = style == InteractiveOpticalStyle.Off ? 0 : style == InteractiveOpticalStyle.Subtle ? .35f : .80f;
-            float wave = style == InteractiveOpticalStyle.Off ? 0 : style == InteractiveOpticalStyle.Subtle ? .25f : .75f;
+            float lens = style == InteractiveOpticalStyle.Off ? 0 : style == InteractiveOpticalStyle.Subtle ? .2f : .35f;
+            float wave = style == InteractiveOpticalStyle.Off ? 0 : style == InteractiveOpticalStyle.Subtle ? .45f : 1.3f;
             presenter.SetWristOptics(style, lens, wave); Refresh(true);
         }
         public void SetOpticalGains(float lens, float wave)
-        { presenter.SetWristOptics(lastState.OpticalStyle, Mathf.Clamp01(lens), Mathf.Clamp01(wave)); Refresh(true); }
+        { presenter.SetWristOptics(lastState.OpticalStyle, Mathf.Clamp01(lens), Mathf.Clamp(wave, 0, 2)); Refresh(true); }
         private void InputsChanged()
         { if (refreshing) return; pendingEdits = true; localValidation = null; UpdateInputLabels(); }
         private void OpticsChanged()
@@ -401,7 +401,7 @@ namespace DTET.VisualPrototype
                 playText.text = state.Playing ? "PAUSE" : "PLAY"; rateText.text = $"{Math.Abs(state.PlaybackRate):0.00}x";
                 gasText.text = state.GasEnabled ? "GAS ON" : "GAS OFF";
                 samplesText.text = state.SamplesEnabled ? "SAMPLES ON" : "SAMPLES OFF";
-                opticalText.text = state.OpticalStyle == InteractiveOpticalStyle.Off ? "WARP OFF" : "MAGNIFIED / APPROX.";
+                opticalText.text = state.OpticalStyle == InteractiveOpticalStyle.Off ? "WARP OFF" : "AMPLIFIED / SPACING 1:12";
                 lensGain.SetValueWithoutNotify(state.LensGain); waveGain.SetValueWithoutNotify(state.WaveGain);
                 massA.interactable = massB.interactable = separation.interactable = !state.ReplayMode;
                 applyButton.interactable = !state.ReplayMode;

@@ -11,11 +11,15 @@ namespace BlackHole.Staging.Simulation
     /// </summary>
     public sealed class ReducedBinaryFlowModel
     {
-        public const string ModelId = "assumed-SXS0305-reduced-binary-flow-v1";
+        public const string ModelId = "assumed-SXS0305-reduced-binary-flow-v2-plunge";
         public const double TemperatureScaleKelvin = 1e7;
         public const double GrayExtinctionPerRg = .16;
         public const double BinaryFadeTg = 120;
         public const double RemnantRiseTg = 160;
+        public const double TransitionLeadTg = 600;
+        public const double EmittingInnerHorizonRatio = 1.25;
+        public const double TransitionInnerRadiusRg = 4;
+        public const double TransitionOuterRadiusRg = 16;
         public const double ReservoirAspect = .18;
         public const double DiskAspect = .24;
         public const double StreamWidthRg = 1.4;
@@ -122,6 +126,13 @@ namespace BlackHole.Staging.Simulation
                     body.MassFraction, .008, body.VelocityOverC, 1, 0, 0,
                     ref density, ref emission, ref vx, ref vy, ref vz);
             }
+            // Assumed shared gas during tidal disruption, not a third horizon or
+            // a hydrodynamic merger solution. Its C1 envelope bridges the old
+            // zero-emission interval between minidisk fade and remnant rise.
+            if (state.TransitionWeight > 0)
+                AccumulateRing(xRg, yRg, zRg, TransitionInnerRadiusRg, TransitionOuterRadiusRg,
+                    DiskAspect, 1.5 * state.TransitionWeight, 1.1, 1, .008, default,
+                    state.PatternCos2, state.PatternSin2, .2, ref density, ref emission, ref vx, ref vy, ref vz);
             if (density <= 0) return default;
             // Coordinate equal-area-sphere mask, not a ray-traced horizon or optical shadow.
             double mask = state.IsCommonHorizon
@@ -140,7 +151,7 @@ namespace BlackHole.Staging.Simulation
             double vscale = deltaSeconds > 0 ? 1 / (deltaSeconds * history.SpeedOfLight) : 0;
             var velocity = new NumericalVector3((r.X - l.X) * vscale, (r.Z - l.Z) * vscale, (r.Y - l.Y) * vscale);
             return new ReducedBinaryFlowBody(position, velocity, mass, current.ArealRadiusMeters / GravitationalRadiusMeters,
-                6 * mass, outer);
+                EmittingInnerHorizonRatio * current.ArealRadiusMeters / GravitationalRadiusMeters, outer);
         }
 
         internal ReducedBinaryFlowStream MakeStream(ReducedBinaryFlowBody body)
@@ -261,6 +272,12 @@ namespace BlackHole.Staging.Simulation
         public double SeparationRg { get; }
         public double BinaryWeight { get; }
         public double RemnantWeight { get; }
+        // Prescribed gas survives the switch between individual and common horizons.
+        // Intra-ISCO emission is an assumed plunging component; it is not stable
+        // circular motion or a reconstruction of gas in GW150914.
+        public double TransitionWeight => ReducedBinaryFlowModel.SmoothStep(
+            (AlignedTimeTg + ReducedBinaryFlowModel.TransitionLeadTg) / ReducedBinaryFlowModel.TransitionLeadTg)
+            * (1 - RemnantWeight);
         public bool IsCommonHorizon => AlignedTimeTg >= 0;
         public double ReservoirInnerRadiusRg { get; }
         public double ReservoirOuterRadiusRg { get; }

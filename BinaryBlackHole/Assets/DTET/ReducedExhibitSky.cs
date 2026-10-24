@@ -72,6 +72,27 @@ namespace DTET.VisualPrototype
 
         private void LateUpdate() { UpdateRenderSize(); }
 
+        /// <summary>Moves immutable star centres in the vertex shader before gas composition.</summary>
+        public void SetLensing(InteractiveBinarySnapshot snapshot, float gain)
+        {
+            if (material == null) return;
+            if (!float.IsFinite(gain)) throw new ArgumentOutOfRangeException(nameof(gain));
+            material.SetFloat("_SkyLensGain", Mathf.Clamp(gain, 0, 2));
+            material.SetVector("_SkyLensA", LensBody(snapshot.BodyA));
+            material.SetVector("_SkyLensB", LensBody(snapshot.BodyB));
+            material.SetVector("_SkyLensR", LensBody(snapshot.Remnant));
+            material.SetVector("_SkyLensRadii", new Vector4((float)(snapshot.BodyA?.HorizonRadiusRg ?? 0),
+                (float)(snapshot.BodyB?.HorizonRadiusRg ?? 0), (float)(snapshot.Remnant?.HorizonRadiusRg ?? 0), 0));
+            UpdateRenderSize();
+        }
+
+        private static Vector4 LensBody(InteractiveBinaryBody? body)
+        {
+            if (!body.HasValue) return Vector4.zero;
+            var b = body.Value;
+            return new Vector4((float)b.PositionRg.X, (float)b.PositionRg.Y, (float)b.PositionRg.Z, (float)b.MassFraction);
+        }
+
         private void UpdateRenderSize()
         {
             if (view == null || material == null) return;

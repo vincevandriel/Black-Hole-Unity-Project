@@ -30,6 +30,30 @@ internal static class InteractiveOpticsTests
         }
         InteractiveOpticsReference.LensOffset(.1, .2, 10, .5, 1, 100, 0, out dx, out dy);
         Check(dx == 0 && dy == 0, "Zero lens gain is identity");
+        foreach (double gain in new[] { .05, .35, 1, 2 })
+        foreach (double mass in new[] { .1, .5, 1 })
+        {
+            double lastMapped = 0;
+            for (int i = 1; i <= 1000; i++)
+            {
+                double angle = i * .001;
+                InteractiveOpticsReference.LensOffset(angle, 0, 15, mass, 2 * mass,
+                    double.PositiveInfinity, gain, out double x, out double y);
+                Check(Math.Abs(x) <= InteractiveOpticsReference.MaximumLensFraction * mass * angle + 1e-14,
+                    "Near-field composite displacement obeys the mass-weighted impact bound");
+                Check(angle + x > lastMapped && y == 0,
+                    "Lens image mapping cannot fold the luminous disk into nested copies");
+                lastMapped = angle + x;
+            }
+        }
+        InteractiveOpticsReference.SkyApparentOffset(.1, -.2, 25, .5, 1, .35, out dx, out dy);
+        Check(dx > 0 && dy < 0, "Distant apparent star centre deflects away from the lens");
+        InteractiveOpticsReference.LensOffset(.1, -.2, 25, .5, 1, double.PositiveInfinity, .35,
+            out double inverseX, out double inverseY);
+        Near(dx, -inverseX, 0, "Star centre uses the forward sign of the bounded weak lens");
+        Near(dy, -inverseY, 0, "Both forward star coordinates share the lens convention");
+        InteractiveOpticsReference.SkyApparentOffset(.1, -.2, 25, .5, 1, 0, out dx, out dy);
+        Check(dx == 0 && dy == 0, "Zero sky lens gain leaves immutable star centres unchanged");
         InteractiveOpticsReference.WaveOffset(.1, .1, 1, 0, 1, out dx, out dy);
         Near(dx, -dy, 1e-15, "Plus polarization stretches and squeezes perpendicular axes");
         InteractiveOpticsReference.WaveOffset(.1, 0, 0, 1, 1, out dx, out dy);
@@ -38,9 +62,28 @@ internal static class InteractiveOpticsTests
         Check(Math.Sqrt(dx * dx + dy * dy) <= .035000001, "Enhanced wave gain remains bounded");
         InteractiveOpticsReference.WaveOffset(.1, .2, 2, 3, 0, out dx, out dy);
         Check(dx == 0 && dy == 0, "Zero wave gain is identity");
+        InteractiveOpticsReference.WaveOffset(0, 0, 1, 1, 2, out dx, out dy);
+        Check(dx == 0 && dy == 0, "Wave display has no singular centre");
+        InteractiveOpticsReference.WaveOffset(.2, .1, .2, 0, 1.3, out dx, out dy);
+        Check(Math.Sqrt(dx * dx + dy * dy) > .005,
+            "A modest normalized wave produces a legible amplified angular displacement");
+        InteractiveOpticsReference.WaveOffset(.2, .1, -.2, 0, 1.3, out double reverseX, out double reverseY);
+        Near(dx, -reverseX, 1e-15, "Opposite wave phase reverses horizontal distortion");
+        Near(dy, -reverseY, 1e-15, "Opposite wave phase reverses vertical distortion");
 
         var model = new InteractiveBinaryScenario(new InteractiveBinaryParameters());
         double time = .5 * model.CutoffTimeSeconds;
+        Near(InteractiveOpticsReference.WaveHistoryRadius(8), 96, 0,
+            "Wave presentation declares twelvefold radial compression");
+        double radius1 = InteractiveOpticsReference.WaveHistoryRadius(4);
+        double radius2 = InteractiveOpticsReference.WaveHistoryRadius(9);
+        double propagationSeconds = (radius2 - radius1) * model.GravitationalTimeSeconds;
+        var innerFront = model.EvaluateRetardedSignal(time, radius1);
+        var outerFront = model.EvaluateRetardedSignal(time + propagationSeconds, radius2);
+        Near(innerFront.HPlus!.Value, outerFront.HPlus!.Value, 1e-19,
+            "A signed front propagates outward with exact source timing through compressed display radii");
+        Near(innerFront.HCross!.Value, outerFront.HCross!.Value, 1e-19,
+            "Both wave polarizations share the same compressed outward propagation delay");
         for (int i = 0; i <= 255; i++)
         {
             double radius = 4 * model.HalfExtentXZ * i / 255;

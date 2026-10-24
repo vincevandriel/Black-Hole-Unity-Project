@@ -218,7 +218,8 @@ namespace BlackHole.Staging.Simulation
                     .8 * RocheLobeFraction(mass2 / mass1) * radius);
                 sa = GasSampler.MakeStream(a); sb = GasSampler.MakeStream(b);
             }
-            else c = new ReducedBinaryFlowBody(default, default, 1, 2, 6, 16);
+            else c = new ReducedBinaryFlowBody(default, default, 1, 2,
+                ReducedBinaryFlowModel.EmittingInnerHorizonRatio * 2, 16);
             double aligned = (elapsed - MergerTimeSeconds) / GravitationalTimeSeconds;
             double mid = .5 * (GasSampler.ReservoirInnerRadiusRg + GasSampler.ReservoirOuterRadiusRg);
             double pattern = tau / Math.Pow(mid, 1.5);
@@ -314,7 +315,8 @@ namespace BlackHole.Staging.Simulation
             var p = new NumericalVector3(orbitFraction * radius * cos, 0, orbitFraction * radius * sin);
             var v = new NumericalVector3(orbitFraction * (radialVelocity * cos - radius * omega * sin), 0,
                 orbitFraction * (radialVelocity * sin + radius * omega * cos));
-            return new ReducedBinaryFlowBody(p, v, mass, 2 * mass, 6 * mass, outer);
+            return new ReducedBinaryFlowBody(p, v, mass, 2 * mass,
+                ReducedBinaryFlowModel.EmittingInnerHorizonRatio * 2 * mass, outer);
         }
         private InteractiveSignalSample Unavailable(double time, InteractiveSignalCoverage coverage)
             => new InteractiveSignalSample(history != null ? InteractiveSignalKind.NormalizedSxsMode : InteractiveSignalKind.QuadrupoleStrain,

@@ -19,6 +19,20 @@ float4 SampleGeneratedFluid(float3 p)
 float3 GeneratedFluidTint(float2 velocity)
 {
     // False colour indicates model speed; this is not a temperature or luminosity estimate.
-    return lerp(float3(.95,.52,.19), float3(.55,.78,1), .35 * saturate(length(velocity)/.3));
+    return lerp(float3(1,.19,.025), float3(1,.73,.3), saturate(length(velocity)/.35));
+}
+float3 GeneratedFluidDisplayEmission(float3 p, float4 field)
+{
+    // Display transfer only: retain the resolved flow morphology and all fixture
+    // values. No synthetic filaments are added to the numerical fluid history.
+    float contrast = field.x / (field.x + .45);
+    float speed = saturate(length(field.zw) / .35);
+    float source = (.08 + 1.9 * contrast * contrast) * (.3 + 1.7 * speed * speed);
+    float height = p.y / max(_GeneratedGrid.y, 1e-6);
+    float midPlane = exp(-1.5 * height * height);
+    // A circular display aperture fades the finite square cache boundary; the
+    // samples, mass ledger, and stored history still cover the entire grid.
+    float aperture = 1 - smoothstep(.82, .98, length(p.xz) / max(_GeneratedGrid.x, 1e-6));
+    return GeneratedFluidTint(field.zw) * source * midPlane * aperture;
 }
 #endif

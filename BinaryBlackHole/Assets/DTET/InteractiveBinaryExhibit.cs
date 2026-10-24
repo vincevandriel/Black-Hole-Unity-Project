@@ -27,9 +27,9 @@ namespace DTET.VisualPrototype
         public bool EmulatedInputEnabled { get; set; } = true;
         public bool GasVisible { get; private set; }
         public bool SamplesVisible { get; private set; }
-        public InteractiveOpticalStyle OpticalStyle { get; private set; } = InteractiveOpticalStyle.Subtle;
+        public InteractiveOpticalStyle OpticalStyle { get; private set; } = InteractiveOpticalStyle.Enhanced;
         public float LensGain { get; private set; } = .35f;
-        public float WaveGain { get; private set; } = .25f;
+        public float WaveGain { get; private set; } = 1.3f;
         public Transform BodyATransform => bodyA;
         public Transform BodyBTransform => bodyB;
         public Transform RemnantTransform => remnant;
@@ -48,10 +48,10 @@ namespace DTET.VisualPrototype
             : GeneratedFluidPlayer == null ? "Enter the observatory to generate fluid." : GeneratedFluidPlayer.Status;
 
         private GameObject launcher, sceneRoot, hud, sampleObject;
-        private Text launchDetail, phaseLabel, statusLabel;
+        private Text launchDetail, phaseLabel, statusLabel, transportPlay;
         private RawImage sceneImage;
         private Transform bodyA, bodyB, remnant, gasBox;
-        private Material bodyMaterial, guideMaterial, gasMaterial, sampleMaterial, displayMaterial;
+        private Material bodyMaterial, gasMaterial, sampleMaterial, displayMaterial;
         private Mesh sampleMesh;
         private MeshRenderer gasRenderer, sampleRenderer;
         private ReducedExhibitSky sky;
@@ -152,10 +152,9 @@ namespace DTET.VisualPrototype
             ResizeTarget();
             sky = sceneRoot.AddComponent<ReducedExhibitSky>(); sky.Initialize(View, Profile.StarCount);
             bodyMaterial = new Material(Resources.Load<Shader>("DTET/SolidSurface")); bodyMaterial.SetColor("_Color", Color.black);
-            guideMaterial = new Material(Resources.Load<Shader>("DTET/GlowLine"));
-            bodyA = BuildMarker("Primary horizon proxy", new Color(.3f, .77f, 1));
-            bodyB = BuildMarker("Secondary horizon proxy", new Color(.8f, .55f, 1));
-            remnant = BuildMarker("Remnant horizon proxy", Gold);
+            bodyA = BuildMarker("Primary horizon proxy");
+            bodyB = BuildMarker("Secondary horizon proxy");
+            remnant = BuildMarker("Remnant horizon proxy");
             if (Profile.GasEnabled) BuildGas();
             BuildHud();
             Optics = sceneRoot.AddComponent<InteractiveOptics>();
@@ -163,7 +162,7 @@ namespace DTET.VisualPrototype
             Ready = true; GasVisible = Profile.GasEnabled; SamplesVisible = false;
             Wrist = hud.AddComponent<InteractiveWristDisplay>(); Wrist.Initialize(CaptureCamera, this);
             lastGeneration = -1; lastTime = double.NaN;
-            launcher.SetActive(false); SetViewPreset(0); Present(); Wrist.SetRaised(true);
+            launcher.SetActive(false); SetViewPreset(0); Present(); Wrist.SetRaised(false, true);
         }
 
         private void ResizeTarget()
@@ -177,22 +176,10 @@ namespace DTET.VisualPrototype
             if (sceneImage != null) sceneImage.texture = SceneTarget;
         }
 
-        private Transform BuildMarker(string name, Color colour)
+        private Transform BuildMarker(string name)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Sphere); go.name = name; go.transform.SetParent(sceneRoot.transform);
             Destroy(go.GetComponent<Collider>()); go.GetComponent<MeshRenderer>().sharedMaterial = bodyMaterial;
-            // Three thin coordinate guides keep the proxy visible from arbitrary inclinations.
-            for (int plane = 0; plane < 3; plane++)
-            {
-                var guide = new GameObject("Horizon coordinate guide"); guide.transform.SetParent(go.transform, false);
-                var line = guide.AddComponent<LineRenderer>(); line.sharedMaterial = guideMaterial; line.useWorldSpace = false;
-                line.loop = true; line.positionCount = 64; line.widthMultiplier = .013f; line.startColor = line.endColor = colour * .65f;
-                for (int i = 0; i < 64; i++)
-                {
-                    float a = i * 2 * Mathf.PI / 64, x = Mathf.Cos(a) * .506f, y = Mathf.Sin(a) * .506f;
-                    line.SetPosition(i, plane == 0 ? new Vector3(x, 0, y) : plane == 1 ? new Vector3(x, y, 0) : new Vector3(0, x, y));
-                }
-            }
             return go.transform;
         }
 
@@ -216,6 +203,10 @@ namespace DTET.VisualPrototype
             ReducedExhibitUi.Label(hud.transform, "DT / ET     BINARY EXPLORER", 26, 28, 12, 1450, 36, Color.white);
             phaseLabel = ReducedExhibitUi.Label(hud.transform, "", 15, 30, 53, 1500, 30, Gold);
             statusLabel = ReducedExhibitUi.Label(hud.transform, "", 14, 25, 866, 1540, 32, ReducedExhibitUi.Muted);
+            transportPlay = ReducedExhibitUi.Button(hud.transform, "PLAY INSPIRAL", 36, 812, 185, 36,
+                () => SetWristPlaying(!Session.IsPlaying)).GetComponentInChildren<Text>();
+            ReducedExhibitUi.Button(hud.transform, "RESTART", 231, 812, 120, 36, RestartPresentation);
+            ReducedExhibitUi.Button(hud.transform, "WATCH MERGER", 361, 812, 185, 36, WatchMerger);
         }
 
         private void RebuildSamples()
@@ -251,6 +242,7 @@ namespace DTET.VisualPrototype
                 Session.Seek(GeneratedHistory.StartSeconds); Session.Pause();
                 SamplesVisible = false; if (sampleRenderer != null) sampleRenderer.enabled = false;
                 GasVisible = Profile.GasEnabled; lastTime = double.NaN;
+                SetViewPreset(0);
             }
             var s = Snapshot;
             if (s.Generation != lastGeneration)
@@ -301,7 +293,10 @@ namespace DTET.VisualPrototype
         {
             if (View == null || Session == null) return;
             float r = (float)(GeneratedFluidActive ? GeneratedHistory.HalfExtentRg : Session.Model.HalfExtentXZ);
-            Vector3[] points = { new Vector3(0, r * .95f, -r * 1.8f), new Vector3(0, r * 2.05f, -.01f), new Vector3(0, r * .035f, -r * 2), new Vector3(0, -r * .95f, -r * 1.8f), new Vector3(0, 10, -23) };
+            // Frame the binary rather than the much larger reservoir. This is a view command,
+            // never an automatic camera track: navigation and paused inspection stay independent.
+            float focus = GeneratedFluidActive ? r : Mathf.Max(16, (float)Snapshot.SeparationRg * 1.6f);
+            Vector3[] points = { new Vector3(0, focus * .85f, -focus * 1.3f), new Vector3(0, focus * 1.55f, -.01f), new Vector3(0, focus * .14f, -focus * 1.55f), new Vector3(0, -focus * .85f, -focus * 1.3f), new Vector3(0, r * .95f, -r * 1.8f) };
             if (index < 0 || index >= points.Length) throw new ArgumentOutOfRangeException(nameof(index));
             View.transform.position = points[index]; View.transform.LookAt(Vector3.zero); MoveCamera(Vector3.zero);
         }
@@ -326,6 +321,7 @@ namespace DTET.VisualPrototype
             if (!Ready) return;
             if (IsGeneratingFluid) Session.Pause();
             Session.Tick(Time.unscaledDeltaTime); Present();
+            BindSkyLensing();
             if (Time.unscaledTimeAsDouble >= nextLabels) { RefreshLabels(); nextLabels = Time.unscaledTimeAsDouble + .1; }
         }
         private void AfterSceneRender(ScriptableRenderContext context, Camera camera)
@@ -343,6 +339,7 @@ namespace DTET.VisualPrototype
         {
             if (!Ready) return;
             Present(); RefreshLabels(); Wrist.RefreshNow(); Canvas.ForceUpdateCanvases();
+            BindSkyLensing();
             manualRendering = true;
             try
             {
@@ -358,6 +355,11 @@ namespace DTET.VisualPrototype
                 }
             }
             finally { manualRendering = false; }
+        }
+        private void BindSkyLensing()
+        {
+            if (sky != null) sky.SetLensing(Snapshot,
+                Profile.GasEnabled && OpticalStyle != InteractiveOpticalStyle.Off ? LensGain : 0);
         }
         private void HandleInput()
         {
@@ -390,6 +392,22 @@ namespace DTET.VisualPrototype
             var s = CaptureWristState();
             phaseLabel.text = $"{s.ScenarioLabel}  ·  {s.StageLabel}  ·  {(GeneratedFluidActive ? "2D ISOTHERMAL FLUID / NEWTONIAN GRAVITY" : "ASSUMED GAS / ILLUSTRATIVE OPTICS")}";
             statusLabel.text = $"V wrist · WASD + Q/E move · right-drag look · 1–5 views · Space pause · {Profile.EffectiveProfile} {SceneTarget.width}×{SceneTarget.height} · {OpticalStyle}";
+            transportPlay.text = Session.IsPlaying ? "PAUSE" : "PLAY INSPIRAL";
+        }
+
+        public void WatchMerger()
+        {
+            if (!Ready || IsGeneratingFluid) return;
+            Session.Seek(Math.Max(0, Session.Model.MergerTimeSeconds - 600 * Snapshot.GravitationalTimeSeconds));
+            Session.SetPlaybackRate(.01); Present(); SetViewPreset(0);
+            Wrist.SetRaised(false, true); Session.Play(); RefreshLabels();
+        }
+
+        public void RestartPresentation()
+        {
+            if (!Ready || IsGeneratingFluid) return;
+            ResetWristScenario(); Session.SetPlaybackRate(.05); SetViewPreset(0);
+            Wrist.SetRaised(false, true); RefreshLabels();
         }
 
         public InteractiveWristState CaptureWristState()
@@ -500,6 +518,7 @@ namespace DTET.VisualPrototype
             if (!Ready || GeneratedFluidPlayer == null) return;
             GeneratedFluidPlayer.Select(value);
             if (GeneratedFluidActive) { SamplesVisible = false; if (sampleRenderer != null) sampleRenderer.enabled = false; }
+            SetViewPreset(0);
             lastTime = double.NaN; Present(); RefreshLabels();
         }
         public void SeekGeneratedFluidStart()
@@ -540,10 +559,10 @@ namespace DTET.VisualPrototype
             if (sceneRoot != null) sceneRoot.SetActive(false);
             if (hud != null) hud.SetActive(false);
             if (SceneTarget != null) { if (View != null) View.targetTexture = null; SceneTarget.Release(); Destroy(SceneTarget); }
-            foreach (var owned in new UnityEngine.Object[] { sceneRoot, hud, bodyMaterial, guideMaterial, gasMaterial, sampleMaterial, displayMaterial, sampleMesh })
+            foreach (var owned in new UnityEngine.Object[] { sceneRoot, hud, bodyMaterial, gasMaterial, sampleMaterial, displayMaterial, sampleMesh })
                 if (owned != null) Destroy(owned);
             sceneRoot = hud = sampleObject = null; SceneTarget = null; sceneImage = null;
-            bodyMaterial = guideMaterial = gasMaterial = sampleMaterial = displayMaterial = null; sampleMesh = null;
+            bodyMaterial = gasMaterial = sampleMaterial = displayMaterial = null; sampleMesh = null;
             samplePositions = null; sampleColours = null; sampleRenderer = gasRenderer = null;
             Session = null; Wrist = null; Optics = null; View = null; sky = null;
             lastGeneration = -1; lastTime = double.NaN; GasVisible = SamplesVisible = false;

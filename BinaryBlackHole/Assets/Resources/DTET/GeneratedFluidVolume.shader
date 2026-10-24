@@ -52,10 +52,11 @@ Shader "DTET/GeneratedFluidVolume"
                 float opacity=0;float3 radiance=0;
                 [loop]for(int k=0;k<count;k++)
                 {
-                    float4 field=SampleGeneratedFluid(ro+rd*(start+(k+.5)*ds));
+                    float3 position=ro+rd*(start+(k+.5)*ds);
+                    float4 field=SampleGeneratedFluid(position);
                     float tau=max(0,_GeneratedOpacity*field.y*ds);
                     float absorb=tau<1e-3?tau*(1-tau*(.5-tau/6)):1-exp(-tau);
-                    radiance+=(1-opacity)*absorb*GeneratedFluidTint(field.zw);
+                    radiance+=(1-opacity)*absorb*GeneratedFluidDisplayEmission(position,field);
                     opacity+=(1-opacity)*absorb;
                 }
                 return float4(radiance*_GeneratedExposure,blocked?1:opacity);

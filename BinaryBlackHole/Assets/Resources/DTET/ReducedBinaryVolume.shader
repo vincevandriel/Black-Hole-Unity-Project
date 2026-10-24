@@ -34,7 +34,9 @@ Shader "DTET/ReducedBinaryVolume"
             float HorizonHit(float3 ro,float3 rd,float4 horizon)
             {
                 if(horizon.w<=0)return 1e20;
-                float3 d=ro-horizon.xyz;float b=dot(d,rd);float disc=b*b-dot(d,d)+horizon.w*horizon.w;
+                float3 d=ro-horizon.xyz;float b=dot(d,rd);float c=dot(d,d)-horizon.w*horizon.w;
+                if(c<=0)return 0;
+                float disc=b*b-c;
                 if(disc<0)return 1e20;
                 float hit=-b-sqrt(disc);return hit>0?hit:1e20;
             }
@@ -59,16 +61,22 @@ Shader "DTET/ReducedBinaryVolume"
                     // Expand by one base segment so crossing a region boundary cannot skip refinement.
                     float cavity=_FlowReservoir.x+3+ds;
                     int subdivisions=(dot(centre.xz,centre.xz)<cavity*cavity && abs(centre.y)<6+ds)?4:1;
+                    // Resolve the thinner emitting layer locally rather than
+                    // raising the full-volume march cost for every sky pixel.
+                    float3 da=centre-_FlowA.xyz,db=centre-_FlowB.xyz,dr=centre-_FlowRemnant.xyz;
+                    bool nearMini=(_FlowWeights.x>0 &&
+                        ((length(da.xz)<_FlowARadii.y+ds && abs(da.y)<.3*_FlowARadii.y+ds)
+                        || (length(db.xz)<_FlowBRadii.y+ds && abs(db.y)<.3*_FlowBRadii.y+ds)));
+                    bool nearRemnant=_FlowWeights.y>0 && length(dr.xz)<_FlowRemnantRadii.y+ds && abs(dr.y)<5+ds;
+                    bool nearTransition=_FlowWeights.w>0 && length(centre.xz)<16+ds && abs(centre.y)<5+ds;
+                    if(nearMini||nearRemnant||nearTransition)subdivisions=8;
                     float subDs=ds/subdivisions;
                     [loop]for(int j=0;j<subdivisions;j++)
                     {
                         float3 p=ro+rd*(midpoint-.5*ds+(j+.5)*subDs);
                         float2 field=SampleReducedFlow(p);
-                        float source=field.y/max(field.x,1e-12);
-                        float temperature=sqrt(sqrt(max(source,0)));
-                        float3 tint=lerp(float3(1,.28,.065),float3(.62,.83,1),saturate((temperature-.38)/.7));
                         float absorb=Absorbed(max(0,_Opacity*field.x*subDs));
-                        radiance+=(1-opacity)*absorb*source*tint;opacity+=(1-opacity)*absorb;
+                        radiance+=(1-opacity)*absorb*ReducedFlowDisplayEmission(p,field);opacity+=(1-opacity)*absorb;
                     }
                 }
                 // Linear premultiplied radiance; the display applies one final exposure map

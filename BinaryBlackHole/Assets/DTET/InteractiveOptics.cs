@@ -35,6 +35,7 @@ namespace DTET.VisualPrototype
         public long ContextVersion { get; private set; }
         public double SnapshotTime { get; private set; }
         public double WaveRadiusRg => radialExtent;
+        public double DisplayWaveRadiusRg => radialExtent / InteractiveOpticsReference.WaveRadialCompression;
         public Material WarpMaterial => material;
         public long AllocatedBytes => (target == null ? 0 : (long)target.width * target.height * (target.format == RenderTextureFormat.ARGBHalf ? 8 : 4))
             + (waveTexture == null ? 0 : 2L * InteractiveOpticsReference.WaveSamples * (waveTexture.format == TextureFormat.RGBAHalf ? 8 : 16))
@@ -109,7 +110,7 @@ namespace DTET.VisualPrototype
             material.SetVector("_HorizonA", Horizon(snapshot.BodyA));
             material.SetVector("_HorizonB", Horizon(snapshot.BodyB));
             material.SetVector("_HorizonR", Horizon(snapshot.Remnant));
-            radialExtent = 4 * model.HalfExtentXZ;
+            radialExtent = InteractiveOpticsReference.WaveHistoryRadius(2 * model.HalfExtentXZ);
             if (waveTexture != null && (sampledTime != snapshot.ElapsedSeconds || sampledGeneration != snapshot.Generation))
             {
                 ulong hash = 14695981039346656037UL;
@@ -140,12 +141,13 @@ namespace DTET.VisualPrototype
             float scale = WaveDisplayScale;
             float effectiveWaveGain = waveTexture == null ? 0 : waveGain;
             material.SetFloat("_OpticsFixture", 0);
-            material.SetVector("_WaveParameters", new Vector4((float)radialExtent, scale, gasVisible ? 1 : 0, 0));
+            material.SetVector("_WaveParameters", new Vector4((float)radialExtent, scale, gasVisible ? 1 : 0,
+                (float)InteractiveOpticsReference.WaveRadialCompression));
             bool hasWaveTexture = waveTexture != null;
             if (!hasActiveStatus || statusLensGain != lensGain || statusWaveGain != effectiveWaveGain
                 || statusCoveredSamples != CoveredWaveSamples || statusHasWaveTexture != hasWaveTexture)
             {
-                Status = $"Approximate softened lenses {lensGain:0.00}; retarded wave display {effectiveWaveGain:0.00}; {CoveredWaveSamples}/{wavePixels.Length} covered radii."
+                Status = $"Bounded star lenses {lensGain:0.00}; amplified wave distortion {effectiveWaveGain:0.00}, distance compressed 12x; {CoveredWaveSamples}/{wavePixels.Length} covered radii."
                     + (hasWaveTexture ? " No binary metric or ray geodesics." : " Wave texture unavailable; wave distortion off.");
                 hasActiveStatus = true; statusLensGain = lensGain; statusWaveGain = effectiveWaveGain;
                 statusCoveredSamples = CoveredWaveSamples; statusHasWaveTexture = hasWaveTexture;
@@ -178,17 +180,16 @@ namespace DTET.VisualPrototype
             material.SetVector("_LensRadii", radii);
             float tangent = Mathf.Tan(view.fieldOfView * Mathf.Deg2Rad * .5f);
             material.SetVector("_Optics", new Vector4(lensGain, waveTexture == null ? 0 : waveGain, tangent * source.width / source.height, tangent));
-            float centreDepth = Vector3.Dot(-origin, forward);
-            material.SetVector("_SystemAngle", new Vector4(Vector3.Dot(-origin, right) / Math.Max(.01f, centreDepth),
-                Vector3.Dot(-origin, up) / Math.Max(.01f, centreDepth), 0, 0));
             material.SetVector("_WaveParameters", new Vector4((float)radialExtent,
                 WaveDisplayScale,
-                gasVisible ? 1 : 0, centreDepth));
+                gasVisible ? 1 : 0, (float)InteractiveOpticsReference.WaveRadialCompression));
             Vector3 direction = origin.sqrMagnitude > 1e-8 ? origin.normalized : -forward;
             Vector3 e1 = Vector3.Cross(Vector3.up, direction);
             if (e1.sqrMagnitude < 1e-8) e1 = Vector3.right;
             e1.Normalize(); Vector3 e2 = Vector3.Cross(direction, e1).normalized;
             material.SetVector("_Polarization", new Vector4(Vector3.Dot(e1, right), Vector3.Dot(e1, up), Vector3.Dot(e2, right), Vector3.Dot(e2, up)));
+            material.SetVector("_WaveBasisX", new Vector4(e1.x, e1.y, e1.z, origin.magnitude));
+            material.SetVector("_WaveBasisY", new Vector4(e2.x, e2.y, e2.z, 0));
         }
 
         private float WaveDisplayScale => snapshot.Signal.Kind == InteractiveSignalKind.QuadrupoleStrain

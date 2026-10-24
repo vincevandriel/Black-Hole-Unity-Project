@@ -111,6 +111,12 @@ namespace DTET.VisualPrototype
             string prefix = fallback ? "compatibility" : profile.ToString().ToLowerInvariant();
             Check(exhibit.Ready && exhibit.Session != null && exhibit.View != null && exhibit.Wrist != null, prefix + " loads all exhibit bindings");
             Check(!exhibit.Session.IsPlaying && exhibit.Snapshot.ElapsedSeconds == 0, prefix + " starts paused at the recorded beginning");
+            Check(!exhibit.Wrist.Raised, prefix + " initial binary view is unobstructed by the wrist");
+            if (profile == ExhibitQualityProfile.Laptop && !fallback)
+                Check(exhibit.LensGain == .35f && exhibit.WaveGain == 1.3f,
+                    "first launch enables the declared mass and wave display gains");
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+            if (!fallback) Capture(prefix + "-first-view.png");
             exhibit.Wrist.SetRaised(true, true); exhibit.Wrist.RefreshNow();
             Check(exhibit.Wrist.PresentedGeneration == exhibit.Snapshot.Generation, prefix + " wrist shares the scenario generation");
             Check(exhibit.BodyATransform.gameObject.activeSelf && exhibit.BodyBTransform.gameObject.activeSelf, prefix + " numerical binary proxies are visible");
@@ -240,6 +246,8 @@ namespace DTET.VisualPrototype
                 exhibit.SetViewPreset(0); exhibit.RenderFrame(); var one = ReadPixels((RenderTexture)exhibit.PresentedTexture);
                 exhibit.SeekWrist(.8); exhibit.SeekWrist(.35); exhibit.RenderFrame(); var two = ReadPixels((RenderTexture)exhibit.PresentedTexture);
                 Check(PixelDifference(one, two) < 1e-6, "rewind restores the same optical image without a shader clock");
+                ValidateVisibleScene();
+                if (Environment.GetEnvironmentVariable("DTET_VISUAL_MOVIE") == "1") yield return CaptureMergerSequence();
             }
             foreach (var scenario in new[] { "replay-paused", "experiment-playback", "camera-motion", "repeated-seek" }) yield return Measure(scenario);
             exhibit.ReturnToLauncher(); yield return null; yield return null;
@@ -248,6 +256,93 @@ namespace DTET.VisualPrototype
             foreach (var texture in Resources.FindObjectsOfTypeAll<RenderTexture>())
                 if (texture.name == "Bounded interactive scene" || texture.name == "Capped astronomical optics") noOwnedTargets = false;
             Check(noOwnedTargets, prefix + " no owned astronomical render targets survive unload");
+        }
+
+        private void ValidateVisibleScene()
+        {
+            exhibit.SelectWristScenario(true); exhibit.Wrist.SetRaised(false, true);
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+            exhibit.SeekWrist(.45); exhibit.SetViewPreset(0); exhibit.RenderFrame();
+            var a = exhibit.View.WorldToViewportPoint(exhibit.BodyATransform.position);
+            var b = exhibit.View.WorldToViewportPoint(exhibit.BodyBTransform.position);
+            Check(a.z > 0 && b.z > 0 && a.x > .1 && a.x < .9 && b.x > .1 && b.x < .9
+                && a.y > .18 && a.y < .85 && b.y > .18 && b.y < .85
+                && Vector2.Distance(a, b) > .10f, "binary framing separates both horizons within the visible scene");
+            Check(exhibit.BodyATransform.GetComponentsInChildren<LineRenderer>().Length == 0,
+                "horizon silhouettes have no luminous coordinate wireframes");
+            ValidateRayProjection();
+            for (int view = 0; view < 4; view++)
+            {
+                exhibit.SetViewPreset(view); Capture("revised-replay-view-" + view + ".png");
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 0); exhibit.RenderFrame();
+                var noWave = ReadPixels((RenderTexture)exhibit.PresentedTexture);
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f); exhibit.RenderFrame();
+                var wave = ReadPixels((RenderTexture)exhibit.PresentedTexture);
+                double change = PixelDifference(noWave, wave);
+                fixtures.Add(new Fixture { label = "rendered wave-only image difference / view " + view,
+                    measuredX = change });
+                Check(change > .0001, "wave distortion visibly displaces scene pixels from viewpoint " + view);
+            }
+            exhibit.SetViewPreset(0); exhibit.SetWristOptics(InteractiveOpticalStyle.Off, 0, 0);
+            exhibit.SetWristGas(false); exhibit.RenderFrame(); var noGas = ReadPixels(exhibit.SceneTarget);
+            exhibit.SetWristGas(true); exhibit.RenderFrame(); var gas = ReadPixels(exhibit.SceneTarget);
+            int lit = 0;
+            for (int i = 0; i < gas.Length; i++) if (gas[i].r - noGas[i].r > 35 && gas[i].r > gas[i].b * 1.15f) lit++;
+            Check(lit > gas.Length * .003, "accretion emission produces a resolved warm structure in the rendered image");
+            foreach (var body in new[] { exhibit.Snapshot.GasState.BodyA, exhibit.Snapshot.GasState.BodyB })
+            {
+                Vector3 centre = exhibit.View.WorldToViewportPoint(V(body.PositionRg));
+                Vector3 edge = exhibit.View.WorldToViewportPoint(V(body.PositionRg) + exhibit.View.transform.right * (float)body.OuterRadiusRg);
+                float rx = Mathf.Abs(edge.x - centre.x) * exhibit.SceneTarget.width;
+                float cx = centre.x * exhibit.SceneTarget.width, cy = centre.y * exhibit.SceneTarget.height;
+                int resolved = 0;
+                for (int y = Mathf.Max(0, (int)(cy-rx)); y < Mathf.Min(exhibit.SceneTarget.height, cy+rx); y++)
+                for (int x = Mathf.Max(0, (int)(cx-rx)); x < Mathf.Min(exhibit.SceneTarget.width, cx+rx); x++)
+                {
+                    if ((x-cx)*(x-cx)+(y-cy)*(y-cy)>rx*rx) continue;
+                    int i = y * exhibit.SceneTarget.width + x;
+                    if (gas[i].r-noGas[i].r > 35 && gas[i].r > gas[i].b*1.15f) resolved++;
+                }
+                Check(resolved > 30, "each compact disk has resolved warm emission around body " + body.MassFraction);
+            }
+            Capture("revised-disks-optics-off.png");
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 1.3f);
+            Capture("revised-waves-only.png");
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+            double initialSeparation = exhibit.Snapshot.SeparationRg;
+            exhibit.WatchMerger(); exhibit.SetWristPlaying(false);
+            Check(exhibit.Snapshot.SeparationRg < initialSeparation && !exhibit.Wrist.Raised
+                && exhibit.Snapshot.ElapsedSeconds < exhibit.Session.Model.MergerTimeSeconds,
+                "watch merger frames a later tighter binary before common horizon formation");
+            Capture("revised-late-inspiral.png");
+            var pose = exhibit.View.transform.position;
+            exhibit.Session.Seek(exhibit.Session.Model.MergerTimeSeconds); exhibit.Present();
+            ValidateGasFixtures();
+            Capture("revised-common-horizon.png");
+            Check(exhibit.View.transform.position == pose, "event playback preserves the user's inspection viewpoint");
+            exhibit.Session.Seek(Math.Min(exhibit.Snapshot.DurationSeconds,
+                exhibit.Session.Model.MergerTimeSeconds + 120 * exhibit.Snapshot.GravitationalTimeSeconds));
+            exhibit.Present(); Capture("revised-post-merger-waves.png");
+            exhibit.RestartPresentation();
+            Check(exhibit.Snapshot.ElapsedSeconds == 0 && exhibit.Session.PlaybackRate == .05
+                && !exhibit.Session.IsPlaying && !exhibit.Wrist.Raised,
+                "restart restores the beginning, normal slow rate and unobstructed binary framing");
+        }
+
+        private IEnumerator CaptureMergerSequence()
+        {
+            Directory.CreateDirectory(Path.Combine(output, "movie"));
+            exhibit.SelectWristScenario(true); exhibit.Wrist.SetRaised(false, true);
+            exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+            exhibit.WatchMerger(); exhibit.SetWristPlaying(false);
+            double centre = exhibit.Session.Model.MergerTimeSeconds;
+            for (int i = 0; i < 120; i++)
+            {
+                exhibit.Session.Seek(Math.Max(0, Math.Min(exhibit.Snapshot.DurationSeconds, centre - .16 + .25 * i / 119)));
+                exhibit.Present(); Capture("movie/frame-" + i.ToString("D3") + ".png");
+                // Permit deferred texture disposal between frames; no 120-frame memory spike.
+                yield return null;
+            }
         }
 
         private IEnumerator Measure(string scenario)
@@ -395,6 +490,75 @@ namespace DTET.VisualPrototype
             }
         }
 
+        private void ValidateRayProjection()
+        {
+            var bodyMaterial = exhibit.BodyATransform.GetComponent<Renderer>().sharedMaterial;
+            Color originalColor = bodyMaterial.GetColor("_Color");
+            bool originalGas = exhibit.GasVisible, originalSamples = exhibit.SamplesVisible;
+            var originalStyle = exhibit.OpticalStyle;
+            float originalLens = exhibit.LensGain, originalWave = exhibit.WaveGain;
+            var optics = exhibit.Optics.WarpMaterial;
+            var target = new RenderTexture(exhibit.SceneTarget.width, exhibit.SceneTarget.height, 0,
+                RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
+            var previousTarget = RenderTexture.active;
+            bool previousSrgb = GL.sRGBWrite;
+            try
+            {
+                if (!target.Create()) throw new InvalidOperationException("Cannot allocate real-camera ray projection fixture.");
+                bodyMaterial.SetColor("_Color", Color.green);
+                exhibit.SetWristGas(false); exhibit.SetWristSamples(false);
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+                for (int view = 0; view < 4; view++)
+                {
+                    exhibit.SetViewPreset(view); exhibit.RenderFrame();
+                    var rendered = ReadPixels(exhibit.SceneTarget);
+                    optics.SetFloat("_OpticsFixture", 3); GL.sRGBWrite = false;
+                    Graphics.Blit(exhibit.SceneTarget, target, optics);
+                    var analytic = ReadPixels(target);
+                    int actualCount = 0, analyticCount = 0, union = 0, intersection = 0;
+                    double actualX = 0, actualY = 0, analyticX = 0, analyticY = 0;
+                    var overlay = new Color32[rendered.Length];
+                    for (int i = 0; i < rendered.Length; i++)
+                    {
+                        bool actual = rendered[i].g > 180 && rendered[i].r < 30 && rendered[i].b < 30;
+                        bool predicted = analytic[i].r > 180;
+                        int x = i % target.width, y = i / target.width;
+                        if (actual) { actualCount++; actualX += x; actualY += y; }
+                        if (predicted) { analyticCount++; analyticX += x; analyticY += y; }
+                        if (actual || predicted) union++;
+                        if (actual && predicted) intersection++;
+                        overlay[i] = new Color32(predicted ? (byte)255 : (byte)0, actual ? (byte)255 : (byte)0, 0, 255);
+                    }
+                    double overlap = union == 0 ? 0 : (double)intersection / union;
+                    double centroidError = actualCount == 0 || analyticCount == 0 ? 1e6
+                        : Math.Sqrt(Math.Pow(actualX / actualCount - analyticX / analyticCount, 2)
+                            + Math.Pow(actualY / actualCount - analyticY / analyticCount, 2));
+                    fixtures.Add(new Fixture { label = "actual rendered horizon versus optical ray mask / view " + view,
+                        expectedX = 1, measuredX = overlap, measuredY = centroidError, absoluteError = 1 - overlap });
+                    Check(actualCount > 20 && analyticCount > 20 && overlap > .90 && centroidError < 1.5,
+                        "actual camera geometry and optical ray projection align from viewpoint " + view);
+                    var image = new Texture2D(target.width, target.height, TextureFormat.RGBA32, false, true);
+                    try
+                    {
+                        image.SetPixels32(overlay); image.Apply();
+                        string name = "optics-ray-projection-view-" + view + ".png";
+                        File.WriteAllBytes(Path.Combine(output, name), image.EncodeToPNG()); images.Add(name);
+                    }
+                    finally { Destroy(image); }
+                    optics.SetFloat("_OpticsFixture", 0);
+                }
+            }
+            finally
+            {
+                optics.SetFloat("_OpticsFixture", 0); bodyMaterial.SetColor("_Color", originalColor);
+                exhibit.SetWristGas(originalGas); exhibit.SetWristSamples(originalSamples);
+                exhibit.SetWristOptics(originalStyle, originalLens, originalWave);
+                GL.sRGBWrite = previousSrgb; RenderTexture.active = previousTarget;
+                target.Release(); Destroy(target);
+                exhibit.SetViewPreset(0); exhibit.RenderFrame();
+            }
+        }
+
         private void ValidateGpuFixtures()
         {
             var target = new RenderTexture(1, 1, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear); target.Create();
@@ -417,6 +581,16 @@ namespace DTET.VisualPrototype
                     optics.SetVector("_FixtureInput", new Vector4(.2f, .4f, signal.x, signal.y));
                     InteractiveOpticsReference.WaveOffset(.2f, .4f, signal.x, signal.y, 2, out double x, out double y);
                     FixtureRead("wave plus/cross " + signal, x, y, optics, target, image, 2e-6);
+                }
+                foreach (Vector2 angle in new[] { new Vector2(.01f, .03f), new Vector2(.2f, .4f), new Vector2(.9f, -.7f) })
+                foreach (float gain in new[] { 0, .35f, 2 })
+                {
+                    optics.SetFloat("_OpticsFixture", 4); optics.SetVector("_Optics", new Vector4(gain, 0, 1, 1));
+                    optics.SetVector("_FixtureInput", new Vector4(angle.x, angle.y, 0, 0));
+                    optics.SetVector("_FixtureLens", new Vector4(25, .5f, 1, 1e6f));
+                    InteractiveOpticsReference.SkyApparentOffset(angle.x, angle.y, 25, .5, 1, gain, out double x, out double y);
+                    FixtureRead("shared sky star-centre deflection " + angle + " / gain " + gain,
+                        x, y, optics, target, image, 2e-6);
                 }
                 ValidateGasFixtures();
             }
@@ -466,7 +640,7 @@ namespace DTET.VisualPrototype
                 for (int i = 0; i < renderers.Length; i++) renderers[i].enabled = renderers[i].sharedMaterial == gas;
                 gas.SetFloat("_FieldTest", 1);
                 foreach (Vector3 point in new[] { new Vector3((float)(exhibit.Snapshot.GasState.ReservoirInnerRadiusRg * 1.3), 0, 0),
-                    V(exhibit.Snapshot.GasState.BodyA.PositionRg) + new Vector3(5, 0, 0), new Vector3(1000, 0, 0) })
+                    V(exhibit.Snapshot.GasState.BodyA.PositionRg) + new Vector3(5, 0, 0), new Vector3(10, 0, 0), new Vector3(1000, 0, 0) })
                 {
                     var expected = exhibit.Session.Model.SampleGas(exhibit.Snapshot.GasState, point.x, point.y, point.z);
                     gas.SetVector("_FieldPoint", point);

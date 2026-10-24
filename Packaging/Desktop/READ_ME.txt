@@ -13,6 +13,9 @@ on a Mac. For a first-launch developer-verification warning, Apple's instruction
 for opening an app you trust are at https://support.apple.com/en-us/102445.
 
 Choose a fidelity setting before entering. Start with Laptop on modest hardware.
+The wrist starts lowered so both disks are visible. PLAY INSPIRAL starts the
+recorded motion; WATCH MERGER jumps to a close, slower view before coalescence.
+RESTART restores the beginning, framing and normal slow playback speed.
 Space plays/pauses; comma reverses; R resets; M seeks the merger; V toggles the
 wrist interface. WASD/QE move, right-drag looks, wheel approaches, Shift moves
 faster, and 1-5 select viewpoints. Esc pauses. Use the wrist controls to adjust
@@ -25,6 +28,10 @@ rewind and explore from any viewpoint. The generated gas is an experimental
 detailed flow is not resolution-converged. This is not a measured GW150914 gas
 reconstruction or a full relativistic fluid/metric simulation. Brightness and
 optical wave distortion are illustrative; the sky is synthetic.
+Wave distortion bends the rendered star/gas image rather than emitting light.
+Its amplitude is magnified and its displayed radial spacing is compressed 12:1
+so passing fronts can be inspected. Wrist waveform/frequency values retain their
+original scale; the WAVE GAIN control changes only the display strength.
 
 The numerical replay uses representative SXS:BBH:0305 data. Adjustable binaries
 use a separate educational inspiral and conceptual merger. GW150914 was observed

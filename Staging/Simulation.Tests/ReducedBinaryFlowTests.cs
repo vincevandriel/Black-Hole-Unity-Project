@@ -29,6 +29,10 @@ internal static class ReducedBinaryFlowTests
         Check(late.BinaryWeight == 0 && late.RemnantWeight == 1 && late.IsCommonHorizon,
             "Retained endpoint selects fully developed assumed remnant ring");
         Near(initial.ReservoirInnerRadiusRg, 1.8 * model.InitialSeparationRg, 1e-14, "Fixed cavity set by initial separation");
+        Near(initial.BodyA.InnerRadiusRg, 1.25 * initial.BodyA.HorizonRadiusRg, 1e-14,
+            "Assumed emitting plunge remains outside the retained horizon proxy");
+        Check(initial.BodyA.OuterRadiusRg + initial.BodyB.OuterRadiusRg < initial.SeparationRg,
+            "Tidal outer radii do not expand to force overlapping minidisks");
         Near(model.EvaluateState(-1).TimeTg, 0, 0, "Time clamps to recorded start");
         Near(model.EvaluateState(model.DurationSeconds + 1).TimeTg, late.TimeTg, 1e-14, "Time clamps to recorded endpoint");
         Reject(() => model.EvaluateState(double.NaN), "Nonfinite epoch");
@@ -112,7 +116,18 @@ internal static class ReducedBinaryFlowTests
         var common = model.EvaluateState(model.CommonHorizonElapsedSeconds);
         var post = model.EvaluateState(model.CommonHorizonElapsedSeconds + epsilon);
         Check(pre.BinaryWeight < 3e-12 && common.BinaryWeight == 0 && common.RemnantWeight == 0
-            && post.RemnantWeight < 2e-12, "Binary fade and remnant rise have zero value and slope at common horizon");
+            && post.RemnantWeight < 2e-12 && common.TransitionWeight == 1,
+            "Shared transition gas bridges zero individual/remnant weights at common horizon");
+        foreach (double aligned in new[] { -600.0, -300.0, -120.0, -1.0, 0.0, 1.0, 80.0, 160.0 })
+        {
+            var state = model.EvaluateState(model.CommonHorizonElapsedSeconds + aligned * model.GravitationalTimeSeconds);
+            double integratedEmission = 0;
+            // Resolve the central plane independently of camera direction or volume march.
+            for (int z = -64; z <= 64; z++)
+            for (int x = -64; x <= 64; x++)
+                integratedEmission += model.Sample(state, x * .25, 0, z * .25).NormalizedBolometricEmission * .0625;
+            Check(integratedEmission > .25, "Central gas emits through late inspiral/common horizon/remnant: " + aligned);
+        }
         for (int i = 0; i < 512; ++i)
         {
             double x = (2 * RadicalInverse(i + 1, 2) - 1) * model.HalfExtentXZ;
@@ -159,6 +174,9 @@ internal static class ReducedBinaryFlowTests
         }
         var remnant = RingIntegrals(s.Remnant.InnerRadiusRg, s.Remnant.OuterRadiusRg, .24, 2 * s.RemnantWeight, 1.1);
         total.mass += remnant.mass; total.emission += remnant.emission;
+        var transition = RingIntegrals(ReducedBinaryFlowModel.TransitionInnerRadiusRg,
+            ReducedBinaryFlowModel.TransitionOuterRadiusRg, .24, 1.5 * s.TransitionWeight, 1.1);
+        total.mass += transition.mass; total.emission += transition.emission;
         foreach (ReducedBinaryFlowStream stream in new[] { s.StreamA, s.StreamB })
         {
             double factor = .9 * s.BinaryWeight * Math.Sqrt(stream.ChordLengthSquaredRg2) * Math.PI * 1.4 * .8 / 3;
