@@ -30,6 +30,8 @@ BENDING compares its original disk with lensed images. ACCRETION VIEW returns.
 Pause, rewind and free camera controls remain available.
 BENDING: ON/OFF compares the original stars with their bent images.
 WATCH MERGER restores illustrative gas. G toggles gas without changing time.
+The silhouettes join smoothly around merger; the brief shape blend is illustrative.
+Long orange links are assumed gas feeding streams, not outgoing jets.
 Use ENTER OBSERVATORY for disks; COMPATIBILITY / NO GAS disables them.
 Space plays/pauses; comma reverses; R resets; M seeks the merger; V toggles the
 wrist interface. WASD/QE move, right-drag looks, wheel approaches, Shift moves

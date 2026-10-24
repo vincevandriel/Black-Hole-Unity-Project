@@ -7,7 +7,7 @@ namespace BlackHole.Staging.Simulation
     // Units: total-mass rg=GM/c^2; SXS (X,Y,Z) maps to Unity (X,Z,Y). Velocities are coordinate values.
     public sealed class ReducedBinaryFlowModel
     {
-        public const string ModelId = "assumed-SXS0305-reduced-binary-flow-v2-plunge";
+        public const string ModelId = "assumed-SXS0305-reduced-binary-flow-v3-stream-taper";
         public const double TemperatureScaleKelvin = 1e7;
         public const double GrayExtinctionPerRg = .16;
         public const double BinaryFadeTg = 120;
@@ -110,8 +110,10 @@ namespace BlackHole.Staging.Simulation
             {
                 AccumulateMini(state.BodyA, state.BinaryWeight, xRg, yRg, zRg, ref density, ref emission, ref vx, ref vy, ref vz);
                 AccumulateMini(state.BodyB, state.BinaryWeight, xRg, yRg, zRg, ref density, ref emission, ref vx, ref vy, ref vz);
-                AccumulateStream(state.StreamA, state.BinaryWeight, xRg, yRg, zRg, ref density, ref emission, ref vx, ref vy, ref vz);
-                AccumulateStream(state.StreamB, state.BinaryWeight, xRg, yRg, zRg, ref density, ref emission, ref vx, ref vy, ref vz);
+                AccumulateStream(state.StreamA, state.BinaryWeight * SmoothStep(state.BodyA.OuterRadiusRg - state.BodyA.InnerRadiusRg),
+                    xRg, yRg, zRg, ref density, ref emission, ref vx, ref vy, ref vz);
+                AccumulateStream(state.StreamB, state.BinaryWeight * SmoothStep(state.BodyB.OuterRadiusRg - state.BodyB.InnerRadiusRg),
+                    xRg, yRg, zRg, ref density, ref emission, ref vx, ref vy, ref vz);
             }
             if (state.RemnantWeight > 0)
             {
@@ -201,9 +203,10 @@ namespace BlackHole.Staging.Simulation
             vz += rho * (translation.Z + omega * x - inwardSpeed * z / radius);
         }
 
-        private static void AccumulateStream(ReducedBinaryFlowStream stream, double binary, double x, double y, double z,
+        private static void AccumulateStream(ReducedBinaryFlowStream stream, double weight, double x, double y, double z,
             ref double density, ref double emission, ref double vx, ref double vy, ref double vz)
         {
+            if (weight <= 0) return;
             double cx = stream.EndRg.X - stream.StartRg.X, cz = stream.EndRg.Z - stream.StartRg.Z;
             double u = ((x - stream.StartRg.X) * cx + (z - stream.StartRg.Z) * cz) / stream.ChordLengthSquaredRg2;
             if (u <= 0 || u >= 1) return;
@@ -215,7 +218,7 @@ namespace BlackHole.Staging.Simulation
                 + dy * dy / (StreamHeightRg * StreamHeightRg);
             if (ellipse >= 1) return;
             double along = 4 * u * (1 - u), across = 1 - ellipse;
-            double rho = .9 * binary * along * along * across * across;
+            double rho = .9 * weight * along * along * across * across;
             double temperature = .4 + .5 * u, t4 = temperature * temperature; t4 *= t4;
             double tx = cx + stream.BowNormal.X * 4 * StreamBowRg * (1 - 2 * u);
             double tz = cz + stream.BowNormal.Z * 4 * StreamBowRg * (1 - 2 * u);

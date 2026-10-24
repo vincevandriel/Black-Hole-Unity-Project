@@ -24,6 +24,7 @@ namespace DTET.VisualPrototype
         public InteractiveOptics Optics { get; private set; }
         public FeaturedBackgroundStar FeaturedStar { get; private set; }
         public WaveSurfaceView WaveSurface { get; private set; }
+        public MergerSurfaceView MergerSurface { get; private set; }
         public bool WaveMapVisible { get; private set; }
         public bool StarFinderVisible { get; private set; }
         public bool BackgroundStarsVisible { get => sky != null && sky.Visible; set { if (sky != null) sky.Visible = value; if (FeaturedStar != null) FeaturedStar.Visibility = value; } }
@@ -61,6 +62,7 @@ namespace DTET.VisualPrototype
         private Material bodyMaterial, gasMaterial, sampleMaterial, displayMaterial;
         private Mesh sampleMesh;
         private MeshRenderer gasRenderer, sampleRenderer;
+        private Renderer bodyRendererA, bodyRendererB, remnantRenderer;
         private ReducedExhibitSky sky;
         private Vector3[] samplePositions;
         private Color[] sampleColours;
@@ -164,6 +166,9 @@ namespace DTET.VisualPrototype
             bodyA = BuildMarker("Primary horizon proxy");
             bodyB = BuildMarker("Secondary horizon proxy");
             remnant = BuildMarker("Remnant horizon proxy");
+            bodyRendererA = bodyA.GetComponent<Renderer>(); bodyRendererB = bodyB.GetComponent<Renderer>();
+            remnantRenderer = remnant.GetComponent<Renderer>();
+            MergerSurface = sceneRoot.AddComponent<MergerSurfaceView>(); MergerSurface.Initialize();
             if (Profile.GasEnabled) BuildGas();
             BuildHud();
             Optics = sceneRoot.AddComponent<InteractiveOptics>();
@@ -284,6 +289,9 @@ namespace DTET.VisualPrototype
                 }
             }
             if (GeneratedFluidPlayer != null) GeneratedFluidPlayer.Present(s, GasVisible);
+            MergerSurface.Present(Session.Model, s);
+            MergerSurface.BindTo(gasMaterial); MergerSurface.BindTo(GeneratedFluidMaterial);
+            bodyRendererA.enabled = bodyRendererB.enabled = remnantRenderer.enabled = !MergerSurface.Visible;
             if (gasRenderer != null) gasRenderer.enabled = GasVisible && !GeneratedFluidActive;
             if (sampleRenderer != null) sampleRenderer.enabled = SamplesVisible && !GeneratedFluidActive;
             if (s.ElapsedSeconds == lastTime) return;
@@ -441,6 +449,7 @@ namespace DTET.VisualPrototype
                     : "NO GENERATED COVERAGE / ACCRETION VIEW RESTORES DISKS")
                 : "ILLUSTRATIVE ACCRETION DISKS / ASSUMED GAS";
             phaseLabel.text = $"{s.ScenarioLabel}  ·  {s.StageLabel}  ·  {gasPresentation}";
+            if (MergerSurface != null && MergerSurface.Visible) phaseLabel.text += "  ·  ILLUSTRATIVE SMOOTH JOIN";
             statusLabel.text = $"V wrist · WASD + Q/E move · right-drag look · 1–5 views · Space pause · {Profile.EffectiveProfile} {SceneTarget.width}×{SceneTarget.height} · {OpticalStyle}";
             transportPlay.text = Session.IsPlaying ? "PAUSE" : "PLAY INSPIRAL";
             bendingToggle.text = OpticalStyle != InteractiveOpticalStyle.Off && (LensGain > 0 || WaveGain > 0) && Optics != null && Optics.Active ? "BENDING: ON" : "BENDING: OFF";
@@ -701,7 +710,8 @@ namespace DTET.VisualPrototype
             bodyMaterial = gasMaterial = sampleMaterial = displayMaterial = null; sampleMesh = null;
             samplePositions = null; sampleColours = null; sampleRenderer = gasRenderer = null;
             Session = null; Wrist = null; Optics = null; FeaturedStar = null; View = null; sky = null;
-            WaveSurface = null; starLocator = null; viewLegendPanel = null;
+            WaveSurface = null; MergerSurface = null; starLocator = null; viewLegendPanel = null;
+            bodyRendererA = bodyRendererB = remnantRenderer = null;
             WaveMapVisible = StarFinderVisible = false;
             lastGeneration = -1; lastTime = double.NaN; GasVisible = SamplesVisible = false;
             if (launcher != null && !disposed) { launcher.SetActive(true); SelectProfile(SelectedProfile); }

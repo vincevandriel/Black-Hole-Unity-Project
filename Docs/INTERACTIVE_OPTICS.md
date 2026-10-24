@@ -102,6 +102,12 @@ Normalized strains are limited to +/-4, and displacement to 0.035 tangent-angle 
 
 An explicit texture LOD permits the same history helper in vertex and fragment stages. The stellar distortion adds no luminous wave rings or source-free light. This is a magnified tensor analogy, not photon propagation through a dynamic metric. Wave gain/compression leave source strain, frequency, orbit, gas density, clock controls and scientific graphs unchanged. Highly visible gradients are not quantitative astrometric predictions.
 
+## Illustrative merger surface
+
+The opaque merger display uses a shared signed-distance surface over the interval from 12 gravitational time units before the common-horizon switch to 40 afterward. With normalized interval u, its blend is `w=6u^5-15u^4+10u^3`. A polynomial smooth union of the two retained sphere distances uses width `k=2(rA+rB)w(1-w)`; the resulting distance is linearly blended into the remnant sphere distance by w. Individual sphere inputs follow retained tracks up to the last pre-switch epoch and then hold; the remnant input holds its first retained value before the switch and follows its track afterward. Exact interval endpoints use analytic sphere intersections.
+
+`MergerSurfaceView` draws this opaque shape with actual hit depth. Both gas-volume shaders use the same bounded intersection routine, preventing a conflicting one-frame gas occluder switch. The scene's authoritative sphere transforms and scientific snapshot are untouched; only their renderers are temporarily hidden. The surface is an illustrative connection of area proxies, not a true horizon geometry, photon shadow or numerical ringdown surface. It allocates an eight-vertex/36-index box and one material on first use, no textures or image targets, and caps intersection work at 256 iterations after a ray-box rejection, with early exit for ordinary rays. Event time alone determines the shape.
+
 ## Optional wave map and star finder
 
 `WaveSurfaceView` adds an explicitly illustrative orbital-plane diagram when WAVE MAP is selected. It samples the existing 512-bin history at `R_history = 12 R_display`, including its coverage mask and Float/Half normalization. For orbital-plane angle phi, its signed display signal is `s = h_plus cos(2 phi) + h_cross sin(2 phi)`. Replay uses the declared normalized h22 components. This scalar projection is an explanatory diagram, not a metric embedding or a full angular radiation solution.

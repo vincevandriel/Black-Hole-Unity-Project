@@ -123,6 +123,7 @@ namespace DTET.VisualPrototype.Editor
                 "Assets/Resources/DTET/ExhibitSky.shader",
                 "Assets/Resources/DTET/StellarBackdrop.shader",
                 "Assets/Resources/DTET/WaveSurface.shader",
+                "Assets/Resources/DTET/MergerSurface.shader",
                 "Assets/Resources/DTET/FeaturedBackgroundStar.shader",
                 "Assets/Resources/DTET/ExhibitDisplay.shader",
                 "Assets/Resources/DTET/InteractiveOptics.shader",

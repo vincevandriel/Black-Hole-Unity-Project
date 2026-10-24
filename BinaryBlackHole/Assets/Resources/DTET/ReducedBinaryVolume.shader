@@ -23,6 +23,7 @@ Shader "DTET/ReducedBinaryVolume"
             #pragma multi_compile_local _ DTET_QA_FIXTURES
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "ReducedBinaryFlow.hlsl"
+            #include "MergerSurface.hlsl"
             float4 _HalfExtent,_HorizonA,_HorizonB,_HorizonR;
             float _Steps,_Exposure,_Opacity;
             #if defined(DTET_QA_FIXTURES)
@@ -55,7 +56,8 @@ Shader "DTET/ReducedBinaryVolume"
                 float3 n=min(a,b),f=max(a,b);
                 float start=max(0,max(n.x,max(n.y,n.z))),end=min(f.x,min(f.y,f.z));
                 if(end<=start)return 0;
-                float hit=min(HorizonHit(ro,rd,_HorizonA),min(HorizonHit(ro,rd,_HorizonB),HorizonHit(ro,rd,_HorizonR)));
+                float hit=_MergerActive>.5?MergerSurfaceHit(ro,rd)
+                    :min(HorizonHit(ro,rd,_HorizonA),min(HorizonHit(ro,rd,_HorizonB),HorizonHit(ro,rd,_HorizonR)));
                 bool blocked=hit<end;if(blocked)end=max(start,hit);
                 int count=(int)clamp(_Steps,32,256);float ds=(end-start)/count;
                 float opacity=0;float3 radiance=0;

@@ -286,6 +286,7 @@ namespace DTET.VisualPrototype
             if (!fallback)
             {
                 ValidateDiscoveryViews(prefix);
+                ValidateSmoothMerger(prefix);
                 if (profile == ExhibitQualityProfile.Balanced && Environment.GetEnvironmentVariable("DTET_DISCOVERY_MOVIE") == "1")
                     yield return CaptureDiscoverySequence();
             }
@@ -296,10 +297,173 @@ namespace DTET.VisualPrototype
             foreach (var texture in Resources.FindObjectsOfTypeAll<RenderTexture>())
                 if (texture.name == "Bounded interactive scene" || texture.name == "Capped astronomical optics") noOwnedTargets = false;
             Check(noOwnedTargets, prefix + " no owned astronomical render targets survive unload");
-            bool noWaveMeshes = true;
+            bool noSurfaceMeshes = true, noSurfaceMaterials = true;
             foreach (var mesh in Resources.FindObjectsOfTypeAll<Mesh>())
-                if (mesh.name == "Immutable illustrative strain grid") noWaveMeshes = false;
-            Check(noWaveMeshes && exhibit.WaveSurface == null, prefix + " wave surface and immutable mesh are released on unload");
+                if (mesh.name == "Immutable illustrative strain grid" || mesh.name == "Bounded merger surface ray box") noSurfaceMeshes = false;
+            foreach (var material in Resources.FindObjectsOfTypeAll<Material>())
+                if (material.name == "Illustrative retarded strain / cyan positive, amber negative"
+                    || material.name == "Opaque illustrative common-horizon transition") noSurfaceMaterials = false;
+            Check(noSurfaceMeshes && noSurfaceMaterials && exhibit.WaveSurface == null && exhibit.MergerSurface == null,
+                prefix + " wave and merger meshes, materials and components are released on unload");
+        }
+
+        internal static double SilhouetteDifference(Color32[] a, Color32[] b, out int union)
+        {
+            int changed = 0; union = 0;
+            for (int i = 0; i < a.Length; i++)
+            {
+                bool first = a[i].r < 20 && a[i].g < 20 && a[i].b < 20;
+                bool second = b[i].r < 20 && b[i].g < 20 && b[i].b < 20;
+                if (first || second) union++;
+                if (first != second) changed++;
+            }
+            return union == 0 ? 1 : (double)changed / union;
+        }
+
+        private void ValidateSmoothMerger(string profile)
+        {
+            Color background = exhibit.View.backgroundColor;
+            float opacity = exhibit.GasMaterial.GetFloat("_Opacity");
+            try
+            {
+                exhibit.ShowAccretionView(); exhibit.SetWristSamples(false);
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Off, 0, 0);
+                exhibit.BackgroundStarsVisible = false; exhibit.View.backgroundColor = Color.white;
+                foreach (bool replay in new[] { true, false })
+                {
+                    exhibit.SelectWristScenario(replay); exhibit.SetWristGas(false);
+                    var model = exhibit.Session.Model;
+                    double merger = model.MergerTimeSeconds, tg = model.GravitationalTimeSeconds;
+                    string label = profile + (replay ? " replay" : " experiment");
+                    var directions = new[] { new Vector3(.2f, .8f, -1), Vector3.up, new Vector3(0, .05f, -1), new Vector3(1, .4f, 0) };
+                    for (int view = 0; view < directions.Length; view++)
+                    {
+                        exhibit.View.transform.position = directions[view].normalized * 12;
+                        exhibit.View.transform.LookAt(Vector3.zero, view == 1 ? Vector3.forward : Vector3.up);
+                        foreach (double boundary in new[] { -12.0, 0.0, 40.0 })
+                        {
+                            exhibit.Session.Seek(merger + (boundary - .001) * tg); exhibit.RenderFrame();
+                            var before = ReadPixels(exhibit.SceneTarget);
+                            exhibit.Session.Seek(merger + (boundary + .001) * tg); exhibit.RenderFrame();
+                            double difference = SilhouetteDifference(before, ReadPixels(exhibit.SceneTarget), out int area);
+                            fixtures.Add(new Fixture { label = label + " local silhouette boundary " + boundary + " view " + view,
+                                measuredX = difference, measuredY = area });
+                            Check(area > 150 && difference < .035, label + " continuous local silhouette at " + boundary + " tg, view " + view);
+                        }
+                        exhibit.Session.Seek(merger + 8 * tg); exhibit.RenderFrame();
+                        Check(exhibit.MergerSurface.Visible && exhibit.RemnantTransform.gameObject.activeSelf
+                            && !exhibit.RemnantTransform.GetComponent<Renderer>().enabled,
+                            label + " smooth surface hides only the authoritative proxy renderer, view " + view);
+                        var exact = model.Evaluate(exhibit.Snapshot.ElapsedSeconds);
+                        Check(exhibit.Snapshot.Signal.NormalizedRealH22 == exact.Signal.NormalizedRealH22
+                            && exhibit.Snapshot.Signal.HPlus == exact.Signal.HPlus
+                            && Vector3.Distance(exhibit.RemnantTransform.position, V(exact.Remnant.Value.PositionRg)) < 1e-6f,
+                            label + " presentation leaves model position and scientific signal unchanged, view " + view);
+                        var surface = ReadPixels(exhibit.SceneTarget);
+                        exhibit.SetWristGas(true); exhibit.GasMaterial.SetFloat("_Opacity", 0);
+                        exhibit.MergerSurface.SurfaceRenderer.forceRenderingOff = true;
+                        exhibit.RenderFrame();
+                        double maskError = SilhouetteDifference(surface, ReadPixels(exhibit.SceneTarget), out int maskArea);
+                        Check(maskArea > 150 && maskError < .015, label + " gas and visible surface share the same occluder, view " + view);
+                        exhibit.MergerSurface.SurfaceRenderer.forceRenderingOff = false;
+                        exhibit.GasMaterial.SetFloat("_Opacity", opacity); exhibit.SetWristGas(false);
+                        exhibit.Session.Seek(merger - 6 * tg); exhibit.RenderFrame();
+                        exhibit.Session.Seek(merger + 8 * tg); exhibit.RenderFrame();
+                        Check(PixelDifference(surface, ReadPixels(exhibit.SceneTarget)) < 1e-6,
+                            label + " rewind restores the same merged surface, view " + view);
+                    }
+                    exhibit.Session.Seek(merger - 6 * tg); exhibit.RenderFrame();
+                    Check(exhibit.BodyATransform.gameObject.activeSelf
+                        && Vector3.Distance(exhibit.BodyATransform.position, V(exhibit.Snapshot.BodyA.Value.PositionRg)) < 1e-6f,
+                        label + " pre-merger authoritative centres remain intact");
+                }
+                ValidateMergerGrazing(profile);
+            }
+            finally
+            {
+                if (exhibit.MergerSurface.SurfaceRenderer != null) exhibit.MergerSurface.SurfaceRenderer.forceRenderingOff = false;
+                exhibit.GasMaterial.SetFloat("_Opacity", opacity); exhibit.View.backgroundColor = background;
+                exhibit.BackgroundStarsVisible = true; exhibit.SelectWristScenario(true); exhibit.ShowAccretionView();
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+            }
+            double centre = exhibit.Session.Model.MergerTimeSeconds, step = exhibit.Session.Model.GravitationalTimeSeconds;
+            exhibit.WatchMerger(); exhibit.SetWristPlaying(false);
+            exhibit.View.transform.position = new Vector3(0, 8, -12); exhibit.View.transform.LookAt(Vector3.zero);
+            foreach (double offset in new[] { -14.0, -6.0, 0.0, 12.0, 28.0, 42.0 })
+            {
+                exhibit.Session.Seek(centre + offset * step); exhibit.Present();
+                Capture(profile + "-smooth-merger-" + offset.ToString("0", CultureInfo.InvariantCulture) + ".png");
+            }
+            exhibit.ShowAccretionView();
+        }
+
+        private void ValidateMergerGrazing(string profile)
+        {
+            exhibit.SelectWristScenario(true); exhibit.SetWristGas(false);
+            exhibit.Session.Seek(exhibit.Session.Model.MergerTimeSeconds);
+            exhibit.View.transform.position = new Vector3(0, 8, -12); exhibit.View.transform.LookAt(Vector3.zero);
+            exhibit.RenderFrame();
+            var renderer = exhibit.MergerSurface.SurfaceRenderer;
+            Check(renderer != null && exhibit.MergerSurface.Visible, profile + " T0 grazing fixture has a visible merger surface");
+            if (renderer == null) return;
+            var material = renderer.sharedMaterial;
+            Vector4 a = material.GetVector("_MergerA"), b = material.GetVector("_MergerB");
+            Vector4 r = material.GetVector("_MergerR"), shape = material.GetVector("_MergerShape");
+            var surfacePixels = ReadPixels(exhibit.SceneTarget);
+            float opacity = exhibit.GasMaterial.GetFloat("_Opacity");
+            bool forceOff = renderer.forceRenderingOff;
+            try
+            {
+                exhibit.SetWristGas(true); exhibit.GasMaterial.SetFloat("_Opacity", 0);
+                renderer.forceRenderingOff = true; exhibit.RenderFrame();
+                var gasPixels = ReadPixels(exhibit.SceneTarget);
+                int width = exhibit.SceneTarget.width, height = exhibit.SceneTarget.height;
+                // Original 640x360 top-left pixels where a grazing first lobe hid a later interior hit.
+                var seeds = new[] { new Vector2Int(332,175), new Vector2Int(328,174), new Vector2Int(319,174),
+                    new Vector2Int(303,185), new Vector2Int(302,187), new Vector2Int(338,178) };
+                foreach (var seed in seeds)
+                {
+                    int x = Mathf.Clamp(Mathf.FloorToInt((seed.x + .5f) / 640 * width), 0, width - 1);
+                    int y = Mathf.Clamp(Mathf.FloorToInt((1 - (seed.y + .5f) / 360) * height), 0, height - 1);
+                    Ray ray = exhibit.View.ViewportPointToRay(new Vector3((x + .5f) / width, (y + .5f) / height, 0));
+                    Vector3 origin = exhibit.View.transform.position, direction = ray.direction.normalized;
+                    double interior = double.PositiveInfinity;
+                    foreach (var sphere in new[] { a, b, r })
+                    {
+                        double t = Math.Max(0, Vector3.Dot(new Vector3(sphere.x, sphere.y, sphere.z) - origin, direction));
+                        interior = Math.Min(interior, MergerDistanceReference(origin + direction * (float)t, a, b, r, shape));
+                    }
+                    string label = profile + " T0 grazing ray " + seed;
+                    // A negative distance at any point proves intersection without another ray marcher.
+                    Check(interior < -.01, label + " has a strict CPU-certified interior point");
+                    Color32 surface = surfacePixels[y * width + x], gas = gasPixels[y * width + x];
+                    int surfaceLight = Math.Max(surface.r, Math.Max(surface.g, surface.b));
+                    int gasLight = Math.Max(gas.r, Math.Max(gas.g, gas.b));
+                    fixtures.Add(new Fixture { label = label + " surface/gas maximum channel and interior SDF",
+                        expectedX = 0, measuredX = Math.Max(surfaceLight, gasLight) / 255.0, measuredY = interior,
+                        absoluteError = Math.Max(surfaceLight, gasLight) / 255.0 });
+                    Check(surfaceLight <= 2, label + " visible silhouette has no background pinhole");
+                    Check(gasLight <= 2, label + " gas occluder has no background pinhole");
+                }
+            }
+            finally
+            {
+                renderer.forceRenderingOff = forceOff; exhibit.GasMaterial.SetFloat("_Opacity", opacity);
+                exhibit.SetWristGas(false);
+            }
+        }
+
+        private static double MergerDistanceReference(Vector3 p, Vector4 a, Vector4 b, Vector4 r, Vector4 shape)
+        {
+            double Sphere(Vector4 sphere)
+            {
+                double x = (double)p.x - sphere.x, y = (double)p.y - sphere.y, z = (double)p.z - sphere.z;
+                return Math.Sqrt(x * x + y * y + z * z) - sphere.w;
+            }
+            double da = Sphere(a), db = Sphere(b), width = shape.y;
+            double h = Math.Max(0, Math.Min(1, .5 + .5 * (db - da) / Math.Max(width, 1e-8)));
+            double binary = width > 1e-8 ? db + (da - db) * h - width * h * (1 - h) : Math.Min(da, db);
+            return binary + (Sphere(r) - binary) * Math.Max(0, Math.Min(1, shape.x));
         }
 
         private struct SourcePixels
@@ -672,9 +836,11 @@ namespace DTET.VisualPrototype
             exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
             exhibit.WatchMerger(); exhibit.SetWristPlaying(false);
             double centre = exhibit.Session.Model.MergerTimeSeconds;
+            double tg = exhibit.Session.Model.GravitationalTimeSeconds;
+            exhibit.View.transform.position = new Vector3(0, 8, -12); exhibit.View.transform.LookAt(Vector3.zero);
             for (int i = 0; i < 120; i++)
             {
-                exhibit.Session.Seek(Math.Max(0, Math.Min(exhibit.Snapshot.DurationSeconds, centre - .16 + .25 * i / 119)));
+                exhibit.Session.Seek(Math.Max(0, Math.Min(exhibit.Snapshot.DurationSeconds, centre + (-30 + 100.0 * i / 119) * tg)));
                 exhibit.Present(); Capture("movie/frame-" + i.ToString("D3") + ".png");
                 // Allow deferred texture disposal between captures.
                 yield return null;

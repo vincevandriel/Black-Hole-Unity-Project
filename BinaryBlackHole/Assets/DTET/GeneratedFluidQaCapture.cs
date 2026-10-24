@@ -107,6 +107,8 @@ namespace DTET.VisualPrototype
             exhibit.SeekWrist(t / exhibit.Snapshot.DurationSeconds);
             exhibit.Wrist.SetRaised(true, true); exhibit.Wrist.SetFluidPanelOpen(true); Capture("generated-controls.png");
             ValidateGpuSamples(t);
+            ValidateGeneratedMergerOcclusion();
+            exhibit.SeekWrist(t / exhibit.Snapshot.DurationSeconds); exhibit.SetViewPreset(1);
             exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 1, 1); exhibit.RenderFrame();
             Check(exhibit.Optics.Active && exhibit.Optics.ScenarioGeneration == exhibit.Snapshot.Generation,
                 "illustrative optics and gravitational-wave display follow generated scene generation");
@@ -191,6 +193,46 @@ namespace DTET.VisualPrototype
             exhibit.ReturnToLauncher(); yield return null;
             WriteReceipt(); Application.Quit(passed ? 0 : 1);
         }
+        private void ValidateGeneratedMergerOcclusion()
+        {
+            Color background = exhibit.View.backgroundColor;
+            var model = exhibit.Session.Model;
+            double merger = model.MergerTimeSeconds, tg = model.GravitationalTimeSeconds;
+            try
+            {
+                exhibit.Wrist.SetRaised(false, true); exhibit.BackgroundStarsVisible = false;
+                exhibit.View.backgroundColor = Color.white;
+                exhibit.Session.Seek(merger + 8 * tg); exhibit.SetWristGas(false);
+                foreach (var direction in new[] { new Vector3(0, 8, -12), new Vector3(0, 14, .01f) })
+                {
+                    exhibit.View.transform.position = direction; exhibit.View.transform.LookAt(Vector3.zero);
+                    exhibit.SetWristGas(false); exhibit.RenderFrame();
+                    var shape = Pixels(exhibit.SceneTarget);
+                    exhibit.SetWristGas(true); exhibit.Present();
+                    Check(exhibit.GeneratedFluidMaterial.GetFloat("_MergerActive") > .5f && exhibit.MergerSurface.Visible,
+                        "generated gas binds the active smooth merger surface");
+                    exhibit.GeneratedFluidMaterial.SetFloat("_GeneratedOpacity", 0);
+                    exhibit.MergerSurface.SurfaceRenderer.forceRenderingOff = true;
+                    RenderPipeline.SubmitRenderRequest(exhibit.View, new RenderPipeline.StandardRequest { destination = exhibit.SceneTarget });
+                    double difference = InteractiveExhibitQaCapture.SilhouetteDifference(shape, Pixels(exhibit.SceneTarget), out int area);
+                    Check(area > 150 && difference < .015, "generated gas and opaque merger silhouette agree from an independent view");
+                    exhibit.MergerSurface.SurfaceRenderer.forceRenderingOff = false;
+                }
+            }
+            finally
+            {
+                if (exhibit.MergerSurface.SurfaceRenderer != null) exhibit.MergerSurface.SurfaceRenderer.forceRenderingOff = false;
+                exhibit.View.backgroundColor = background; exhibit.BackgroundStarsVisible = true;
+                exhibit.SetWristGas(true); exhibit.Wrist.SetFluidPanelOpen(false); exhibit.Wrist.SetRaised(false, true);
+            }
+            exhibit.View.transform.position = new Vector3(0, 8, -12); exhibit.View.transform.LookAt(Vector3.zero);
+            foreach (double offset in new[] { -6.0, 0.0, 12.0, 42.0 })
+            {
+                exhibit.Session.Seek(merger + offset * tg); exhibit.Present();
+                Capture("generated-smooth-merger-" + offset.ToString("0", System.Globalization.CultureInfo.InvariantCulture) + ".png");
+            }
+        }
+
         private void ValidateGpuSamples(double time)
         {
             var history = exhibit.GeneratedHistory;

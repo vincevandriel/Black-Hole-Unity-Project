@@ -2,7 +2,7 @@
 
 M4 adds an **assumed gas illustration around the retained SXS:BBH:0305 horizon replay**. Its ring, stream and remnant geometry is computed directly from absolute event time. This makes seeking reversible and bounds storage without keeping a movie of gas frames. The field is three-dimensional and independent of the visitor's viewpoint. It is not a hydrodynamic or GRMHD solution, does not conserve gas, and is not a reconstruction of observed gas in GW150914.
 
-The current field is `assumed-SXS0305-reduced-binary-flow-v2-plunge`. Version 2 includes an explicitly assumed emitting plunge region and a shared transition ring. Version 1's `6 mi` inner cutoff left narrow annuli, removed a component's disk before merger, and made all inner gas vanish at common-horizon formation. Those were consequences of the illustration's choices, not predictions from measured gas. The numerical horizon motion and gravitational-wave data are unchanged.
+The current field is `assumed-SXS0305-reduced-binary-flow-v3-stream-taper`. Version 3 applies each minidisk's smooth width taper to its feeding stream, so long bright links do not outlive a closed emitting disk. Version 2 added an explicitly assumed emitting plunge region and a shared transition ring. Version 1's `6 mi` inner cutoff left narrow annuli, removed a component's disk before merger, and made all inner gas vanish at common-horizon formation. These are choices of the illustration, not predictions from measured gas. Numerical horizon motion and gravitational-wave data are unchanged.
 
 The authoritative formulas are in `ReducedBinaryFlowModel.cs`; `ReducedBinaryFlow.hlsl` implements the same density and bolometric emission functions. Both use the [M2 data and unit contract](Data/SXS0305/README.md). No other binary's gas simulation has been attached to these horizon positions. The [M3 isolated reference](PHYSICS_M3.md) remains a separate control.
 
@@ -50,11 +50,12 @@ At a query point `p`, let `u=dot(pXZ-AXZ,dXZ)/|dXZ|²`. For `0<u<1`, form `cente
 
 ```
 q = |pXZ-centerXZ|² / 1.4² + (py-centery)² / 0.8²
-rho/rho0 = 0.9 B W(u) (1-q)²           for q<1
+V_i = smoothstep(rout,minidisk_i-rin,minidisk_i)
+rho/rho0 = 0.9 B V_i W(u) (1-q)²       for q<1
 T/T0 = 0.4 + 0.5 u
 ```
 
-The curve parameter is the projection onto its chord, not an iterative closest-point solution. The field definition uses that projection consistently in C# and HLSL. The prescribed stream velocity points along the derivative of the center curve, with speed `(0.12+0.13u)c`. It does not infer a conserved mass flux or a ballistic solution of the binary metric.
+The curve parameter is the projection onto its chord, not an iterative closest-point solution. The field definition uses that projection consistently in C# and HLSL. The prescribed stream velocity points along the derivative of the center curve, with speed `(0.12+0.13u)c`. The disk-width factor multiplies density, emission and density-weighted momentum together; it does not change the surviving gas's tangent speed. This bounded prescription prevents long bright feeding links from persisting after their minidisk closes. It does not infer a conserved mass flux, an outflow jet or a ballistic solution of the binary metric.
 
 ## Merger transition and horizon proxies
 

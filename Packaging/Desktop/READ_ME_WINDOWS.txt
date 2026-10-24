@@ -13,6 +13,8 @@ ACCRETION VIEW or RESTART restores both illustrative disks, the beginning and
 close framing, even after gas was hidden or generated fluid was selected.
 STARLIGHT ONLY intentionally hides gas. PLAY INSPIRAL begins playback;
 WATCH MERGER restores illustrative gas and jumps to the final approach.
+The silhouettes join smoothly around merger; the brief shape blend is illustrative.
+Long orange links are assumed gas feeding streams, not outgoing jets.
 OUTGOING WAVES starts a slow view of outward distortion in the synthetic stellar
 background while keeping the disks visible. Wave strength is visually amplified.
 WAVE MAP (top right) shows a colored, exaggerated strain surface with gas hidden.

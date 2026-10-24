@@ -37,6 +37,7 @@ float2 FlowRing(float3 p, float inner, float outer, float aspect, float strength
 
 float2 FlowStream(float3 p, float4 start, float4 end, float4 bow, float weight)
 {
+    if (weight <= 0.0) return 0;
     float2 chord = end.xz - start.xz;
     float u = dot(p.xz - start.xz, chord) / bow.w;
     if (u <= 0.0 || u >= 1.0) return 0;
@@ -68,8 +69,10 @@ float2 SampleReducedFlow(float3 p)
             3.0 * _FlowWeights.x * FlowSmooth(_FlowARadii.y - _FlowARadii.x), 1.1, 0, float2(1, 0));
         value += FlowRing(p - _FlowB.xyz, _FlowBRadii.x, _FlowBRadii.y, .24,
             3.0 * _FlowWeights.x * FlowSmooth(_FlowBRadii.y - _FlowBRadii.x), 1.1, 0, float2(1, 0));
-        value += FlowStream(p, _FlowStreamAStart, _FlowStreamAEnd, _FlowStreamABow, _FlowWeights.x);
-        value += FlowStream(p, _FlowStreamBStart, _FlowStreamBEnd, _FlowStreamBBow, _FlowWeights.x);
+        value += FlowStream(p, _FlowStreamAStart, _FlowStreamAEnd, _FlowStreamABow,
+            _FlowWeights.x * FlowSmooth(_FlowARadii.y - _FlowARadii.x));
+        value += FlowStream(p, _FlowStreamBStart, _FlowStreamBEnd, _FlowStreamBBow,
+            _FlowWeights.x * FlowSmooth(_FlowBRadii.y - _FlowBRadii.x));
     }
     if (_FlowWeights.y > 0.0)
         value += FlowRing(p - _FlowRemnant.xyz, _FlowRemnantRadii.x, _FlowRemnantRadii.y, .24,
