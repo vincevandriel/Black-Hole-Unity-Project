@@ -67,7 +67,7 @@ The mapping is exact only for the implemented bounded equation, not for the phys
 
 Prior full-image effects could remap foreground gas and black proxies into detached arcs, repeated disks and false silhouettes. Current mass and wave effects operate only while rendering stellar sources. Neither samples the completed gas image. Gas retains its renderer's density, emission and geometry; existing scene order lets horizon proxies occlude the background.
 
-This implements background-starlight bending, not strong-field disk-emission bending. With both stellar renderers hidden, changing lens/wave controls must leave foreground gas unchanged; integration QA contains that isolation check. **STARLIGHT VIEW** hides gas to expose the stellar images. Restarting restores the accretion view.
+This implements background-starlight bending, not strong-field disk-emission bending. With both stellar renderers hidden, changing lens/wave controls must leave foreground gas unchanged; integration QA contains that isolation check. **STARLIGHT ONLY** hides gas to expose the stellar images. **ACCRETION VIEW** and **RESTART** restore visible illustrative disks and the opening camera, including after generated-fluid mode was selected.
 
 ## Retarded waveform and 12:1 display compression
 

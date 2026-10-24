@@ -1,5 +1,7 @@
 # Background stellar light: validation record
 
+This records the stellar-light runtime below. The later control repair, ordinary-camera disk checks and replacement desktop package are documented in [ACCRETION_VIEW_VALIDATION.md](ACCRETION_VIEW_VALIDATION.md) and [DESKTOP_DISTRIBUTION.md](DESKTOP_DISTRIBUTION.md); the counts here remain historical evidence for this revision.
+
 Runtime source: `605b8b9c1eaad39e4115b16d277d38a800ae8a61`, 24 October 2026. The corrected Windows observatory passes both Float and forced-supported Half integration runs, with independently reviewed source-light captures. The implementation is described in [INTERACTIVE_OPTICS.md](INTERACTIVE_OPTICS.md). The preceding full-image wave implementation and its historical release are documented separately in [VISUAL_REPAIR_VALIDATION.md](VISUAL_REPAIR_VALIDATION.md).
 
 ## Current status
