@@ -141,6 +141,15 @@ namespace DTET.VisualPrototype.Editor
                         var sigma = new float[cells]; var vx = new float[cells]; var vz = new float[cells];
                         disks.ReadFrame(0, sigma, vx, vz);
                         disks.ReadFrame(disks.FrameCount - 1, sigma, vx, vz);
+                        string fluidPath = Path.Combine(Application.streamingAssetsPath, "DTET", "MiniDisks", "sxs0305.mdf");
+                        using (var material = BlackHole.Staging.Simulation.MiniDiskMaterialCache.Open(
+                            BlackHole.Staging.Simulation.MiniDiskMaterialAdvection.SidecarPath(fluidPath)))
+                        {
+                            if (!material.MatchesFile(disks, fluidPath))
+                                throw new InvalidOperationException("Prepared material does not match the fluid history.");
+                            material.ReadFrame(0, sigma); material.ReadFrame(material.FrameCount - 1, sigma);
+                            Debug.Log($"DTET_MATERIAL_PREFLIGHT_PASSED fluidSha={material.FluidSha256} frames={material.FrameCount} checkedFrames=first,last");
+                        }
                         Debug.Log($"DTET_MINIDISK_PREFLIGHT_PASSED sourceSha={hash} grid={disks.GridSize} frames={disks.FrameCount} start={disks.StartSeconds:R} end={disks.EndSeconds:R} checkedFrames=first,last");
                     }
                     finally { Resources.UnloadAsset(source); }

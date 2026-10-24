@@ -13,6 +13,20 @@ if (args.Contains("--m1") || args.Contains("--m2"))
         double.Parse(Value("--m2", "30"), System.Globalization.CultureInfo.InvariantCulture),
         double.Parse(Value("--separation", "30"), System.Globalization.CultureInfo.InvariantCulture)));
 if (args.Contains("--self-test")) { MiniDiskTests.Run(scenario); return; }
+if (args.Contains("--material-self-test")) { MiniDiskMaterialTests.Run(scenario); return; }
+if (args.Contains("--material")) {
+    string fluidPath = Value("--material", ""), detailPath = Value("--output", MiniDiskMaterialAdvection.SidecarPath(fluidPath));
+    var timer = Stopwatch.StartNew(); double previous = -1;
+    var detailReport = MiniDiskMaterialAdvection.GenerateCache(fluidPath, detailPath, CancellationToken.None,
+        p => { if (p > previous + .05 || p == 1) { previous = p; Console.WriteLine($"progress={p:F5} elapsedSeconds={timer.Elapsed.TotalSeconds:F3}"); } },
+        int.Parse(Value("--tracers", "8192")), double.Parse(Value("--courant", ".75"), System.Globalization.CultureInfo.InvariantCulture));
+    string detailJson = JsonSerializer.Serialize(new { modelId = MiniDiskMaterialAdvection.ModelId, elapsedSeconds = timer.Elapsed.TotalSeconds,
+        detailReport, MiniDiskMaterialAdvection.MinimumDensity, MiniDiskMaterialAdvection.SplatSigmaCells,
+        MiniDiskMaterialAdvection.SplatSupportCells, MiniDiskMaterialAdvection.Seed,
+        assumption = "Finite passive material tags sampled from initial density, with coherent seeded labels; RK2 transport through stored coordinate velocity, no respawn or fluid modification. Reconstructed signed material concentration is a subgrid display assumption, not measured turbulence, temperature or new matter. Invalid speed >= c removes a tag or neutralizes a pixel; this does not repair the Newtonian fluid." },
+        new JsonSerializerOptions { WriteIndented = true });
+    File.WriteAllText(detailPath + ".json", detailJson); Console.WriteLine(detailJson); return;
+}
 if (args.Contains("--inspect")) { MiniDiskInspection.Run(scenario, Value("--inspect", "")); return; }
 if (args.Contains("--compare")) {
     int ci = Array.IndexOf(args, "--compare"); MiniDiskInspection.Compare(args[ci + 1], args[ci + 2]); return;

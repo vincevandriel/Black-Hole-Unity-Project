@@ -19,6 +19,9 @@ for opening an app you trust are at https://support.apple.com/en-us/102445.
 Choose a fidelity setting before entering. Start with Laptop on modest hardware.
 The wrist starts lowered and the prepared fluid replay begins slowly.
 Space pauses it; WATCH MERGER jumps to a slower view before coalescence.
+MERGER SLOW MOTION gradually slows the shared event clock around coalescence.
+Its effective rate appears in the footer. Selecting a manual speed switches
+automatic slow motion off; the top-right button turns it back on.
 ACCRETION VIEW or RESTART restores the evolving disks at their recorded beginning
 with close framing, even after gas was hidden or the reservoir experiment selected.
 STARLIGHT ONLY explicitly hides gas to inspect the background stars.
@@ -45,6 +48,9 @@ formation, then evolves to the source-history end. Earlier source epochs contain
 no simulated gas; ACCRETION VIEW returns to the gas initialization time.
 All fidelity settings share its evolving density and velocity. Only two frames
 are loaded for rendering; pause and rewind reproduce the same gas history.
+Passive material markers travel through that flow to carry emission structure.
+They add visible moving detail without adding gas or changing the fluid forces.
+The .mdf and .mdt files are required prepared data; keep them with the player.
 Changing masses or separation prepares matching disks in the background and
 pauses playback. This can take several minutes; FLUID LAB shows progress and
 cancellation. Adjustable gas covers at most the final 4000 gravitational times;
@@ -53,10 +59,13 @@ FLUID LAB > SOLVE RESERVOIR is a separate coarse outer-reservoir experiment.
 DEFAULT DISKS or ACCRETION VIEW returns to the mini-disks.
 
 The gas is conditional, isothermal and Newtonian, with no magnetic field or
-energy equation. Thickness, opacity and brightness are assumed. Curved gas rays
+energy equation. Vertical thickness uses an assumed local equilibrium; opacity,
+colour and material emission contrast are illustrative. Curved gas rays
 use a single-hole optical formula extended approximately to the binary, plus
 velocity-based Doppler brightness. This is not measured GW150914 gas or a full
-relativistic fluid/metric simulation. Detailed flow is not resolution-converged.
+relativistic fluid/metric simulation. Detailed flow and material patterns are
+not converged; some near-merger fluid velocities exceed the model's physical
+validity. This is an educational visualization, not a predicted merger image.
 The sky is synthetic; gravitational-wave distortion is deliberately exaggerated.
 The featured source is a hypothetical Sun-sized star at 1 AU, appearing about
 half a degree across before lensing. Its arcs and multiple images change as

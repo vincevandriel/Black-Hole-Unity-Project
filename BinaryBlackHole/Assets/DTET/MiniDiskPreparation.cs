@@ -14,6 +14,7 @@ namespace DTET.VisualPrototype
             public InteractiveBinaryScenario Scenario;
             public long Generation;
             public string Path;
+            public string DetailError;
             public readonly CancellationTokenSource Cancellation = new CancellationTokenSource();
             public Task Task;
             public bool Published;
@@ -32,8 +33,18 @@ namespace DTET.VisualPrototype
             var request = new Work { Scenario = scenario, Generation = generation,
                 Path = System.IO.Path.Combine(directory, "disks-" + Guid.NewGuid().ToString("N") + ".mdf") };
             work = request; Status = "Computing pressure and gravity for this binary. Playback is paused.";
-            request.Task = Task.Run(() => MiniDiskSimulation.GenerateCache(scenario, request.Path, 128, 513,
-                request.Cancellation.Token, request.Report));
+            request.Task = Task.Run(() =>
+            {
+                MiniDiskSimulation.GenerateCache(scenario, request.Path, 128, 513,
+                    request.Cancellation.Token, value => request.Report(.85 * value));
+                try
+                {
+                    MiniDiskMaterialAdvection.GenerateCache(request.Path, MiniDiskMaterialAdvection.SidecarPath(request.Path),
+                        request.Cancellation.Token, value => request.Report(.85 + .15 * value));
+                }
+                catch (Exception error) when (error is IOException || error is InvalidDataException || error is UnauthorizedAccessException)
+                { request.DetailError = error.Message; }
+            });
         }
 
         public bool TryComplete(InteractiveBinaryScenario scenario, long generation, out string path)
@@ -47,7 +58,9 @@ namespace DTET.VisualPrototype
             { Status = "Disk preparation cancelled."; return false; }
             if (request.Task.IsFaulted)
             { Status = "Disk preparation failed: " + request.Task.Exception.GetBaseException().Message; return false; }
-            path = request.Path; Status = "Evolved disks ready."; return true;
+            path = request.Path; Status = string.IsNullOrEmpty(request.DetailError) ? "Evolved disks ready."
+                : "Evolved disks ready; transported material unavailable: " + request.DetailError;
+            return true;
         }
 
         public void Cancel()
@@ -60,6 +73,7 @@ namespace DTET.VisualPrototype
                 if (completed.IsFaulted) { var observed = completed.Exception; }
                 request.Cancellation.Dispose();
                 try { File.Delete(request.Path); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                try { File.Delete(MiniDiskMaterialAdvection.SidecarPath(request.Path)); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             Status = "Disk preparation cancelled.";
         }

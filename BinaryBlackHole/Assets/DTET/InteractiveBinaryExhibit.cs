@@ -28,6 +28,9 @@ namespace DTET.VisualPrototype
         public CachedMiniDiskPlayer MiniDisks { get; private set; }
         public bool EvolvedDisksSelected => useEvolvedDisks && !GeneratedFluidActive;
         public bool IsPreparingDisks => diskPreparation != null && diskPreparation.Running;
+        public bool MergerSlowMotion { get; private set; } = true;
+        public double EffectivePlaybackRate => !Ready ? 0 : Session.PlaybackRate * (MergerSlowMotion
+            ? MergerPlaybackTiming.Factor(Session.PlaybackTimeSeconds, Session.Model.MergerTimeSeconds, Session.Model.GravitationalTimeSeconds) : 1);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         internal bool LegacyGasForQa { get; set; }
 #endif
@@ -60,7 +63,7 @@ namespace DTET.VisualPrototype
             : GeneratedFluidPlayer == null ? "Enter the observatory to generate fluid." : GeneratedFluidPlayer.Status;
 
         private GameObject launcher, sceneRoot, hud, sampleObject;
-        private Text launchDetail, phaseLabel, statusLabel, transportPlay, bendingToggle, waveMapToggle, viewLegend;
+        private Text launchDetail, phaseLabel, statusLabel, transportPlay, bendingToggle, waveMapToggle, timingToggle, viewLegend;
         private GameObject viewLegendPanel;
         private StarSourceLocator starLocator;
         private RawImage sceneImage;
@@ -158,6 +161,7 @@ namespace DTET.VisualPrototype
             var gasShader = Resources.Load<Shader>(useEvolvedDisks ? "DTET/CurvedDiskVolume" : "DTET/ReducedBinaryVolume");
             Profile = ExhibitQuality.Resolve(profile, Capabilities(fallback || gasShader == null || !gasShader.isSupported));
             SelectedProfile = profile;
+            MergerSlowMotion = useEvolvedDisks;
             var data = Resources.Load<TextAsset>("Physics/SXS0305");
             if (data == null) throw new InvalidOperationException("The licensed SXS replay asset is missing.");
             try
@@ -247,7 +251,9 @@ namespace DTET.VisualPrototype
             var waveButton = ReducedExhibitUi.Button(hud.transform, "WAVE MAP: OFF", 1290, 110, 274, 38, ToggleWaveMap);
             waveButton.interactable = Profile.GasEnabled; waveMapToggle = waveButton.GetComponentInChildren<Text>();
             ReducedExhibitUi.Button(hud.transform, "FIND SUN-LIKE STAR", 1290, 158, 274, 38, ShowStarView);
-            viewLegendPanel = ReducedExhibitUi.Panel(hud.transform, "View guide", 1130, 210, 434, 128, ReducedExhibitUi.Ink);
+            timingToggle = ReducedExhibitUi.Button(hud.transform, "MERGER SLOW MOTION: ON", 1290, 206, 274, 38,
+                () => SetMergerSlowMotion(!MergerSlowMotion)).GetComponentInChildren<Text>();
+            viewLegendPanel = ReducedExhibitUi.Panel(hud.transform, "View guide", 1130, 254, 434, 128, ReducedExhibitUi.Ink);
             viewLegend = ReducedExhibitUi.Label(viewLegendPanel.transform, "", 16, 14, 10, 405, 112, ReducedExhibitUi.Accent);
             viewLegendPanel.GetComponent<Image>().raycastTarget = false;
             viewLegendPanel.SetActive(false);
@@ -404,13 +410,27 @@ namespace DTET.VisualPrototype
             if (EmulatedInputEnabled) HandleInput();
             if (!Ready) return;
             if (IsGeneratingFluid || IsPreparingDisks) Session.Pause();
-            Session.Tick(Time.unscaledDeltaTime); Present();
+            AdvancePlayback(Time.unscaledDeltaTime); Present();
             BindSkyLensing();
             if (Time.unscaledTimeAsDouble >= nextLabels) { RefreshLabels(); nextLabels = Time.unscaledTimeAsDouble + .1; }
         }
         private void AfterSceneRender(ScriptableRenderContext context, Camera camera)
         {
             if (Ready && !manualRendering && camera == View) { RenderOptics(); AutomaticOpticalFrames++; }
+        }
+        public void SetMergerSlowMotion(bool enabled)
+        {
+            MergerSlowMotion = enabled;
+            if (Ready) RefreshLabels();
+        }
+        public void AdvancePlayback(double wallSeconds)
+        {
+            if (!Ready || !Session.IsPlaying) return;
+            if (!MergerSlowMotion) { Session.Tick(wallSeconds); return; }
+            double source = Session.PlaybackTimeSeconds;
+            double target = MergerPlaybackTiming.Advance(source, wallSeconds, Session.PlaybackRate,
+                Session.Model.MergerTimeSeconds, Session.Model.GravitationalTimeSeconds, Session.Model.DurationSeconds);
+            Session.Tick(Math.Max(0, (target - source) / Session.PlaybackRate));
         }
         public void RenderOptics()
         {
@@ -501,6 +521,8 @@ namespace DTET.VisualPrototype
             transportPlay.text = Session.IsPlaying ? "PAUSE" : "PLAY INSPIRAL";
             bendingToggle.text = OpticalStyle != InteractiveOpticalStyle.Off && (LensGain > 0 || WaveGain > 0) && Optics != null && Optics.Active ? "BENDING: ON" : "BENDING: OFF";
             waveMapToggle.text = WaveMapVisible ? "WAVE MAP: ON" : "WAVE MAP: OFF";
+            timingToggle.text = MergerSlowMotion ? "MERGER SLOW MOTION: ON" : "MERGER SLOW MOTION: OFF";
+            statusLabel.text += $" · {(MergerSlowMotion ? "AUTO" : "MANUAL")} {EffectivePlaybackRate:0.0000}x source time";
             viewLegendPanel.SetActive(WaveMapVisible || StarFinderVisible);
             if (WaveMapVisible)
                 viewLegend.text = "GRAVITATIONAL WAVE MAP\nCyan / amber: opposite strain phases\nIllustrative height; distance compressed 12x\n"
@@ -517,7 +539,7 @@ namespace DTET.VisualPrototype
             UseGeneratedFluid(false);
             SetWristGas(true);
             Session.Seek(Math.Max(0, Session.Model.MergerTimeSeconds - 600 * Snapshot.GravitationalTimeSeconds));
-            Session.SetPlaybackRate(.01); Present(); SetViewPreset(0);
+            Session.SetPlaybackRate(.02); MergerSlowMotion = useEvolvedDisks; Present(); SetViewPreset(0);
             Wrist.SetRaised(false, true); Session.Play(); RefreshLabels();
         }
 
@@ -534,7 +556,7 @@ namespace DTET.VisualPrototype
             UseGeneratedFluid(false);
             SetWristGas(true);
             SetWristSamples(false);
-            ResetWristScenario(); Session.SetPlaybackRate(.05); Present(); SetViewPreset(0);
+            ResetWristScenario(); Session.SetPlaybackRate(useEvolvedDisks ? .02 : .05); MergerSlowMotion = useEvolvedDisks; Present(); SetViewPreset(0);
             Wrist.SetRaised(false, true); RefreshLabels();
         }
 
@@ -688,7 +710,8 @@ namespace DTET.VisualPrototype
             Present(); RefreshLabels(); }
         public void SetWristPlaying(bool playing) { if (!Ready) return; if (playing && !IsGeneratingFluid && !IsPreparingDisks) Session.Play(); else Session.Pause(); RefreshLabels(); }
         public void SeekWrist(double fraction) { if (!Ready) return; Session.Seek(Math.Max(0, Math.Min(1, fraction)) * Snapshot.DurationSeconds); Present(); RefreshLabels(); }
-        public void SetWristRate(double rate) { if (!Ready) return; Session.SetPlaybackRate(rate); RefreshLabels(); }
+        public void SetWristRate(double rate)
+        { if (!Ready) return; Session.SetPlaybackRate(rate); MergerSlowMotion = false; RefreshLabels(); }
         public void SetWristOptics(InteractiveOpticalStyle style, float lensGain, float waveGain)
         {
             if (!Enum.IsDefined(typeof(InteractiveOpticalStyle), style) || !float.IsFinite(lensGain) || !float.IsFinite(waveGain)) return;

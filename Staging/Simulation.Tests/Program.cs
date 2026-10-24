@@ -1,5 +1,7 @@
 using BlackHole.Staging.Simulation;
 
+MergerPlaybackTimingTests.Run();
+
 static void Near(double actual, double expected, double relativeTolerance, string label)
 {
     double scale = Math.Max(1.0, Math.Abs(expected));

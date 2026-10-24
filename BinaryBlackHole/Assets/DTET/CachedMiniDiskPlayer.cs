@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using BlackHole.Staging.Simulation;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -10,21 +11,24 @@ namespace DTET.VisualPrototype
     {
         private Texture2D frameA, frameB;
         private TextureFormat textureFormat;
-        private float[] sigma, velocityX, velocityZ;
+        private float[] sigma, velocityX, velocityZ, materialConcentration;
         private Color[] pixels;
         private Mesh mesh;
         private GameObject surface;
         private MeshRenderer surfaceRenderer;
         private Camera view;
         private InteractiveBinaryScenario scenario;
-        private Vector4 endpointA, endpointB, endpointR, opticalWeights;
+        private Vector4 endpointA, endpointB, endpointR, endpointRadii, opticalWeights;
         private int lowerFrame = -1, upperFrame = -1, rayBudget = 256;
         private long generation;
         private double initialSeparationRg;
         private bool curvedLight = true;
         private float dopplerStrength = 1;
+        private float materialDetailStrength = 1;
         public const float AssumedHeightRg = .3f;
         public MiniDiskCache Cache { get; private set; }
+        public MiniDiskMaterialCache MaterialCache { get; private set; }
+        public bool MaterialDetailAvailable => MaterialCache != null;
         public Material Material { get; private set; }
         public bool Ready => Cache != null && Material != null && surfaceRenderer != null;
         public bool IsCovered { get; private set; }
@@ -37,7 +41,9 @@ namespace DTET.VisualPrototype
         public int TextureUploads { get; private set; }
         public int RayBudget => rayBudget;
         public long PlaybackPayloadBytes => Cache == null ? 0 : Cache.ResidentPayloadBytes
-            + (long)Cache.GridSize * Cache.GridSize * (28 + (textureFormat == TextureFormat.RGBAHalf ? 16 : 32));
+            + (MaterialCache == null ? 0 : MaterialCache.ResidentPayloadBytes)
+            + (long)Cache.GridSize * Cache.GridSize * (28 + (materialConcentration == null ? 0 : 4)
+                + (textureFormat == TextureFormat.RGBAHalf ? 16 : 32));
         public string Status { get; private set; } = "Evolved mini-disk cache has not been loaded.";
         public bool CurvedLight
         {
@@ -48,6 +54,12 @@ namespace DTET.VisualPrototype
         {
             get => dopplerStrength;
             set { dopplerStrength = float.IsFinite(value) ? Mathf.Clamp01(value) : 0; if (Material != null) Material.SetFloat("_DopplerStrength", dopplerStrength); }
+        }
+        public float MaterialDetailStrength
+        {
+            get => materialDetailStrength;
+            set { materialDetailStrength = float.IsFinite(value) ? Mathf.Clamp01(value) : 0;
+                if (Material != null) Material.SetFloat("_MaterialDetailStrength", MaterialCache == null ? 0 : materialDetailStrength); }
         }
 
         public void Initialize(Camera camera, int baseRaySteps)
@@ -65,6 +77,7 @@ namespace DTET.VisualPrototype
             double before = Math.Max(0, model.MergerTimeSeconds - Math.Max(1e-10, model.GravitationalTimeSeconds * 1e-7));
             var binary = model.Evaluate(before); var remnant = model.Evaluate(model.MergerTimeSeconds);
             endpointA = Lens(binary.BodyA); endpointB = Lens(binary.BodyB); endpointR = Lens(remnant.Remnant);
+            endpointRadii = new Vector4(Horizon(binary.BodyA).w, Horizon(binary.BodyB).w, Horizon(remnant.Remnant).w, 0);
         }
 
         public bool Load(string path, long sourceGeneration)
@@ -81,10 +94,12 @@ namespace DTET.VisualPrototype
                     throw new InvalidOperationException("The cached scenario identity does not match the selected binary.");
                 int count = checked(Cache.GridSize * Cache.GridSize);
                 sigma = new float[count]; velocityX = new float[count]; velocityZ = new float[count]; pixels = new Color[count];
+                TryLoadMaterial(path, count);
                 frameA = CreateFrame("Evolved mini-disk lower frame"); frameB = CreateFrame("Evolved mini-disk upper frame");
                 Material = new Material(shader) { name = "Evolved mini-disks / approximate curved light" };
                 Material.SetFloat("_GeneratedOpacity", 8); Material.SetFloat("_GeneratedExposure", 1.6f);
                 Material.SetFloat("_DopplerStrength", dopplerStrength);
+                Material.SetFloat("_MaterialDetailStrength", materialDetailStrength);
                 Material.SetVector("_DiskDomain", new Vector4((float)Cache.HalfExtentRg, AssumedHeightRg,
                     Mathf.Max(128, 6 * (float)Cache.HalfExtentRg), rayBudget));
                 mesh = new Mesh { name = "Curved evolved gas screen surface" };
@@ -97,7 +112,9 @@ namespace DTET.VisualPrototype
                 surfaceRenderer.shadowCastingMode = ShadowCastingMode.Off; surfaceRenderer.receiveShadows = false;
                 surfaceRenderer.lightProbeUsage = LightProbeUsage.Off; surfaceRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
                 surfaceRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion; surfaceRenderer.enabled = false;
-                Status = "Evolved Newtonian mini-disks; assumed thin vertical profile and approximate curved light.";
+                Status = MaterialCache != null
+                    ? "Evolved 2D gas with transported material detail and approximate curved light."
+                    : "Evolved 2D gas; material detail unavailable. Approximate curved light.";
                 return true;
             }
             catch (Exception error)
@@ -148,6 +165,10 @@ namespace DTET.VisualPrototype
                 }
             }
             Material.SetVector("_DiskLensA", a); Material.SetVector("_DiskLensB", b); Material.SetVector("_DiskLensR", remnant);
+            Material.SetVector("_DiskVertical", new Vector4(.04f,
+                .5f * (snapshot.BodyA.HasValue ? Horizon(snapshot.BodyA).w : endpointRadii.x),
+                .5f * (snapshot.BodyB.HasValue ? Horizon(snapshot.BodyB).w : endpointRadii.y),
+                .5f * (snapshot.Remnant.HasValue ? Horizon(snapshot.Remnant).w : endpointRadii.z)));
             opticalWeights = new Vector4(1 - remnantWeight, remnantWeight, curvedLight ? 1 : 0, 1);
             Material.SetVector("_DiskWeights", opticalWeights);
             Material.SetFloat("_DopplerStrength", dopplerStrength);
@@ -158,8 +179,34 @@ namespace DTET.VisualPrototype
         {
             if (target == null) return;
             target.SetTexture("_GeneratedFrameA", frameA); target.SetTexture("_GeneratedFrameB", frameB);
+            target.SetFloat("_MaterialDetailStrength", MaterialCache == null ? 0 : materialDetailStrength);
             target.SetVector("_GeneratedGrid", new Vector4(Cache == null ? 0 : (float)Cache.HalfExtentRg,
                 AssumedHeightRg, (float)FrameBlend, Ready && IsCovered ? 1 : 0));
+            if (Cache != null)
+            {
+                var targetTexture = view == null ? null : view.targetTexture;
+                target.SetVector("_DiskSampling", new Vector4(2 * (float)Cache.HalfExtentRg / Cache.GridSize,
+                    Cache.GridSize, targetTexture == null ? Screen.width : targetTexture.width,
+                    targetTexture == null ? Screen.height : targetTexture.height));
+            }
+        }
+
+        private void TryLoadMaterial(string fluidPath, int count)
+        {
+            string path = MiniDiskMaterialAdvection.SidecarPath(fluidPath);
+            if (!File.Exists(path)) return;
+            try
+            {
+                MaterialCache = MiniDiskMaterialCache.Open(path);
+                if (!MaterialCache.MatchesFile(Cache, fluidPath)) throw new InvalidDataException("Material history does not match the fluid.");
+                materialConcentration = new float[count];
+            }
+            catch (Exception error) when (error is IOException || error is InvalidDataException
+                || error is UnauthorizedAccessException || error is ArgumentException)
+            {
+                MaterialCache?.Dispose(); MaterialCache = null; materialConcentration = null;
+                Debug.LogWarning("Material detail unavailable: " + error.Message);
+            }
         }
 
         private bool Matches(InteractiveBinarySnapshot s) => Cache.SourceModelId == s.ScenarioId && Cache.ScenarioMode == s.Mode
@@ -173,7 +220,19 @@ namespace DTET.VisualPrototype
         private void Upload(Texture2D texture, int frame)
         {
             Cache.ReadFrame(frame, sigma, velocityX, velocityZ);
-            for (int i = 0; i < pixels.Length; i++) pixels[i] = new Color(sigma[i], velocityX[i], velocityZ[i], 0);
+            if (MaterialCache != null)
+            {
+                try { MaterialCache.ReadFrame(frame, materialConcentration); }
+                catch (Exception error) when (error is IOException || error is InvalidDataException)
+                {
+                    MaterialCache.Dispose(); MaterialCache = null; materialConcentration = null;
+                    Material.SetFloat("_MaterialDetailStrength", 0);
+                    Status = "Evolved gas ready; material detail could not be read.";
+                    Debug.LogWarning(Status + " " + error.Message);
+                }
+            }
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = new Color(sigma[i], velocityX[i], velocityZ[i],
+                materialConcentration == null ? 0 : materialConcentration[i]);
             texture.SetPixels(pixels); texture.Apply(false, false); TextureUploads++;
         }
         private static Vector4 Lens(InteractiveBinaryBody? body)
@@ -190,15 +249,16 @@ namespace DTET.VisualPrototype
         private void OnDestroy() => Release();
         public void Release()
         {
-            ReleasePlayback(); view = null; scenario = null; endpointA = endpointB = endpointR = Vector4.zero;
+            ReleasePlayback(); view = null; scenario = null; endpointA = endpointB = endpointR = endpointRadii = Vector4.zero;
         }
         private void ReleasePlayback()
         {
             if (surface != null) { surface.SetActive(false); Destroy(surface); }
             if (mesh != null) Destroy(mesh); if (Material != null) Destroy(Material);
             if (frameA != null) Destroy(frameA); if (frameB != null) Destroy(frameB);
-            Cache?.Dispose(); Cache = null; Material = null; frameA = frameB = null; surface = null; surfaceRenderer = null; mesh = null;
-            sigma = velocityX = velocityZ = null; pixels = null; lowerFrame = upperFrame = -1;
+            Cache?.Dispose(); MaterialCache?.Dispose(); Cache = null; MaterialCache = null;
+            Material = null; frameA = frameB = null; surface = null; surfaceRenderer = null; mesh = null;
+            sigma = velocityX = velocityZ = materialConcentration = null; pixels = null; lowerFrame = upperFrame = -1;
             IsCovered = false; FrameBlend = 0; TextureUploads = 0;
         }
     }

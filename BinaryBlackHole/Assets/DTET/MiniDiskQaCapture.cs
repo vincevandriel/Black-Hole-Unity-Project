@@ -28,7 +28,7 @@ namespace DTET.VisualPrototype
 
         [Serializable] private sealed class ProfileEvidence
         {
-            public string requested, effective, fieldFingerprint;
+            public string requested, effective, fieldFingerprint, materialFingerprint;
             public int gridSize, frameCount, rayBudget, width, height;
             public double elapsedSeconds, meanCompletedReadbackMs;
         }
@@ -98,6 +98,8 @@ namespace DTET.VisualPrototype
             Check(playbackBytes > 0, "playback reports allocated cache/texture payload");
             ValidateRecordedField();
             ValidateSharedScience();
+            ValidateMaterialAndTiming();
+            ValidateOptionalMaterialFallback();
             var diskCache = exhibit.MiniDisks.Cache;
             double gasStart = diskCache.StartSeconds, gasEnd = diskCache.EndSeconds;
             if (gasStart > 0)
@@ -169,18 +171,23 @@ namespace DTET.VisualPrototype
                 renderMs.Add(watch.Elapsed.TotalMilliseconds); yield return null;
             }
             var releasedCache = exhibit.MiniDisks.Cache;
+            var releasedMaterial = exhibit.MiniDisks.MaterialCache;
             exhibit.ReturnToLauncher(); yield return null;
             Check(!exhibit.Ready, "return to launcher releases the active scene");
             bool disposed = false;
             try { releasedCache.GetFrameTime(0); } catch (ObjectDisposedException) { disposed = true; }
             Check(disposed, "return to launcher closes the streamed cache rather than retaining its file handle");
+            bool materialDisposed = false;
+            if (releasedMaterial != null)
+                try { releasedMaterial.GetFrameTime(0); } catch (ObjectDisposedException) { materialDisposed = true; }
+            Check(materialDisposed, "return to launcher closes the transported-material stream");
             yield return ValidateRenderProfiles();
             WriteReceipt(); Application.Quit(passed ? 0 : 1);
         }
 
         private IEnumerator ValidateRenderProfiles()
         {
-            string referenceFingerprint = null, referenceSource = null;
+            string referenceFingerprint = null, referenceSource = null, referenceMaterial = null;
             int referenceGrid = 0, referenceFrames = 0;
             double selectedTime = 0;
             foreach (var profile in new[] { ExhibitQualityProfile.Laptop, ExhibitQualityProfile.Balanced, ExhibitQualityProfile.High })
@@ -209,6 +216,17 @@ namespace DTET.VisualPrototype
                     }
                 }
                 string signature = fingerprint.ToString("x16");
+                string materialSignature = "unavailable";
+                if (exhibit.MiniDisks.MaterialDetailAvailable)
+                {
+                    var concentrations = new float[count]; exhibit.MiniDisks.MaterialCache.ReadFrame(lower, concentrations);
+                    ulong materialHash = 14695981039346656037UL;
+                    unchecked { foreach (float value in concentrations) materialHash = (materialHash ^ (uint)BitConverter.SingleToInt32Bits(value)) * 1099511628211UL; }
+                    materialSignature = materialHash.ToString("x16");
+                }
+                if (referenceMaterial == null) referenceMaterial = materialSignature;
+                Check(materialSignature != "unavailable" && materialSignature == referenceMaterial,
+                    profile + " preserves the same transported material at the same source epoch");
                 if (referenceFingerprint == null)
                 {
                     referenceFingerprint = signature; referenceSource = cache.SourceSha256;
@@ -225,7 +243,7 @@ namespace DTET.VisualPrototype
                     milliseconds += watch.Elapsed.TotalMilliseconds; yield return null;
                 }
                 profileEvidence.Add(new ProfileEvidence { requested = profile.ToString(), effective = exhibit.Profile.EffectiveProfile.ToString(),
-                    fieldFingerprint = signature, gridSize = cache.GridSize, frameCount = cache.FrameCount,
+                    fieldFingerprint = signature, materialFingerprint = materialSignature, gridSize = cache.GridSize, frameCount = cache.FrameCount,
                     rayBudget = exhibit.MiniDisks.RayBudget, width = exhibit.SceneTarget.width, height = exhibit.SceneTarget.height,
                     elapsedSeconds = exhibit.Snapshot.ElapsedSeconds, meanCompletedReadbackMs = milliseconds / 3 });
                 CaptureInterface("minidisk-profile-" + profile + ".png");
@@ -234,6 +252,100 @@ namespace DTET.VisualPrototype
             if (profileEvidence.Count == 3)
                 Check(profileEvidence[0].rayBudget < profileEvidence[1].rayBudget && profileEvidence[1].rayBudget < profileEvidence[2].rayBudget,
                     "the tested device admits distinct increasing curved-ray budgets for Laptop, Balanced and High");
+        }
+
+        private void ValidateMaterialAndTiming()
+        {
+            var player = exhibit.MiniDisks;
+            Check(player.MaterialDetailAvailable, "matching transported-material history is loaded for the reference fluid");
+            if (player.MaterialCache != null)
+            {
+                int count = player.Cache.GridSize * player.Cache.GridSize;
+                var a = new float[count]; var b = new float[count];
+                player.MaterialCache.ReadFrame(0, a);
+                player.MaterialCache.ReadFrame(player.MaterialCache.FrameCount / 2, b);
+                double variance = 0, change = 0; bool bounded = true;
+                for (int i = 0; i < count; i++)
+                {
+                    bounded &= Finite(a[i]) && Finite(b[i]) && Math.Abs(a[i]) <= 1 && Math.Abs(b[i]) <= 1;
+                    variance += a[i] * a[i]; change += Math.Abs(a[i] - b[i]);
+                }
+                Check(bounded && variance / count > 1e-5 && change / count > 1e-4,
+                    "transported material is finite, bounded, structured and changes over the recorded fluid history");
+                player.MaterialCache.ReadFrame(0, b);
+                bool exact = true; for (int i = 0; i < count; i++) exact &= a[i] == b[i];
+                Check(exact, "transported material rereads are immutable after seeking another epoch");
+            }
+            double start = player.Cache.StartSeconds;
+            exhibit.Session.Seek(start); exhibit.SetViewPreset(0); exhibit.SetWristGas(true);
+            player.MaterialDetailStrength = 1; exhibit.RenderFrame(); var detailed = Pixels(exhibit.SceneTarget);
+            Capture("material-detail-on.png");
+            var source = exhibit.Snapshot;
+            player.MaterialDetailStrength = 0; exhibit.RenderFrame(); var smooth = Pixels(exhibit.SceneTarget);
+            Capture("material-detail-off.png");
+            Check(Difference(detailed, smooth) > 1e-5, "transported material changes actual emitted gas structure");
+            Check(SameBody(source.BodyA, exhibit.Snapshot.BodyA) && source.Signal.DimensionlessRealH22 == exhibit.Snapshot.Signal.DimensionlessRealH22,
+                "material appearance does not alter scientific bodies or radiation");
+            player.MaterialDetailStrength = 1; exhibit.RenderFrame();
+            Check(Difference(detailed, Pixels(exhibit.SceneTarget)) < 1e-6, "restoring material detail reproduces the paused image exactly");
+
+            double merger = exhibit.Session.Model.MergerTimeSeconds;
+            double tg = exhibit.Session.Model.GravitationalTimeSeconds;
+            exhibit.Session.Seek(merger - 100 * tg); exhibit.SetMergerSlowMotion(true);
+            double frozen = exhibit.Session.PlaybackTimeSeconds;
+            exhibit.AdvancePlayback(1);
+            Check(exhibit.Session.PlaybackTimeSeconds == frozen, "automatic merger timing respects pause");
+            exhibit.Session.SetPlaybackRate(.02); exhibit.Session.Play(); exhibit.AdvancePlayback(1); exhibit.Session.Pause();
+            double expected = MergerPlaybackTiming.Advance(frozen, 1, .02, merger, tg, exhibit.Session.Model.DurationSeconds);
+            Check(Math.Abs(exhibit.Snapshot.ElapsedSeconds - expected) < 1e-12
+                && exhibit.EffectivePlaybackRate < .02
+                && exhibit.Snapshot.Signal.DimensionlessRealH22 == exhibit.Session.Model.Evaluate(expected).Signal.DimensionlessRealH22,
+                "automatic slowdown advances the shared source clock and keeps the waveform at the same epoch");
+            exhibit.SetWristRate(.05);
+            Check(!exhibit.MergerSlowMotion, "manual speed selection disables automatic merger timing");
+            double before = exhibit.Session.PlaybackTimeSeconds;
+            exhibit.Session.Play(); exhibit.AdvancePlayback(.1); exhibit.Session.Pause();
+            Check(Math.Abs(exhibit.Session.PlaybackTimeSeconds - before - .005) < 1e-12, "manual rate remains a constant source-time rate");
+            exhibit.Session.SetPlaybackRate(.02); exhibit.SetMergerSlowMotion(true); exhibit.Session.Seek(start);
+        }
+
+        private void ValidateOptionalMaterialFallback()
+        {
+            string directory = Path.Combine(output, "material-fallback-fixture");
+            Directory.CreateDirectory(directory);
+            string source = Path.Combine(Application.streamingAssetsPath, "DTET", "MiniDisks", "sxs0305.mdf");
+            string fluid = Path.Combine(directory, "fixture.mdf"), detail = MiniDiskMaterialAdvection.SidecarPath(fluid);
+            var root = new GameObject("Optional material fallback control"); root.SetActive(false);
+            var player = root.AddComponent<CachedMiniDiskPlayer>();
+            try
+            {
+                File.Copy(source, fluid);
+                File.WriteAllBytes(detail, new byte[] { 1, 2, 3 });
+                player.Initialize(exhibit.View, exhibit.Profile.RaySteps); player.BindScenario(exhibit.Session.Model);
+                bool headerFallback = player.Load(fluid, exhibit.Session.Generation);
+                Check(headerFallback && player.Ready && !player.MaterialDetailAvailable,
+                    "invalid material header falls back to intact fluid playback");
+                player.Release();
+                File.Copy(MiniDiskMaterialAdvection.SidecarPath(source), detail, true);
+                long payload;
+                using (var input = new BinaryReader(File.OpenRead(detail)))
+                {
+                    input.BaseStream.Position = 108; int modelLength = input.ReadInt32();
+                    input.BaseStream.Position += modelLength + 8; payload = input.ReadInt64();
+                }
+                using (var changed = new FileStream(detail, FileMode.Open, FileAccess.Write))
+                { changed.Position = payload; changed.WriteByte(0); changed.WriteByte(0); }
+                player.Initialize(exhibit.View, exhibit.Profile.RaySteps); player.BindScenario(exhibit.Session.Model);
+                bool opened = player.Load(fluid, exhibit.Session.Generation);
+                player.Present(exhibit.Snapshot, true); player.MaterialDetailStrength = 1;
+                Check(opened && player.Ready && player.IsCovered && !player.MaterialDetailAvailable
+                    && player.Material.GetFloat("_MaterialDetailStrength") == 0,
+                    "corrupt material payload preserves fluid and cannot re-enable stale detail");
+            }
+            finally
+            {
+                player.Release(); Destroy(root); File.Delete(detail); File.Delete(fluid); Directory.Delete(directory);
+            }
         }
 
         private IEnumerator CaptureEmissionComparison()
@@ -322,6 +434,9 @@ namespace DTET.VisualPrototype
             if (exhibit.MiniDisks.Ready && !exhibit.IsPreparingDisks)
             {
                 var cache = exhibit.MiniDisks.Cache;
+                Check(exhibit.MiniDisks.MaterialDetailAvailable
+                    && exhibit.MiniDisks.MaterialCache.FrameCount == cache.FrameCount,
+                    "adjusted preparation also generates and admits matching transported material");
                 Check(cache.Mass1Solar == 40 && cache.Mass2Solar == 25 && cache.InitialSeparationRg == 35
                     && cache.ScenarioMode == InteractiveScenarioMode.AdjustableExperiment,
                     "adjusted cache identity records the requested masses and initial separation");
@@ -356,6 +471,8 @@ namespace DTET.VisualPrototype
             try
             {
                 double start = exhibit.MiniDisks.Cache.StartSeconds, end = exhibit.MiniDisks.Cache.EndSeconds;
+                double merger = exhibit.Session.Model.MergerTimeSeconds, tg = exhibit.Session.Model.GravitationalTimeSeconds;
+                double displayDuration = MergerPlaybackTiming.DisplayDuration(start, end, .02, merger, tg);
                 exhibit.Session.Pause(); exhibit.Session.Seek(start);
                 exhibit.SetWristGas(true); exhibit.SetWristSamples(false);
                 exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
@@ -368,7 +485,8 @@ namespace DTET.VisualPrototype
                     times.WriteLine("frame,video_seconds,elapsed_source_seconds,source_coordinate_seconds,phase");
                     for (int frame = 0; frame < count; frame++)
                     {
-                        double seconds = start + (end - start) * frame / (count - 1.0);
+                        double seconds = frame == count - 1 ? end : MergerPlaybackTiming.Advance(start,
+                            displayDuration * frame / (count - 1.0), .02, merger, tg, end);
                         exhibit.Session.Seek(seconds); exhibit.View.transform.SetPositionAndRotation(position, rotation);
                         exhibit.RenderFrame();
                         RenderPipeline.SubmitRenderRequest(exhibit.View, new RenderPipeline.StandardRequest { destination = target });
@@ -397,7 +515,7 @@ namespace DTET.VisualPrototype
                     "240 actual default-scene frames cover the recorded gas interval at a fixed oblique viewpoint");
                 File.WriteAllText(Path.Combine(movie, "README.txt"),
                     "240 actual scene renders, 1280x720, intended encoding 24 fps (10 seconds).\n"
-                    + "The initialized gas interval is uniformly time-scaled; frames.csv records exact scientific source epochs.\n"
+                    + "The initialized gas interval uses the same automatic merger slowdown as playback, compressed to ten seconds; frames.csv records exact scientific source epochs.\n"
                     + "Earlier SXS source history is retained but has no gas evolution supplied by this finite-inventory cache.\n"
                     + "Laptop ray budget, production curved shader, default evolved cache; output resolution increased only for capture.\n"
                     + "Same display transfer as ExhibitDisplay. Scene only; no wrist, menus or external decorative overlays.\n"
@@ -564,6 +682,7 @@ namespace DTET.VisualPrototype
                 Check(darkArea > 100 && shadowRelativeError < radiusTolerance,
                     "single-hole isotropic shadow matches the analytic critical impact radius within two pixels plus 0.5 percent");
                 SaveFloatImage(shadow, 513, "fixture-single-hole-reference.png");
+                ValidateHomogeneousSlabs(camera, target, material, field);
             }
             finally
             {
@@ -574,6 +693,40 @@ namespace DTET.VisualPrototype
         }
 
         private static bool Finite(float x) => !float.IsNaN(x) && !float.IsInfinity(x);
+
+        private void ValidateHomogeneousSlabs(Camera camera, RenderTexture target, Material material, Texture2D field)
+        {
+            camera.transform.position = new Vector3(0, 10, 0); camera.transform.LookAt(Vector3.zero, Vector3.forward);
+            camera.backgroundColor = Color.clear;
+            material.SetVector("_DiskLensA", Vector4.zero); material.SetVector("_HorizonA", Vector4.zero);
+            material.SetVector("_DiskWeights", new Vector4(1, 0, 0, 0));
+            material.SetVector("_DiskDomain", new Vector4(18, .3f, 128, 512));
+            material.SetVector("_DiskSampling", new Vector4(36f / 128, 128, 513, 513));
+            material.SetFloat("_GeneratedExposure", 1); material.SetFloat("_MaterialDetailStrength", 0);
+            foreach (int verticalCase in new[] { 0, 1, 2 })
+            foreach (float density in new[] { .02f, .2f, 1f }) foreach (float opacity in new[] { 1f, 8f })
+            {
+                float height = verticalCase == 0 ? .06f : .3f;
+                material.SetVector("_GeneratedGrid", new Vector4(18, height, 0, 1));
+                material.SetVector("_DiskDomain", new Vector4(18, height, 128, 512));
+                material.SetVector("_DiskLensA", verticalCase == 2 ? new Vector4(0, 0, 0, 1) : Vector4.zero);
+                material.SetVector("_DiskVertical", new Vector4(.04f, .25f, 0, 0));
+                camera.transform.position = new Vector3(4, 10, 0); camera.transform.LookAt(new Vector3(4, 0, 0), Vector3.forward);
+                FillField(field, (x, z) => new Color(density, 0, 0, 0));
+                material.SetFloat("_GeneratedOpacity", opacity);
+                var image = Render(camera, target); Color actual = image[(target.height / 2) * target.width + target.width / 2];
+                double contrast = density / (density + .3);
+                float heat = (float)(.35 + .55 * Math.Pow(contrast, .25));
+                Color tint = Color.Lerp(new Color(1, .075f, .005f), new Color(1, .42f, .07f), Mathf.Clamp01((heat - .25f) / .4f));
+                tint = Color.Lerp(tint, new Color(1, .84f, .52f), Mathf.Clamp01((heat - .65f) / .45f));
+                tint = Color.Lerp(tint, new Color(.78f, .89f, 1), Mathf.Clamp01((heat - 1.1f) / .5f));
+                float intensity = (float)((1 - Math.Exp(-opacity * density)) * (.08 + 1.4 * contrast * contrast) * .25);
+                Color expected = tint * intensity;
+                double error = Math.Max(Math.Abs(actual.r - expected.r), Math.Max(Math.Abs(actual.g - expected.g), Math.Abs(actual.b - expected.b)));
+                Check(error <= 1e-5 + .005 * Math.Max(expected.r, Math.Max(expected.g, expected.b)),
+                    "Gaussian column transfer oracle: vertical case " + verticalCase + " density " + density + " opacity " + opacity);
+            }
+        }
         private static void FillField(Texture2D texture, Func<float, float, Color> sample)
         {
             var pixels = new Color[texture.width * texture.height];
