@@ -8,8 +8,14 @@ If Explorer reports 0x80010135 / Path too long, cancel and extract to a shorter
 destination. Do not skip DLLs or rename the application's data/engine files.
 
 Choose a fidelity setting before entering. Start with Laptop on modest hardware.
-The wrist starts lowered and the prepared fluid replay begins slowly.
-Space pauses it; WATCH MERGER jumps to a slower view before coalescence.
+The wrist starts lowered and guided exploration pauses at five event stages:
+the intact binary, inspiral, final approach, coalescence and remnant.
+Look at a tag to open its square; looking away reverses the opening animation.
+Approach within 18 displayed rg, then press F or click the square for an explanation.
+PLAY VOICE is optional. CONTINUE or Space resumes to the next stop.
+GUIDED STOPS: OFF allows uninterrupted playback. RESTART rearms the stops.
+The left guide can turn the camera toward a subject. Movement remains free.
+WATCH MERGER jumps to a slower view before coalescence.
 MERGER SLOW MOTION gradually slows the shared event clock around coalescence.
 Its effective rate appears in the footer. Selecting a manual speed switches
 automatic slow motion off; the top-right button turns it back on.

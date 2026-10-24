@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.Build;
@@ -110,6 +111,7 @@ namespace DTET.VisualPrototype.Editor
         {
             if (AssetDatabase.LoadAssetAtPath<SceneAsset>(Scene) == null)
                 throw new InvalidOperationException("DT-ET staging scene is missing: " + Scene);
+            ValidateGuidedTourResources();
             if (interactiveDefault)
             {
                 using (var disks = BlackHole.Staging.Simulation.MiniDiskCache.Open(
@@ -175,7 +177,8 @@ namespace DTET.VisualPrototype.Editor
                 "Assets/Resources/DTET/InteractiveOptics.shader",
                 "Assets/Resources/DTET/GeneratedFluidVolume.shader",
                 "Assets/Resources/DTET/SolidSurface.shader",
-                "Assets/Resources/DTET/WristSurface.shader"
+                "Assets/Resources/DTET/WristSurface.shader",
+                "Assets/Resources/ApproachHUD/HudVertexAlpha.shader"
             };
             foreach (var path in shaderPaths)
             {
@@ -207,6 +210,70 @@ namespace DTET.VisualPrototype.Editor
             if (report.summary.result != BuildResult.Succeeded)
                 throw new InvalidOperationException("DT-ET player build failed: " + report.summary.result);
             Debug.Log(receipt + " " + destination);
+        }
+
+        [Serializable]
+        private sealed class GuidedTourResourceManifest
+        {
+            public int schemaVersion;
+            public string language;
+            public GuidedTourResourceEntry[] entries;
+        }
+
+        [Serializable]
+        private sealed class GuidedTourResourceEntry
+        {
+            public string id, title, body, narration, clip, titleExperiment, bodyExperiment, narrationExperiment, clipExperiment;
+        }
+
+        private static void ValidateGuidedTourResources()
+        {
+            var asset = Resources.Load<TextAsset>("DTET/GuidedTour");
+            if (asset == null) throw new InvalidOperationException("Guided tour resource DTET/GuidedTour is missing.");
+            try
+            {
+                var manifest = JsonUtility.FromJson<GuidedTourResourceManifest>(asset.text);
+                if (manifest == null || manifest.schemaVersion != 1 || string.IsNullOrWhiteSpace(manifest.language)
+                    || manifest.entries == null || manifest.entries.Length == 0)
+                    throw new InvalidOperationException("Guided tour manifest is empty or has an unsupported schema.");
+                var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var clips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var entry in manifest.entries)
+                {
+                    if (entry == null || string.IsNullOrWhiteSpace(entry.id) || string.IsNullOrWhiteSpace(entry.title)
+                        || string.IsNullOrWhiteSpace(entry.body) || string.IsNullOrWhiteSpace(entry.narration)
+                        || string.IsNullOrWhiteSpace(entry.clip) || !ids.Add(entry.id)
+                        || !clips.Add(entry.clip) || !entry.clip.StartsWith("DTET/Narration/", StringComparison.Ordinal)
+                        || entry.clip.Contains("..") || entry.clip.Contains("\\") || entry.clip.Contains("."))
+                        throw new InvalidOperationException("Guided tour has an empty, duplicate or invalid narration entry.");
+                    var clip = Resources.Load<AudioClip>(entry.clip);
+                    if (clip == null) throw new InvalidOperationException("Guided tour narration is missing: " + entry.clip);
+                    try
+                    {
+                        if (clip.samples <= 0 || clip.channels <= 0 || clip.frequency <= 0)
+                            throw new InvalidOperationException("Guided tour narration is empty or invalid: " + entry.clip);
+                    }
+                    finally { Resources.UnloadAsset(clip); }
+                    if (!string.IsNullOrEmpty(entry.clipExperiment))
+                    {
+                        if (string.IsNullOrWhiteSpace(entry.titleExperiment) || string.IsNullOrWhiteSpace(entry.bodyExperiment)
+                            || string.IsNullOrWhiteSpace(entry.narrationExperiment) || !clips.Add(entry.clipExperiment)
+                            || !entry.clipExperiment.StartsWith("DTET/Narration/", StringComparison.Ordinal)
+                            || entry.clipExperiment.Contains(".") || entry.clipExperiment.Contains("\\"))
+                            throw new InvalidOperationException("Invalid experiment narration for " + entry.id);
+                        var variant = Resources.Load<AudioClip>(entry.clipExperiment);
+                        if (variant == null) throw new InvalidOperationException("Missing experiment narration: " + entry.clipExperiment);
+                        try { if (variant.samples <= 0 || variant.channels <= 0 || variant.frequency <= 0)
+                            throw new InvalidOperationException("Empty experiment narration: " + entry.clipExperiment); }
+                        finally { Resources.UnloadAsset(variant); }
+                    }
+                }
+                foreach (string id in new[] { "system", "black_hole_a", "black_hole_b", "accretion", "waves",
+                    "inspiral", "gas_tides", "final_approach", "coalescence", "remnant" })
+                    if (!ids.Contains(id)) throw new InvalidOperationException("Required guided tour entry is missing: " + id);
+                Debug.Log($"DTET_GUIDED_TOUR_PREFLIGHT_PASSED entries={ids.Count} clips={clips.Count}");
+            }
+            finally { Resources.UnloadAsset(asset); }
         }
     }
 }

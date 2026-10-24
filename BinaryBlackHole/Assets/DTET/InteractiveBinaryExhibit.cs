@@ -21,6 +21,7 @@ namespace DTET.VisualPrototype
         public Camera View { get; private set; }
         public Camera CaptureCamera { get; private set; }
         public InteractiveWristDisplay Wrist { get; private set; }
+        public GuidedObservationController Observations { get; private set; }
         public InteractiveOptics Optics { get; private set; }
         public FeaturedBackgroundStar FeaturedStar { get; private set; }
         public WaveSurfaceView WaveSurface { get; private set; }
@@ -200,6 +201,7 @@ namespace DTET.VisualPrototype
             lastGeneration = -1; lastTime = double.NaN;
             launcher.SetActive(false); SetViewPreset(0); Present(); Wrist.SetRaised(false, true);
             if (EvolvedDisksSelected && MiniDisks.Ready) { Session.SetPlaybackRate(.02); Session.Play(); RefreshLabels(); }
+            Observations = hud.AddComponent<GuidedObservationController>(); Observations.Initialize(this, hud.transform);
         }
 
         private void ResizeTarget()
@@ -426,10 +428,15 @@ namespace DTET.VisualPrototype
         public void AdvancePlayback(double wallSeconds)
         {
             if (!Ready || !Session.IsPlaying) return;
-            if (!MergerSlowMotion) { Session.Tick(wallSeconds); return; }
+            if (!double.IsFinite(wallSeconds) || wallSeconds < 0) throw new ArgumentOutOfRangeException(nameof(wallSeconds));
             double source = Session.PlaybackTimeSeconds;
-            double target = MergerPlaybackTiming.Advance(source, wallSeconds, Session.PlaybackRate,
-                Session.Model.MergerTimeSeconds, Session.Model.GravitationalTimeSeconds, Session.Model.DurationSeconds);
+            double target = MergerSlowMotion ? MergerPlaybackTiming.Advance(source, wallSeconds, Session.PlaybackRate,
+                Session.Model.MergerTimeSeconds, Session.Model.GravitationalTimeSeconds, Session.Model.DurationSeconds)
+                : Math.Max(0, Math.Min(Session.Model.DurationSeconds, source + wallSeconds * Session.PlaybackRate));
+            bool stop = false;
+            if (Observations != null) target = Observations.ClampAdvance(source, target, out stop);
+            if (stop)
+            { Session.Seek(target); Session.Pause(); Observations.RecordCheckpointSeek(); return; }
             Session.Tick(Math.Max(0, (target - source) / Session.PlaybackRate));
         }
         public void RenderOptics()
@@ -518,7 +525,7 @@ namespace DTET.VisualPrototype
             phaseLabel.text = $"{s.ScenarioLabel}  ·  {s.StageLabel}  ·  {gasPresentation}";
             if (MergerSurface != null && MergerSurface.Visible) phaseLabel.text += "  ·  ILLUSTRATIVE SMOOTH JOIN";
             statusLabel.text = $"V wrist · WASD + Q/E move · right-drag look · 1–5 views · Space pause · {Profile.EffectiveProfile} {SceneTarget.width}×{SceneTarget.height} · {OpticalStyle}";
-            transportPlay.text = Session.IsPlaying ? "PAUSE" : "PLAY INSPIRAL";
+            transportPlay.text = Session.IsPlaying ? "PAUSE" : Observations != null && Observations.Tour.IsPausedAtCheckpoint ? "CONTINUE" : "PLAY INSPIRAL";
             bendingToggle.text = OpticalStyle != InteractiveOpticalStyle.Off && (LensGain > 0 || WaveGain > 0) && Optics != null && Optics.Active ? "BENDING: ON" : "BENDING: OFF";
             waveMapToggle.text = WaveMapVisible ? "WAVE MAP: ON" : "WAVE MAP: OFF";
             timingToggle.text = MergerSlowMotion ? "MERGER SLOW MOTION: ON" : "MERGER SLOW MOTION: OFF";
@@ -708,7 +715,14 @@ namespace DTET.VisualPrototype
         public void ResetWristScenario() { if (!Ready) return; Session.Reset();
             if (EvolvedDisksSelected && MiniDisks.Ready) Session.Seek(MiniDisks.Cache.StartSeconds);
             Present(); RefreshLabels(); }
-        public void SetWristPlaying(bool playing) { if (!Ready) return; if (playing && !IsGeneratingFluid && !IsPreparingDisks) Session.Play(); else Session.Pause(); RefreshLabels(); }
+        public void SetWristPlaying(bool playing)
+        {
+            if (!Ready) return;
+            if (playing && !IsGeneratingFluid && !IsPreparingDisks)
+            { if (Observations != null) Observations.BeforePlay(); Session.Play(); }
+            else Session.Pause();
+            RefreshLabels();
+        }
         public void SeekWrist(double fraction) { if (!Ready) return; Session.Seek(Math.Max(0, Math.Min(1, fraction)) * Snapshot.DurationSeconds); Present(); RefreshLabels(); }
         public void SetWristRate(double rate)
         { if (!Ready) return; Session.SetPlaybackRate(rate); MergerSlowMotion = false; RefreshLabels(); }
@@ -808,6 +822,7 @@ namespace DTET.VisualPrototype
         public void ReturnToLauncher()
         {
             Ready = false;
+            if (Observations != null) Observations.Release(); Observations = null;
             if (MiniDisks != null) MiniDisks.Release(); MiniDisks = null;
             if (diskPreparation != null) diskPreparation.Dispose(); diskPreparation = null;
             if (GeneratedFluidPlayer != null) GeneratedFluidPlayer.Release(); GeneratedFluidPlayer = null;

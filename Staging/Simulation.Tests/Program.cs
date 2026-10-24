@@ -1,6 +1,7 @@
 using BlackHole.Staging.Simulation;
 
 MergerPlaybackTimingTests.Run();
+GuidedEventTourTests.Run();
 
 static void Near(double actual, double expected, double relativeTolerance, string label)
 {

@@ -81,6 +81,7 @@ namespace DTET.VisualPrototype
             if (exhibit == null) { WriteReceipt(); Application.Quit(1); yield break; }
             exhibit.EmulatedInputEnabled = false;
             exhibit.Launch(ExhibitQualityProfile.Laptop);
+            exhibit.Observations.SetGuided(false);
             var watch = Stopwatch.StartNew();
             while ((exhibit.MiniDisks == null || !exhibit.MiniDisks.Ready) && watch.Elapsed.TotalSeconds < 30)
                 yield return null;
@@ -192,7 +193,7 @@ namespace DTET.VisualPrototype
             double selectedTime = 0;
             foreach (var profile in new[] { ExhibitQualityProfile.Laptop, ExhibitQualityProfile.Balanced, ExhibitQualityProfile.High })
             {
-                exhibit.Launch(profile); exhibit.Session.Pause();
+                exhibit.Launch(profile); exhibit.Observations.SetGuided(false); exhibit.Session.Pause();
                 Check(exhibit.MiniDisks != null && exhibit.MiniDisks.Ready && !exhibit.IsPreparingDisks,
                     profile + " loads the prepared replay without generating new physics");
                 if (exhibit.MiniDisks == null || !exhibit.MiniDisks.Ready) { exhibit.ReturnToLauncher(); continue; }
