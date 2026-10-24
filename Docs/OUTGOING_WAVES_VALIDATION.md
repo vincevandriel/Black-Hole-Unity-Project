@@ -2,6 +2,8 @@
 
 Runtime source `40096644fbf2942d169cf79f0f1bdd1c79ce3d09`, 24 October 2026, Unity 6000.3.25f1.
 
+This receipt records the preceding release. [Wave map and star finder validation](DISCOVERY_VIEWS_VALIDATION.md) records the newer discovery controls and current rendering matrix; the figures below remain evidence for the revision above.
+
 ## Change
 
 A fixed procedural stellar backdrop supplies dense faint stars and synthetic galactic light that can visibly stretch into curved bands. It uses the existing signed retarded-wave history and bounded mass lens before foreground gas is drawn. No glowing wave geometry, independent wave clock, new particle population, image texture or extra render target was added. The optical equations, waveform data, gas solver and scientific graphs are unchanged.

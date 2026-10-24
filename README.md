@@ -1,6 +1,6 @@
 # Black-Hole-Unity-Project
 
-The top-right **WAVE MAP** button shows an optional colored strain surface driven by the same retarded waveform, with clearly exaggerated height. **FIND SUN-LIKE STAR** centers the hypothetical solar-radius source in a 12-degree telescope view and labels it; BENDING compares its original and lensed images. ACCRETION VIEW restores the normal scene.
+The top-right **WAVE MAP** button shows an optional colored strain surface driven by the same retarded waveform, with clearly exaggerated height. **FIND SUN-LIKE STAR** centers the hypothetical solar-radius source in a 12-degree telescope view and labels it; BENDING compares its original and lensed images. ACCRETION VIEW restores the normal scene. [Discovery-view validation](Docs/DISCOVERY_VIEWS_VALIDATION.md) records the current checks, reviewed captures and memory bounds.
 
 **OUTGOING WAVES** starts a slow, wider view near merger with both disks visible. A fixed synthetic galactic background and faint stars reveal curved bands of stretched light using the same signed, retarded waveform as the instrument. Pause, rewind and fly around the scene; **BENDING: ON/OFF** compares the light mapping. The [outgoing-wave validation](Docs/OUTGOING_WAVES_VALIDATION.md) records the current rendering checks and reviewed captures. Wave strength remains deliberately amplified, with 12:1 radial compression.
 
