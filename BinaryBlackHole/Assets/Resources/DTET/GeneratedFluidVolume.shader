@@ -20,10 +20,15 @@ Shader "DTET/GeneratedFluidVolume"
             #pragma target 3.0
             #pragma vertex Vertex
             #pragma fragment Fragment
+            #pragma multi_compile_local _ DTET_QA_FIXTURES
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "GeneratedFluidSampling.hlsl"
-            float4 _HalfExtent, _HorizonA, _HorizonB, _HorizonR, _FieldPoint;
-            float _Steps, _FieldTest;
+            float4 _HalfExtent, _HorizonA, _HorizonB, _HorizonR;
+            float _Steps;
+            #if defined(DTET_QA_FIXTURES)
+            float _FieldTest;
+            float4 _FieldPoint;
+            #endif
             struct Attributes { float4 positionOS:POSITION; };
             struct Varyings { float4 positionHCS:SV_POSITION; float3 world:TEXCOORD0; };
             Varyings Vertex(Attributes i)
@@ -38,7 +43,9 @@ Shader "DTET/GeneratedFluidVolume"
             }
             float4 Fragment(Varyings i):SV_Target
             {
+                #if defined(DTET_QA_FIXTURES)
                 if(_FieldTest>.5)return SampleGeneratedFluid(_FieldPoint.xyz);
+                #endif
                 if(_GeneratedGrid.w<.5)return 0;
                 float3 ro=_WorldSpaceCameraPos,rd=normalize(i.world-ro);
                 float3 safe=sign(rd+1e-20)*max(abs(rd),1e-7);

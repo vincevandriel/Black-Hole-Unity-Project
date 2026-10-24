@@ -8,7 +8,7 @@ namespace DTET.VisualPrototype
 {
     public enum InteractiveOpticalStyle { Off, Subtle, Enhanced }
 
-    /// <summary>Presentation-only values captured from one authoritative scenario generation.</summary>
+    // Display values from one scenario generation.
     public struct InteractiveWristState
     {
         public long Generation;
@@ -21,7 +21,7 @@ namespace DTET.VisualPrototype
         public float LensGain, WaveGain;
     }
 
-    /// <summary>Commands go to the exhibit session; this display owns no physical clock or model.</summary>
+    // Route display commands to the shared exhibit session.
     public interface IInteractiveExhibitPresenter
     {
         InteractiveWristState CaptureWristState();
@@ -47,7 +47,7 @@ namespace DTET.VisualPrototype
         public string Status, Coverage, Metrics;
     }
 
-    /// <summary>Optional fluid laboratory controls; old presentation fixtures need no solver.</summary>
+    // Optional fluid controls.
     public interface IGeneratedFluidPresenter
     {
         GeneratedFluidUiState CaptureGeneratedFluidState();
@@ -57,10 +57,7 @@ namespace DTET.VisualPrototype
         void SeekGeneratedFluidStart();
     }
 
-    /// <summary>
-    /// Desktop suit projector composed after the astronomical target at full interface resolution.
-    /// Its pose is an illustrated desktop emulation, not a tracked XR hand or physical observer.
-    /// </summary>
+    // Desktop wrist display drawn at interface resolution; its pose is emulated.
     [DefaultExecutionOrder(200)]
     public sealed class InteractiveWristDisplay : MonoBehaviour
     {
@@ -137,8 +134,7 @@ namespace DTET.VisualPrototype
             var root = new GameObject("Suit hologram / full resolution presentation", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             root.transform.SetParent(transform, false);
             root.layer = 5;
-            // This canvas is nested under M4.1's full-screen HUD. A newly created RectTransform
-            // otherwise keeps Unity's centered 100x100 default, shifting every instrument offscreen.
+            // Fill the parent HUD; Unity's default 100x100 canvas would offset the instruments.
             var canvasRect = root.GetComponent<RectTransform>();
             canvasRect.anchorMin = Vector2.zero; canvasRect.anchorMax = Vector2.one;
             canvasRect.offsetMin = canvasRect.offsetMax = Vector2.zero;
@@ -457,8 +453,7 @@ namespace DTET.VisualPrototype
             var slider = rect.gameObject.AddComponent<Slider>(); slider.targetGraphic = handle.GetComponent<Image>();
             slider.fillRect = fill; slider.handleRect = handle; slider.minValue = min; slider.maxValue = max;
             fill.sizeDelta = Vector2.zero;
-            // Slider stretches the cross-axis anchors from 0 to 1. Subtract the hit-area
-            // height to keep the actual handle 20px tall without shrinking that hit area.
+            // Keep a 20px handle inside the larger hit area despite the slider's stretched anchors.
             handle.pivot = new Vector2(.5f, .5f);
             handle.anchoredPosition = Vector2.zero;
             handle.sizeDelta = new Vector2(13, 20 - (h + 10));

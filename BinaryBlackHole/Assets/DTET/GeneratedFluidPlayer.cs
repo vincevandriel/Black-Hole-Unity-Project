@@ -7,7 +7,7 @@ using UnityEngine.Experimental.Rendering;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Owns a cancellable CPU solve and two GPU playback frames; never solves on Unity's main thread.</summary>
+    // Background CPU solve with cancellation and two GPU playback frames.
     public sealed class GeneratedFluidPlayer : MonoBehaviour
     {
         private sealed class Work
@@ -72,7 +72,7 @@ namespace DTET.VisualPrototype
             request.Task = Task.Run(() => GeneratedFluidHistory.Generate(scenario, request.Cancellation.Token, request.Report));
         }
 
-        /// <summary>Publish only on Unity's main thread and only into the identical scenario generation.</summary>
+        // Publish on Unity's main thread only if the scenario generation still matches.
         public bool Poll(InteractiveBinaryScenario scenario, long generation)
         {
             if (sourceScenario != null && (!ReferenceEquals(sourceScenario, scenario) || sourceGeneration != generation))
@@ -117,8 +117,7 @@ namespace DTET.VisualPrototype
             var request = work; work = null;
             if (request == null) return;
             request.Cancellation.Cancel();
-            // A cancelled worker may finish after this component is destroyed. Observe its result
-            // without capturing Unity objects, and dispose the CTS only after the worker is done.
+            // A worker may outlive this component. Avoid Unity references and defer CTS disposal until it finishes.
             request.Task.ContinueWith(completed =>
             {
                 if (completed.IsFaulted) { var observed = completed.Exception; }
@@ -139,7 +138,7 @@ namespace DTET.VisualPrototype
                 && History.TryGetFrames(snapshot.ElapsedSeconds, out int lower, out int upper, out double mix);
             if (IsCovered)
             {
-                // Upload only on a frame boundary. Scrubbing in either direction uses the same immutable cache.
+                // Upload at cache-frame boundaries; both scrub directions use the same immutable history.
                 History.TryGetFrames(snapshot.ElapsedSeconds, out lower, out upper, out mix);
                 if (lowerFrame != lower) { Upload(frameA, lower); lowerFrame = lower; }
                 if (upperFrame != upper) { Upload(frameB, upper); upperFrame = upper; }
@@ -185,7 +184,7 @@ namespace DTET.VisualPrototype
         {
             bool forceHalf = false;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            // Exercise the real fallback in QA without pretending unsupported hardware can use it.
+            // QA may force Half only when the GPU supports it.
             forceHalf = Environment.GetEnvironmentVariable("DTET_FORCE_HALF_TEXTURES_QA") == "1";
 #endif
             // A GPU may support float textures without supporting their linear filtering.

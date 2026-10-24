@@ -18,6 +18,7 @@ Shader "DTET/InteractiveOptics"
             #pragma target 3.0
             #pragma vertex vert_img
             #pragma fragment Fragment
+            #pragma multi_compile_local _ DTET_QA_FIXTURES
             #include "UnityCG.cginc"
             #include "ReducedBinaryFlow.hlsl"
             #include "GeneratedFluidSampling.hlsl"
@@ -32,6 +33,7 @@ Shader "DTET/InteractiveOptics"
             float4 _WaveParameters; // history radial extent, fixed normalization, gas enabled, display radial compression
             float4 _Polarization; // e1 screen xy, e2 screen xy
             float4 _WaveBasisX,_WaveBasisY; // world transverse basis; x.w is observer radius
+            #if defined(DTET_QA_FIXTURES)
             float _OpticsFixture;
             float _GeneratedGas;
             float4 _FixtureInput,_FixtureLens;
@@ -64,8 +66,10 @@ Shader "DTET/InteractiveOptics"
                 float t=-b-sqrt(disc);return t>=0?t:1e20;
             }
             float Luma(float3 color) { return dot(max(color,0),float3(.2126,.7152,.0722)); }
+            #endif
             float4 Fragment(v2f_img input):SV_Target
             {
+                #if defined(DTET_QA_FIXTURES)
                 if((_OpticsFixture>.5&&_OpticsFixture<2.5)||_OpticsFixture>3.5)
                 {
                     float geometry=Behind(_FixtureLens.x,_FixtureLens.w);
@@ -83,11 +87,12 @@ Shader "DTET/InteractiveOptics"
                 float hit=min(Hit(ro,rd,_HorizonA),min(Hit(ro,rd,_HorizonB),Hit(ro,rd,_HorizonR)));
                 if(_OpticsFixture>2.5)return float4(hit<1e19?1:0,0,0,1);
                 if(_Optics.y<=0)return original;
-                // Keep equal-area proxy silhouettes stable. This does not calculate a relativistic shadow.
+                // Stable equal-area proxy silhouettes; not relativistic shadows.
                 if(hit<1e19)return original;
-
-                // Production optics act on background source shaders before gas.
                 return original;
+                #else
+                return tex2D(_MainTex,input.uv);
+                #endif
             }
             ENDHLSL
         }

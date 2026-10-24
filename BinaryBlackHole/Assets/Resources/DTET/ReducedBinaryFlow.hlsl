@@ -56,8 +56,8 @@ float FlowHorizonMask(float3 p, float4 body, float4 radii)
     return FlowSmooth((length(p - body.xyz) / radii.z - 1.0) / .2);
 }
 
-// Density and normalized bolometric emission. The source function for gray LTE transfer is y/x.
-// No observer-dependent quantity enters this field; camera only chooses its ray samples.
+// Returns density and normalized bolometric emission; gray LTE source is y/x.
+// Field is observer-independent.
 float2 SampleReducedFlow(float3 p)
 {
     if (abs(p.x) >= _FlowBounds.x || abs(p.z) >= _FlowBounds.x || abs(p.y) >= _FlowBounds.y) return 0;
@@ -82,9 +82,7 @@ float2 SampleReducedFlow(float3 p)
     return value * mask;
 }
 
-// Presentation-only emissivity on the shared v2 prescribed density / bolometric
-// sample above. These bounded, flow-aligned bands
-// make a small disk readable; they are not resolved turbulence or measured gas.
+// Flow-aligned emissivity bands aid readability; no resolved turbulence or measured gas.
 float3 ReducedFlowDisplayEmission(float3 p, float2 field)
 {
     if (field.x <= 1e-10) return 0;
@@ -128,8 +126,7 @@ float3 ReducedFlowDisplayEmission(float3 p, float2 field)
     float radial = (radius - inner) / (outer - inner);
     float fine = .5 + .5 * sin(25 * radial + 3 * phase.y);
     fine *= fine; fine *= fine;
-    // Concentrate emitted light towards the mid-plane, without altering mass or
-    // gray extinction. A uniform broad luminous torus reads as fog around the holes.
+    // Concentrate emission near the midplane; preserve density and gray extinction.
     float height = local.y / max(aspect * radius, 1e-6);
     float midPlane = exp(-12 * height * height);
     float structure = .06 + 2.8 * filament + .4 * fine;

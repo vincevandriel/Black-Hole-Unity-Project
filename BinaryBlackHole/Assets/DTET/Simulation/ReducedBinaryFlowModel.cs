@@ -3,12 +3,8 @@ using System;
 
 namespace BlackHole.Staging.Simulation
 {
-    /// <summary>
-    /// Compact prescribed gas illustration driven by the retained SXS horizon history.
-    /// This does not solve hydrodynamics, conserve gas, or reconstruct gas in GW150914.
-    /// Coordinates map SXS (X,Y,Z) to Unity (X,Z,Y), in total-source-mass rg=GM/c^2.
-    /// Sample velocities are prescribed coordinate velocities, not local GR measurements.
-    /// </summary>
+    // Prescribed gas driven by SXS history, not a conservative fluid solution or GW150914 gas reconstruction.
+    // Units: total-mass rg=GM/c^2; SXS (X,Y,Z) maps to Unity (X,Z,Y). Velocities are coordinate values.
     public sealed class ReducedBinaryFlowModel
     {
         public const string ModelId = "assumed-SXS0305-reduced-binary-flow-v2-plunge";
@@ -51,8 +47,7 @@ namespace BlackHole.Staging.Simulation
             HalfExtentY = Math.Ceiling(ReservoirAspect * ReservoirOuterRadiusRg + 1);
         }
 
-        // The adjustable scenario supplies its own immutable epoch. The existing replay constructor
-        // and EvaluateState behavior are unchanged; no fabricated NumericalEventHistory is created.
+        // Adjustable scenarios provide their own immutable gas state.
         internal ReducedBinaryFlowModel(double rg, double tg, double separationRg, double duration, double transition)
         {
             GravitationalRadiusMeters = rg; GravitationalTimeSeconds = tg;
@@ -126,9 +121,7 @@ namespace BlackHole.Staging.Simulation
                     body.MassFraction, .008, body.VelocityOverC, 1, 0, 0,
                     ref density, ref emission, ref vx, ref vy, ref vz);
             }
-            // Assumed shared gas during tidal disruption, not a third horizon or
-            // a hydrodynamic merger solution. Its C1 envelope bridges the old
-            // zero-emission interval between minidisk fade and remnant rise.
+            // An assumed shared-gas component bridges minidisk fade and remnant rise with a C1 envelope.
             if (state.TransitionWeight > 0)
                 AccumulateRing(xRg, yRg, zRg, TransitionInnerRadiusRg, TransitionOuterRadiusRg,
                     DiskAspect, 1.5 * state.TransitionWeight, 1.1, 1, .008, default,
@@ -272,9 +265,7 @@ namespace BlackHole.Staging.Simulation
         public double SeparationRg { get; }
         public double BinaryWeight { get; }
         public double RemnantWeight { get; }
-        // Prescribed gas survives the switch between individual and common horizons.
-        // Intra-ISCO emission is an assumed plunging component; it is not stable
-        // circular motion or a reconstruction of gas in GW150914.
+        // Intra-ISCO emission is assumed plunging gas, not stable circular motion.
         public double TransitionWeight => ReducedBinaryFlowModel.SmoothStep(
             (AlignedTimeTg + ReducedBinaryFlowModel.TransitionLeadTg) / ReducedBinaryFlowModel.TransitionLeadTg)
             * (1 - RemnantWeight);

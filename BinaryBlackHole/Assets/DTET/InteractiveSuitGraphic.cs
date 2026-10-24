@@ -3,7 +3,7 @@ using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Procedural desktop suit silhouette and projector; illustrative, not an XR hand mesh.</summary>
+    // Illustrated desktop suit and projector, not a tracked XR hand.
     public sealed class InteractiveSuitGraphic : MaskableGraphic
     {
         private float reveal = 1;
@@ -22,7 +22,7 @@ namespace DTET.VisualPrototype
             var metal = new Color(.36f, .44f, .49f, 1);
             var dark = new Color(.025f, .055f, .075f, 1);
             var cyan = new Color(.29f, .89f, 1, 1);
-            // Draw the projection before the suit; instrument panels compose later above this graphic.
+            // Draw order: projection, suit, then instrument panels.
             if (reveal > .01f)
             {
                 float left = pinned ? -500 : 12, right = pinned ? 180 : 595;
@@ -50,7 +50,7 @@ namespace DTET.VisualPrototype
             Poly(mesh, new Color(.15f, .63f, .76f), rise, new Vector2(333, 81), new Vector2(368, 89), new Vector2(365, 98), new Vector2(329, 90));
             for (int i = 0; i < 4; i++)
                 Line(mesh, new Vector2(330 + i * 10, -100 - i * 2 - rise), new Vector2(335 + i * 10, -101 - i * 2 - rise), 2, cyan);
-            // Articulated glove. The posture is intentionally quiet to keep the graph readable.
+            // Articulated glove.
             Poly(mesh, new Color(.16f, .22f, .27f), rise, new Vector2(252, 76), new Vector2(328, 87), new Vector2(309, 144), new Vector2(246, 151), new Vector2(212, 122));
             Poly(mesh, new Color(.31f, .37f, .41f), rise, new Vector2(255, 82), new Vector2(314, 92), new Vector2(305, 119), new Vector2(250, 126), new Vector2(230, 111));
             for (int i = 0; i < 4; i++)
@@ -61,7 +61,7 @@ namespace DTET.VisualPrototype
                 Line(mesh, new Vector2(228, -y - 1 - rise), new Vector2(225, -y - 11 - rise), 2, lit);
             }
             Poly(mesh, lit, rise, new Vector2(267, 128), new Vector2(242, 148), new Vector2(211, 157), new Vector2(203, 147), new Vector2(230, 125));
-            // Bright emitter glows independently of physical event time.
+            // Animate the emitter on UI time.
             float brightness = Mathf.Lerp(.22f, 1, reveal);
             Poly(mesh, new Color(cyan.r, cyan.g, cyan.b, .15f * brightness), rise, new Vector2(321, 62), new Vector2(369, 72), new Vector2(365, 88), new Vector2(318, 79));
             Line(mesh, new Vector2(329, -72 - rise), new Vector2(361, -79 - rise), 3.6f, cyan * brightness);

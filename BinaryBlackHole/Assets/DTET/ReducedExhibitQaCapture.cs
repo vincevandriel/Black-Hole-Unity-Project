@@ -12,7 +12,7 @@ using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Opt-in M4 checks; completed off-screen rendering is timed separately from PNG captures.</summary>
+    // Opt-in checks; time completed offscreen renders separately from PNG capture.
     internal sealed class ReducedExhibitQaCapture : MonoBehaviour
     {
         private readonly List<string> checks = new List<string>();
@@ -375,8 +375,7 @@ namespace DTET.VisualPrototype
                 double previous = clock.Elapsed.TotalMilliseconds;
                 while (clock.Elapsed.TotalSeconds < benchmarkSeconds)
                 {
-                    // Include the ordinary player Update that advances playback. A hidden window
-                    // may suppress its automatic render, so both cameras are explicitly rendered.
+                    // Allow Update to advance playback, then explicitly render both cameras for hidden-player QA.
                     FrameTimingManager.CaptureFrameTimings();
                     yield return null;
                     if (scenario == "camera-motion")
@@ -514,14 +513,12 @@ namespace DTET.VisualPrototype
                 for (int i = 0; i < renderers.Length; i++)
                 {
                     enabled[i] = renderers[i].enabled;
-                    // The sky controller is attached to the scene root, which also owns gas/bodies.
-                    // Identify its actual draw material rather than accepting every descendant.
+                    // The sky shares a root with gas and bodies; select only its draw material.
                     Material drawMaterial = renderers[i].sharedMaterial;
                     bool skyDraw = drawMaterial != null && drawMaterial.shader != null && drawMaterial.shader.name == "DTET/ExhibitSky";
                     if (!skyDraw) renderers[i].enabled = false;
                 }
-                // A deterministic bright reference avoids depending on whether an arbitrary
-                // overview happens to contain a bright star. Point directly at catalogue entry 0.
+                // Aim at catalogue entry 0 for a deterministic bright reference.
                 SyntheticSkyStar star = SyntheticSkyCatalog.Star(0);
                 var direction = new Vector3((float)star.X, (float)star.Y, (float)star.Z);
                 exhibit.View.transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
@@ -536,8 +533,7 @@ namespace DTET.VisualPrototype
                 exhibit.View.transform.rotation = referenceRotation * Quaternion.Euler(0, 23, 0);
                 Color[] rotated = ReadNativeRadiance();
                 int width = exhibit.SceneTarget.width, height = exhibit.SceneTarget.height;
-                // Admitted dimensions are even: the central star is between the four central
-                // pixels, making the selected pixel center (+0.5,+0.5) from its projected center.
+                // Even dimensions place the central pixel (+0.5,+0.5) from the star centre.
                 double sigma = SyntheticSkyCatalog.PsfSigmaPixels(star.RelativeFlux, height);
                 double flux = SyntheticSkyCatalog.IntegratedDisplayFlux(star.RelativeFlux, height)
                     * SyntheticSkyCatalog.PsfPixelMass(.5, .5, sigma);
@@ -592,6 +588,7 @@ namespace DTET.VisualPrototype
             Material material = exhibit.GasMaterial;
             float previousTest = material.GetFloat("_FieldTest");
             Vector4 previousPoint = material.GetVector("_FieldPoint");
+            bool fixturesEnabled = material.IsKeywordEnabled("DTET_QA_FIXTURES");
             var model = new ReducedBinaryFlowModel(exhibit.Session.Model);
             try
             {
@@ -604,6 +601,7 @@ namespace DTET.VisualPrototype
                     enabled[i] = renderers[i].enabled;
                     renderers[i].enabled = renderers[i].sharedMaterial == material;
                 }
+                material.EnableKeyword("DTET_QA_FIXTURES");
                 material.SetFloat("_FieldTest", 1);
                 double[] epochs = { 0, Math.Max(0, model.CommonHorizonElapsedSeconds - 60 * model.GravitationalTimeSeconds),
                     model.CommonHorizonElapsedSeconds, model.DurationSeconds };
@@ -654,6 +652,7 @@ namespace DTET.VisualPrototype
             finally
             {
                 material.SetFloat("_FieldTest", previousTest); material.SetVector("_FieldPoint", previousPoint);
+                if (!fixturesEnabled) material.DisableKeyword("DTET_QA_FIXTURES");
                 camera.allowHDR = hdr; camera.allowMSAA = msaa;
                 if (cameraData != null) cameraData.renderPostProcessing = post;
                 for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null) renderers[i].enabled = enabled[i];

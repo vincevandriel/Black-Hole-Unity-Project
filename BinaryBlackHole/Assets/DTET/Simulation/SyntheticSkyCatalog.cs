@@ -22,7 +22,7 @@ namespace BlackHole.Staging.Simulation
         }
     }
 
-    /// <summary>Synthetic fixed directions and apparent fluxes; not a measured star catalogue.</summary>
+    // Synthetic fixed directions and apparent fluxes; not a measured star catalogue.
     public static class SyntheticSkyCatalog
     {
         public const uint DefaultSeed = 150914;
@@ -39,8 +39,7 @@ namespace BlackHole.Staging.Simulation
             return stars;
         }
 
-        // The random variates depend on index and seed only: adding dimmer stars never moves,
-        // brightens, recolours or renormalizes the retained bright catalogue prefix.
+        // Index-and-seed sampling preserves existing stars when the catalogue grows.
         public static SyntheticSkyStar Star(int index, uint seed = DefaultSeed)
         {
             if (index < 0 || index >= MaximumStars) throw new ArgumentOutOfRangeException(nameof(index));
@@ -50,9 +49,7 @@ namespace BlackHole.Staging.Simulation
             double magnitude = -1.46 + (5.0 / 3) * Math.Log10(1 + 12.0 * index);
             double temperature = 2800 + 9200 * Math.Pow(Uniform(ref state), 2);
             double x = radius * Math.Cos(phi), z = radius * Math.Sin(phi);
-            // A few deliberately composed synthetic sources put the existing bright flux
-            // range in the opening view. Their angular offsets stay fixed in world space;
-            // they do not follow the camera or identify a measured GW150914 star field.
+            // Fixed synthetic bright sources compose the opening view; they are not measured GW150914 stars.
             if (index < 8)
             {
                 double horizontal, vertical;
@@ -73,8 +70,7 @@ namespace BlackHole.Staging.Simulation
                 double length = Math.Sqrt(x * x + y * y + z * z);
                 x /= length; y /= length; z /= length;
             }
-            // Three Planck samples, normalized against 6500 K, gently desaturated for display.
-            // This is a colour cue, not integration through measured photometric passbands.
+            // Three Planck samples relative to 6500 K give a display colour, not measured photometry.
             double r = PlanckRatio(610e-9, temperature), g = PlanckRatio(545e-9, temperature), b = PlanckRatio(460e-9, temperature);
             double luminance = .2126 * r + .7152 * g + .0722 * b;
             r = .4 + .6 * r / luminance; g = .4 + .6 * g / luminance; b = .4 + .6 * b / luminance;
@@ -84,14 +80,11 @@ namespace BlackHole.Staging.Simulation
         public static double PsfSigmaPixels(double flux, int renderHeight)
         {
             if (!Finite(flux) || flux <= 0 || renderHeight < 2) throw new ArgumentOutOfRangeException(nameof(flux));
-            // This is a display point-spread width, not a resolved stellar radius. Bright
-            // sources get broader compact cores while the faint population stays pinpoint.
-            // Pixel integration below conserves prescribed flux at every width.
+            // Broaden bright-source PSFs while preserving integrated flux; this is not a stellar radius.
             return Math.Max(.65, Math.Min(3, .52 + 1.8 * Math.Sqrt(flux)) * renderHeight / ReferenceImageHeight);
         }
 
-        /// <summary>Pixel-integrated, square-truncated Gaussian. Summing a complete pixel lattice
-        /// yields one for every subpixel location and sigma, up to the stated erf approximation.</summary>
+        // Pixel-integrated truncated Gaussian; lattice sums equal one within the erf approximation.
         public static double PsfPixelMass(double xFromCenterPixels, double yFromCenterPixels, double sigmaPixels)
         {
             if (!Finite(xFromCenterPixels) || !Finite(yFromCenterPixels) || !Finite(sigmaPixels) || sigmaPixels <= 0)
@@ -111,8 +104,7 @@ namespace BlackHole.Staging.Simulation
             return DefaultExposure * flux * scale * scale;
         }
 
-        // Receives translation to make its intentional irrelevance testable. All camera locations
-        // in this ~black-hole-sized scene share the same distant source directions.
+        // Distant-source directions ignore camera translation; the argument makes this invariant testable.
         public static void DirectionAtObserver(SyntheticSkyStar star, double observerX, double observerY, double observerZ,
             out double x, out double y, out double z)
         {

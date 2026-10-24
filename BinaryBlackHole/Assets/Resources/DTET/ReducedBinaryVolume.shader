@@ -20,11 +20,15 @@ Shader "DTET/ReducedBinaryVolume"
             #pragma target 3.0
             #pragma vertex Vertex
             #pragma fragment Fragment
+            #pragma multi_compile_local _ DTET_QA_FIXTURES
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "ReducedBinaryFlow.hlsl"
             float4 _HalfExtent,_HorizonA,_HorizonB,_HorizonR;
-            float _Steps,_Exposure,_Opacity,_FieldTest;
+            float _Steps,_Exposure,_Opacity;
+            #if defined(DTET_QA_FIXTURES)
+            float _FieldTest;
             float4 _FieldPoint;
+            #endif
             struct Attributes {float4 positionOS:POSITION;};
             struct Varyings {float4 positionHCS:SV_POSITION;float3 world:TEXCOORD0;};
             Varyings Vertex(Attributes i)
@@ -42,7 +46,9 @@ Shader "DTET/ReducedBinaryVolume"
             }
             float4 Fragment(Varyings i):SV_Target
             {
+                #if defined(DTET_QA_FIXTURES)
                 if(_FieldTest>.5) {float2 field=SampleReducedFlow(_FieldPoint.xyz);return float4(field,0,1);}
+                #endif
                 float3 ro=_WorldSpaceCameraPos,rd=normalize(i.world-ro);
                 float3 safe=sign(rd+1e-20)*max(abs(rd),1e-7);
                 float3 a=(-_HalfExtent.xyz-ro)/safe,b=(_HalfExtent.xyz-ro)/safe;
@@ -57,12 +63,10 @@ Shader "DTET/ReducedBinaryVolume"
                 {
                     float midpoint=start+(k+.5)*ds;
                     float3 centre=ro+rd*midpoint;
-                    // Narrow inner disks and streams need finer quadrature than the broad reservoir.
-                    // Expand by one base segment so crossing a region boundary cannot skip refinement.
+                    // Refine narrow inner features; expand admission by one base segment.
                     float cavity=_FlowReservoir.x+3+ds;
                     int subdivisions=(dot(centre.xz,centre.xz)<cavity*cavity && abs(centre.y)<6+ds)?4:1;
-                    // Resolve the thinner emitting layer locally rather than
-                    // raising the full-volume march cost for every sky pixel.
+                    // Refine the emitting layer without increasing every ray's full-volume cost.
                     float3 da=centre-_FlowA.xyz,db=centre-_FlowB.xyz,dr=centre-_FlowRemnant.xyz;
                     bool nearMini=(_FlowWeights.x>0 &&
                         ((length(da.xz)<_FlowARadii.y+ds && abs(da.y)<.3*_FlowARadii.y+ds)
@@ -79,8 +83,7 @@ Shader "DTET/ReducedBinaryVolume"
                         radiance+=(1-opacity)*absorb*ReducedFlowDisplayEmission(p,field);opacity+=(1-opacity)*absorb;
                     }
                 }
-                // Linear premultiplied radiance; the display applies one final exposure map
-                // after gas absorption has attenuated the background sky.
+                // Return linear premultiplied radiance; map exposure after sky attenuation.
                 return float4(radiance*_Exposure,blocked?1:opacity);
             }
             ENDHLSL

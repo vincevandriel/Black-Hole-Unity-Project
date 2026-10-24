@@ -9,7 +9,7 @@ using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Opt-in built-player integration checks. Does nothing in ordinary sessions.</summary>
+    // Opt-in built-player integration checks. Does nothing in ordinary sessions.
     internal sealed class PhysicsQaCapture : MonoBehaviour
     {
         private readonly List<string> checks = new List<string>();

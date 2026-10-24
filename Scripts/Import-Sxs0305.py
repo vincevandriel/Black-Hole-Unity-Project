@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Reproduce the compact SXS:BBH:0305 Lev6 runtime asset from pinned originals.
+"""Build compact SXS:BBH:0305 Lev6 runtime assets from pinned originals.
 
-Requires Python 3.10+, numpy and h5py. No network, Unity or SXS Python package is
-needed. --source-dir is the research library's data/raw directory. --check
-rebuilds in memory and fails if any generated artifact differs from the checkout.
-All selected native binary64 samples are kept; no thinning or SI conversion is
-applied to their stored values. See Docs/Data/SXS0305/README.md for conventions.
+Requires Python 3.10+, numpy and h5py; --source-dir points to data/raw.
+--check compares in-memory output with the checkout. No network or Unity needed.
+Retains selected binary64 samples without thinning or SI conversion.
+See Docs/Data/SXS0305/README.md for conventions.
 """
 
 from __future__ import annotations
@@ -102,7 +101,7 @@ def reconstruct_and_check(blob: bytes, constants: tuple, tracks: list, wave: np.
         n = struct.unpack("<I", stream.read(4))[0]
         require(n == len(expected), "Binary row count roundtrip failed")
         packed = stream.read(expected.nbytes)
-        # Byte equality includes every IEEE754 bit, not only rounded JSON values.
+        # Compare every binary64 bit, not rounded JSON values.
         require(packed == expected.tobytes(order="C"), "Native double bits changed")
     require(stream.read(1) == b"", "Trailing data in binary roundtrip")
 
@@ -153,9 +152,8 @@ def convert(source: Path) -> tuple[bytes, dict, dict]:
         spin_squared = np.sum(rows[:, 6:9] ** 2, axis=1)
         expected_mass_squared = rows[:, 5] ** 2 + spin_squared / (4 * rows[:, 5] ** 2)
         mass_residual = np.max(np.abs(expected_mass_squared - rows[:, 4] ** 2) / rows[:, 4] ** 2)
-        # Leave interior odd samples out, then linearly reconstruct their positions.
-        # This is a cadence diagnostic at twice the stored interval, not a rigorous
-        # error bound for interpolating the full dataset or for numerical relativity.
+        # Reconstruct omitted interior odd samples at twice the stored interval.
+        # This measures cadence sensitivity, not NR or full-data interpolation error.
         evens = np.arange(0, len(rows), 2)
         held = np.arange(1, evens[-1], 2)
         predicted = np.column_stack([np.interp(rows[held, 0], rows[evens, 0], rows[evens, k])

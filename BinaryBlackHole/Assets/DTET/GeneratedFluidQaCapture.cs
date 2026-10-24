@@ -10,7 +10,7 @@ using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Integration evidence for generated fluid, separate from the old prescribed-field receipt.</summary>
+    // Generated-fluid integration checks.
     internal sealed class GeneratedFluidQaCapture : MonoBehaviour
     {
         private InteractiveBinaryExhibit exhibit;
@@ -111,8 +111,7 @@ namespace DTET.VisualPrototype
             Check(exhibit.Optics.Active && exhibit.Optics.ScenarioGeneration == exhibit.Snapshot.Generation,
                 "illustrative optics and gravitational-wave display follow generated scene generation");
             int previousCallbacks = exhibit.AutomaticOpticalFrames;
-            // Hidden Windows players can skip presentation-driven camera renders. Exercise the
-            // actual completion callback independently of exhibit.RenderFrame's manual bypass.
+            // Exercise camera completion; hidden players may skip automatic renders.
             var automaticRequest = new RenderPipeline.StandardRequest { destination = exhibit.SceneTarget };
             RenderPipeline.SubmitRenderRequest(exhibit.View, automaticRequest);
             Check(exhibit.AutomaticOpticalFrames > previousCallbacks, "camera completion callback updates the generated scene optics");
@@ -198,8 +197,7 @@ namespace DTET.VisualPrototype
             var material = exhibit.GeneratedFluidMaterial;
             Check(material != null && material.shader.isSupported, "generated fluid shader supported");
             if (material == null) return;
-            // These sampler uniforms are not serialized Shader Properties. Inspect the actual
-            // owned texture instead of relying on Material.GetTexture's property lookup.
+            // Inspect the owned texture; sampler uniforms are not serialized Shader Properties.
             var storedFrame = exhibit.GeneratedFluidPlayer.LowerFrameTextureForQa;
             bool halfPrecision = storedFrame != null && storedFrame.format == TextureFormat.RGBAHalf;
             Check(storedFrame != null && (halfPrecision || storedFrame.format == TextureFormat.RGBAFloat),
@@ -216,8 +214,10 @@ namespace DTET.VisualPrototype
             var renderers = exhibit.GetComponentsInChildren<Renderer>(true); var previousEnabled = new bool[renderers.Length];
             for (int i = 0; i < renderers.Length; i++) { previousEnabled[i] = renderers[i].enabled; renderers[i].enabled = renderers[i].sharedMaterial == material; }
             var previous = RenderTexture.active;
+            bool fixturesEnabled = material.IsKeywordEnabled("DTET_QA_FIXTURES");
             try
             {
+                material.EnableKeyword("DTET_QA_FIXTURES");
                 material.SetFloat("_FieldTest", 1);
                 foreach (var point in new[] { new Vector3(12, 0, 0), new Vector3(20, 2, 7), new Vector3(10000, 0, 0) })
                 {
@@ -228,8 +228,7 @@ namespace DTET.VisualPrototype
                     var actual = image.GetPixel(32, 32);
                     history.TrySample(time, point.x, point.z, out var sample);
                     double rho = sample.SurfaceDensity * Math.Exp(-point.y * point.y / 8.0) / (2 * Math.Sqrt(2 * Math.PI));
-                    // Half's 10-bit fraction adds a bounded quantization error to the existing
-                    // sampling tolerance. CPU history and its conservative solver stay unchanged.
+                    // Half texture tolerance includes 10-bit fractional quantization.
                     double relativeTolerance = halfPrecision ? .002 : 0;
                     bool Close(double measured, double expected) => Math.Abs(measured - expected) < 2e-4 + relativeTolerance * Math.Abs(expected);
                     Check(Close(actual.r, sample.SurfaceDensity) && Close(actual.g, rho)
@@ -240,6 +239,7 @@ namespace DTET.VisualPrototype
             finally
             {
                 material.SetFloat("_FieldTest", 0);
+                if (!fixturesEnabled) material.DisableKeyword("DTET_QA_FIXTURES");
                 for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null) renderers[i].enabled = previousEnabled[i];
                 RenderTexture.active = previous; target.Release(); Destroy(target); Destroy(image); Destroy(go);
             }

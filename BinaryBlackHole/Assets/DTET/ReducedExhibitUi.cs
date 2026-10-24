@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    // Small camera-renderable UI factory; the M4 scene is a desktop inspection exhibit.
+    // UI elements rendered by the desktop inspection camera.
     internal static class ReducedExhibitUi
     {
         public static readonly Color Ink = new Color(.025f, .04f, .065f, .95f);

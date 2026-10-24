@@ -9,7 +9,7 @@ using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Opt-in checks of the independent field laboratory in the built player.</summary>
+    // Opt-in built-player checks for the reference field.
     internal sealed class FieldReferenceQaCapture : MonoBehaviour
     {
         private const double DurationTg = 1024;
@@ -313,9 +313,7 @@ namespace DTET.VisualPrototype
 
         private void CheckGpuConstantSlab()
         {
-            // This exercises the actual shader transfer loop, with a uniform known field substituted
-            // before its density, opacity, integration and exposure calculations. The comparison
-            // disables display post processing and reads a linear floating-point render target.
+            // Test the shader transfer loop with a uniform field and linear readback, without post-processing.
             Material material = lab.VolumeMaterial;
             Camera camera = lab.View;
             Vector3 previousPosition = camera.transform.position;
@@ -326,6 +324,7 @@ namespace DTET.VisualPrototype
             float previousOpacity = lab.OpacityScale;
             float previousExposure = material.GetFloat("_Exposure"), previousSteps = material.GetFloat("_Steps");
             float previousExtinction = material.GetFloat("_Extinction"), previousSlab = material.GetFloat("_SlabTest");
+            bool fixturesEnabled = material.IsKeywordEnabled("DTET_QA_FIXTURES");
             var cameraData = camera.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
             bool previousPostProcessing = cameraData != null && cameraData.renderPostProcessing;
             Canvas[] canvases = lab.GetComponentsInChildren<Canvas>(true);
@@ -336,6 +335,7 @@ namespace DTET.VisualPrototype
                 camera.backgroundColor = Color.black; camera.aspect = 1; camera.orthographic = false;
                 camera.allowHDR = true; camera.allowMSAA = false;
                 if (cameraData != null) cameraData.renderPostProcessing = false;
+                material.EnableKeyword("DTET_QA_FIXTURES");
                 material.SetFloat("_SlabTest", 1); material.SetFloat("_Exposure", 1); material.SetFloat("_Extinction", .3f);
                 lab.SetOpacity(.1f);
                 RenderTextureFormat format = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBFloat)
@@ -370,6 +370,7 @@ namespace DTET.VisualPrototype
             finally
             {
                 material.SetFloat("_SlabTest", previousSlab); material.SetFloat("_Exposure", previousExposure);
+                if (!fixturesEnabled) material.DisableKeyword("DTET_QA_FIXTURES");
                 material.SetFloat("_Steps", previousSteps); material.SetFloat("_Extinction", previousExtinction);
                 lab.SetOpacity(previousOpacity);
                 camera.transform.SetPositionAndRotation(previousPosition, previousRotation);
@@ -447,9 +448,7 @@ namespace DTET.VisualPrototype
 
         private void CaptureScreen(string file)
         {
-            // ScreenSpaceCamera makes the actual HUD and observer image part of this camera render.
-            // Explicit rendering remains available when the automated Windows player is hidden;
-            // this is not a claim that an OS-window backbuffer was captured.
+            // Include the HUD in the offscreen camera capture; this does not read the window backbuffer.
             CaptureCamera(file, 1600, 900, true);
         }
 

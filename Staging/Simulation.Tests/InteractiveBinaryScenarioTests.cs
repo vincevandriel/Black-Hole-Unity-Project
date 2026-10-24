@@ -32,7 +32,7 @@ internal static class InteractiveBinaryScenarioTests
             "Unequal-mass orbit is centered at its barycenter");
         Near(initial.SeparationRg, 30, 1e-15, "Initial separation uses declared total gravitational radii");
 
-        // Compare against existing model only after converting nominal GM through G, preserving custom masses.
+        // Convert nominal GM through G before comparing with the existing model.
         double g = InspiralParameters.GravitationalConstant;
         var reference = new CircularInspiral(new InspiralParameters(35 * InteractiveBinaryScenario.NominalSolarGM / g,
             30 * InteractiveBinaryScenario.NominalSolarGM / g, 30 * initial.GravitationalRadiusMeters,
@@ -47,7 +47,7 @@ internal static class InteractiveBinaryScenarioTests
             if (fraction > 0) Near(state.OrbitalPhaseRadians, old.PhaseRadians, 1e-13, "Existing bounded integrated phase");
         }
 
-        // An independent RK4 integration of the dimensionless ODE verifies the analytic solution.
+        // Independent RK4 reference for the dimensionless ODE.
         double tauEnd = .97 * model.CutoffTimeSeconds / model.GravitationalTimeSeconds;
         double r = 30, phase = 0, eta = 35.0 * 30 / (65.0 * 65);
         const int steps = 20000; double dt = tauEnd / steps;
@@ -122,7 +122,7 @@ internal static class InteractiveBinaryScenarioTests
             "Previously emitted valid waves can remain outward after the source cutoff");
         Reject(() => model.EvaluateRetardedSignal(at, -1), "Negative propagation radius");
 
-        // Roche truncation is a geometric prescription, with body/companion ratio orientation tested.
+        // Check body/companion orientation in the Roche prescription.
         Near(InteractiveBinaryScenario.RocheLobeFraction(1), .49 / (.6 + Math.Log(2)), 1e-14, "Equal-mass Eggleton lobe fixture");
         var extreme = new InteractiveBinaryScenario(new InteractiveBinaryParameters(8, 80, 25));
         var extremeState = extreme.Evaluate(0);
@@ -209,7 +209,6 @@ internal static class InteractiveBinaryScenarioTests
         Reject(() => model.Evaluate(double.NaN), "Nonfinite seek");
         Reject(() => session.SetPlaybackRate(0), "Pause is explicit rather than zero physical playback rate");
 
-        // Snapshot production is plain immutable value state, without gas-frame or history allocations.
         model.Evaluate(at); long before = GC.GetAllocatedBytesForCurrentThread(); double total = 0;
         for (int i = 0; i < 1000; ++i) total += model.Evaluate(i % 2 == 0 ? at : model.DurationSeconds).GasState.PatternCos2;
         Check(GC.GetAllocatedBytesForCurrentThread() == before && double.IsFinite(total), "Adjustable snapshots allocate no per-epoch storage");

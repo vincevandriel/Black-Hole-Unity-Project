@@ -4,7 +4,7 @@ namespace BlackHole.Staging.Simulation
 {
     public enum ExhibitQualityProfile { Auto, Laptop, Balanced, High }
 
-    /// <summary>Reported capabilities are hints, not a measured performance certification.</summary>
+    // Hardware hints for quality selection, not measured performance.
     public readonly struct ExhibitCapabilities
     {
         public int ShaderLevel { get; }
@@ -36,8 +36,7 @@ namespace BlackHole.Staging.Simulation
         public int TracerCount { get; }
         public string Reason { get; }
         public const string SharedPhysicsContract = "same-reduced-field-and-event-epoch-v1";
-        // Conservative allowance for capped color/depth/working surfaces, star/tracer mesh
-        // payload and retained source arrays. This is NOT total Unity process or VRAM usage.
+        // Estimate owned render targets, meshes and source arrays; excludes other Unity/VRAM usage.
         public long EstimatedManagedAndGpuBytes => 32L * MaxRenderWidth * MaxRenderHeight
             + 512L * StarCount + 512L * TracerCount;
 
@@ -49,7 +48,7 @@ namespace BlackHole.Staging.Simulation
             MaxRenderHeight = height; StarCount = stars; TracerCount = tracers; Reason = reason;
         }
 
-        /// <summary>Even dimensions, aspect preserved to rounding; never exceeds display or cap.</summary>
+        // Even dimensions, aspect preserved to rounding; never exceeds display or cap.
         public void RenderDimensions(int screenWidth, int screenHeight, out int width, out int height)
         {
             if (screenWidth < 2 || screenHeight < 2) throw new ArgumentOutOfRangeException(nameof(screenWidth));

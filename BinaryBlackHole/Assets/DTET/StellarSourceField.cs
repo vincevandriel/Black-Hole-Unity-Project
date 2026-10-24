@@ -4,8 +4,7 @@ using UnityEngine.Rendering;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Real source objects with a shared display mesh, not a camera-following sky.
-    /// Approximate thin-lens images remain separate from future relativistic ray tracing.</summary>
+    // Fixed source objects with a shared mesh and approximate thin-lens images.
     [DefaultExecutionOrder(100)]
     public sealed class StellarSourceField : MonoBehaviour
     {
@@ -145,8 +144,7 @@ namespace DTET.VisualPrototype
 
         private void LateUpdate() => UpdateImages();
 
-        // Source objects are fixed emitters. Still detect edits/activation changes rather than
-        // assuming that external code or a future data adapter can never move them.
+        // Refresh fixed emitters when their transforms or activation state change.
         public void InvalidateImages() => imageStateValid = false;
 
         private bool NeedsImageUpdate()

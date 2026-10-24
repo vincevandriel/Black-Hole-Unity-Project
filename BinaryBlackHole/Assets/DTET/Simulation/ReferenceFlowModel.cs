@@ -2,12 +2,8 @@ using System;
 
 namespace BlackHole.Staging.Simulation
 {
-    /// <summary>
-    /// Prescribed isolated-hole teaching field, not a solution of GRMHD or a GW150914 gas reconstruction.
-    /// Coordinates are (x,y,z)/rg, disk in XZ, normal +Y; time is t/tg, rg=GM/c^2, tg=GM/c^3.
-    /// The azimuthal pattern is advected by a prescribed circular velocity. No radial accretion,
-    /// pressure balance, magnetic field, heating/cooling or relativistic fluid dynamics is solved.
-    /// </summary>
+    // Prescribed circular flow around an isolated hole; no fluid, magnetic or thermal evolution.
+    // Disk: XZ, normal +Y. Units: rg=GM/c^2 and tg=GM/c^3. No GW150914 gas reconstruction.
     public sealed class ReferenceFlowModel
     {
         public const string ModelId = "assumed-isolated-thick-torus-v1";
@@ -22,8 +18,7 @@ namespace BlackHole.Staging.Simulation
         public const double DurationTg = 1024;
         public const int FrameCount = 129;
         public const double PatternContrast = .3;
-        // Integral rho/rho0 dV/rg^3; azimuthal contrast integrates to zero at every radius and time.
-        // This is a normalized mass measure, not a calibrated physical density or accretion rate.
+        // Normalized mass integral rho/rho0 dV/rg^3; azimuthal contrast integrates to zero.
         public static double IntegratedRelativeDensityVolumeRg3 => .64 * Math.PI * (936 - 432 / (Math.PI * Math.PI));
 
         public ReferenceFlowSample Evaluate(double xRg, double yRg, double zRg, double timeTg)
@@ -48,8 +43,7 @@ namespace BlackHole.Staging.Simulation
             return new ReferenceFlowSample(density, temperature, -omega * z, omega * x);
         }
 
-        // The Schwarzschild equatorial circular coordinate-frequency law is used as a prescription
-        // throughout this thick torus. Off-equatorial flow is not thereby a geodesic solution.
+        // Prescribe Schwarzschild equatorial circular frequency throughout the torus; off-plane flow is not geodesic.
         public static double AngularVelocityPerTg(double cylindricalRadiusRg)
         {
             RequireFinite(cylindricalRadiusRg, nameof(cylindricalRadiusRg));

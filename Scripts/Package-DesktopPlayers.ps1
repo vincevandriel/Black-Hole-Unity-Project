@@ -3,15 +3,13 @@
 .SYNOPSIS
 Packages Windows x64 and macOS Unity release players, or explicitly Windows only.
 .DESCRIPTION
-Does not build, sign or launch either player. The Python packager preserves Unix
-executable permissions and symbolic links, validates every ZIP entry, and extracts
-and independently inventories its payload. If Windows denies symbolic-link
-creation, their ZIP records are verified separately and the extraction is marked
-incomplete; no link is flattened to a regular file. Reports stay outside the ZIP.
-SourceRevision is the caller-declared Windows revision; MacSourceRevision defaults
-to it. These declarations are not proof of binary-to-source identity.
-ZIPs have no repeated outer folder. Windows-only players are at the archive root.
-Use a short output path; verification paths must fit the packager's 240-unit budget.
+Packages existing players without building, signing or launching them.
+Preserves Unix permissions and symlinks; verifies ZIP entries and fresh extraction.
+Blocked Windows symlinks are verified separately and leave extraction incomplete.
+SourceRevision declares Windows provenance; MacSourceRevision defaults to it.
+Neither proves binary-to-source identity. Reports stay outside the ZIP.
+No repeated outer folder; Windows-only players are at the archive root.
+Use a short output path; verification paths must fit the 240-unit UTF-16 budget.
 #>
 [CmdletBinding()]
 param(

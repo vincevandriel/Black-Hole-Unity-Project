@@ -6,7 +6,7 @@ using UnityEngine.Rendering;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Actual camera render, independent of an OS window's visible backbuffer. QA only.</summary>
+    // QA camera capture, independent of the window backbuffer.
     internal static class DevelopmentFrameCapture
     {
         public static void WritePng(Camera camera, string path, int width = 1600, int height = 900)

@@ -2,8 +2,7 @@ using System;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Small double-precision value types. Coordinates use one dataset's geometrized
-    /// units (G=c=1); Unity units must never be passed here without an explicit mapping.</summary>
+    // Double-precision values in dataset units (G=c=1); map Unity coordinates explicitly.
     public readonly struct MetricVector3
     {
         public readonly double X, Y, Z;
@@ -27,8 +26,7 @@ namespace DTET.VisualPrototype
         }
     }
 
-    /// <summary>One lapse/shift/spatial-metric sample, ds²=-alpha² dt²+gamma_ij(dx^i+beta^i dt)(dx^j+beta^j dt).
-    /// Computes local invariants only. Not a spacetime solver, dataset interpolator or ray integrator.</summary>
+    // Local ADM sample: ds²=-alpha² dt²+gamma_ij(dx^i+beta^i dt)(dx^j+beta^j dt).
     public sealed class AdmMetricSample
     {
         private readonly double xx, xy, xz, yy, yz, zz;
@@ -59,7 +57,7 @@ namespace DTET.VisualPrototype
             + xy * (a.X * b.Y + a.Y * b.X) + xz * (a.X * b.Z + a.Z * b.X)
             + yz * (a.Y * b.Z + a.Z * b.Y);
 
-        /// <summary>d tau / dt for a timelike coordinate worldline, v^i=dx^i/dt (not physical local velocity).</summary>
+        // d tau / dt for a timelike coordinate worldline, v^i=dx^i/dt (not physical local velocity).
         public double ProperTimeRate(MetricVector3 coordinateVelocity)
         {
             var shifted = coordinateVelocity + Shift;
@@ -69,8 +67,7 @@ namespace DTET.VisualPrototype
             return Math.Sqrt(squaredRate);
         }
 
-        /// <summary>E = -g_mu_nu k^mu u^nu. k must be future-directed and null.
-        /// A ray tracer may integrate backwards, but must convert to physical future-directed momentum for this measurement.</summary>
+        // E = -g_mu_nu k^mu u^nu requires future-directed null momentum, even for backward-traced rays.
         public double MeasurePhotonEnergy(PhotonFourMomentum photon, MetricVector3 coordinateVelocity, double nullRelativeTolerance = 1e-8)
         {
             if (!MetricVector3.Finite(nullRelativeTolerance) || nullRelativeTolerance <= 0 || nullRelativeTolerance > 1e-3)

@@ -58,7 +58,7 @@ namespace DTET.VisualPrototype.Editor
             BuildDesktopPlayer(BuildTarget.StandaloneOSX, false);
         }
 
-        // Uses the same default-startup define as the distributable, retaining opt-in QA harnesses.
+        // Match release startup while retaining opt-in QA harnesses.
         public static void BuildDesktopWindowsQaPlayer()
         {
             BuildDesktopPlayer(BuildTarget.StandaloneWindows64, true);
@@ -121,6 +121,7 @@ namespace DTET.VisualPrototype.Editor
                 "Assets/Resources/DTET/ReducedBinaryVolume.shader",
                 "Assets/Resources/DTET/ReducedDensitySamples.shader",
                 "Assets/Resources/DTET/ExhibitSky.shader",
+                "Assets/Resources/DTET/StellarBackdrop.shader",
                 "Assets/Resources/DTET/FeaturedBackgroundStar.shader",
                 "Assets/Resources/DTET/ExhibitDisplay.shader",
                 "Assets/Resources/DTET/InteractiveOptics.shader",
@@ -138,14 +139,17 @@ namespace DTET.VisualPrototype.Editor
             var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
             var destination = Path.Combine(projectRoot, "Builds", folder, executable);
             Directory.CreateDirectory(Path.GetDirectoryName(destination));
-            var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            ShaderFixtureStripper.KeepFixtures = (options & BuildOptions.Development) != 0;
+            BuildReport report;
+            try
             {
-                scenes = new[] { Scene },
-                locationPathName = destination,
-                target = target,
-                options = options,
-                extraScriptingDefines = interactiveDefault ? new[] { "DTET_DESKTOP_RELEASE" } : Array.Empty<string>()
-            });
+                report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+                {
+                    scenes = new[] { Scene }, locationPathName = destination, target = target, options = options,
+                    extraScriptingDefines = interactiveDefault ? new[] { "DTET_DESKTOP_RELEASE" } : Array.Empty<string>()
+                });
+            }
+            finally { ShaderFixtureStripper.KeepFixtures = false; }
             if (report.summary.result != BuildResult.Succeeded)
                 throw new InvalidOperationException("DT-ET player build failed: " + report.summary.result);
             Debug.Log(receipt + " " + destination);

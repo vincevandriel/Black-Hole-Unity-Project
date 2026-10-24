@@ -9,7 +9,7 @@ using UnityEngine.InputSystem.LowLevel;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Development-build visual receipt. Does nothing unless DTET_CAPTURE_PATH is set.</summary>
+    // Development capture enabled by DTET_CAPTURE_PATH.
     internal sealed class VisualQaCapture : MonoBehaviour
     {
         private bool inputChecksPassed = true;
@@ -299,7 +299,7 @@ namespace DTET.VisualPrototype
             yield return new WaitForEndOfFrame();
             var firstObject = GameObject.Find("Body A - illustrated black-hole marker");
             var first = firstObject == null ? null : firstObject.transform;
-            // The hierarchy name is supplied by BuildWorld; failure should not produce a false receipt.
+            // Require the hierarchy name assigned by BuildWorld.
             CheckInput(first != null, "Audit locates the live first marker");
             if (first != null)
             {

@@ -5,7 +5,7 @@ namespace BlackHole.Staging.Simulation
 {
     public enum GeneratedFluidBoundary { Outflow, Periodic }
 
-    /// <summary>Cell-average surface density and primitive planar velocity; units are Sigma0, rg/tg.</summary>
+    // Cell-average surface density and primitive planar velocity; units are Sigma0, rg/tg.
     public readonly struct GeneratedFluidSample
     {
         public double SurfaceDensity { get; }
@@ -15,7 +15,7 @@ namespace BlackHole.Staging.Simulation
         { SurfaceDensity = density; VelocityXRgPerTg = vx; VelocityZRgPerTg = vz; }
     }
 
-    /// <summary>Prescribed Newtonian force source. It is not a spacetime metric or gas backreaction.</summary>
+    // Prescribed Newtonian forcing without gas backreaction.
     public readonly struct GeneratedFluidSource
     {
         public double X { get; }
@@ -89,11 +89,8 @@ namespace BlackHole.Staging.Simulation
             ReconstructionFallbackCount = fallbacks; }
     }
 
-    /// <summary>
-    /// MUSCL/SSPRK2 unsplit finite-volume isothermal Euler solver. Conserved variables
-    /// are Sigma, Sigma*vx, Sigma*vz. Periodic boundaries exist for independent tests;
-    /// generated binary histories always use outflow-only boundary faces.
-    /// </summary>
+    // MUSCL/SSPRK2 isothermal Euler solver; conserved variables are Sigma, Sigma*vx and Sigma*vz.
+    // Binary histories use outflow boundaries; periodic boundaries support solver tests.
     public sealed class GeneratedFluidSolver
     {
         public const double CourantLimit = .35;
@@ -224,8 +221,7 @@ namespace BlackHole.Staging.Simulation
             ComputeTransport(dt, highOrder);
             if (!PositiveNext())
             {
-                // Recompute the entire stage with paired first-order conservative
-                // fluxes. Never clip negative mass or repair individual fluxes.
+                // Retry the whole stage with conservative first-order fluxes instead of clipping negative mass.
                 if (!highOrder) throw new InvalidOperationException("Nonpositive first-order fluid stage; history rejected.");
                 fallbacks++; ComputeTransport(dt, false);
                 if (!PositiveNext()) throw new InvalidOperationException("Nonpositive fluid fallback; history rejected.");

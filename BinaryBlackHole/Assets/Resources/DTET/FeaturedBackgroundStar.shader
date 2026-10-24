@@ -21,19 +21,21 @@ Shader "DTET/FeaturedBackgroundStar"
             #pragma target 3.0
             #pragma vertex Vertex
             #pragma fragment Fragment
+            #pragma multi_compile_local _ DTET_QA_FIXTURES
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "StellarWaveWarp.hlsl"
             float4 _FeaturedSource, _FeaturedColor;
-            float _StellarFixture;
-            float4 _StellarFixtureInput, _StellarFixtureLens;
+            #if defined(DTET_QA_FIXTURES)
+                float _StellarFixture;
+                float4 _StellarFixtureInput, _StellarFixtureLens;
+            #endif
             struct Attributes { float4 position : POSITION; };
             struct Varyings { float4 position : SV_POSITION; float2 angularUnit : TEXCOORD0; };
             Varyings Vertex(Attributes input)
             {
                 Varyings output; output.position = float4(input.position.xy, UNITY_RAW_FAR_CLIP_VALUE, 1);
                 output.angularUnit = input.position.xy;
-                // Unity flips the raster projection for render textures on some graphics
-                // APIs. Restore camera-up when deriving rays from explicit clip vertices.
+                // Correct render-texture projection flips when deriving camera rays.
                 output.angularUnit.y *= _ProjectionParams.x;
                 return output;
             }
@@ -45,18 +47,19 @@ Shader "DTET/FeaturedBackgroundStar"
                 float core = max(.25*max(0,horizonRadius), .03*lens.w)/lens.z;
                 float strength = 4*lens.w*geometry*clamp(_Optics.x,0,2)/lens.z;
                 float2 alpha = strength*relative/max(1e-12,max(dot(relative,relative),core*core));
-                // Only the unresolved near-horizon extension is bounded. The resolved lens
-                // retains the point-mass inverse mapping, including secondary images and arcs.
+                // Bound only the unresolved extension; retain resolved point-mass images and arcs.
                 return alpha*min(1,rcp(max(length(alpha),1e-12)));
             }
             float4 Fragment(Varyings input) : SV_Target
             {
+                #if defined(DTET_QA_FIXTURES)
                 if(_StellarFixture>.5)
                 {
                     float2 alpha = StellarDeflection(_StellarFixtureInput.xy,
                         float4(0,0,_StellarFixtureLens.x,_StellarFixtureLens.y),_StellarFixtureLens.z,_StellarFixtureLens.w);
                     return float4(alpha,0,1);
                 }
+                #endif
                 float3 relativeSource = _FeaturedSource.xyz-_CameraOrigin.xyz;
                 float sourceDepth = dot(relativeSource,_CameraForward.xyz);
                 if(sourceDepth<=_FeaturedSource.w || _FeaturedSource.w<=0) return 0;
@@ -71,8 +74,7 @@ Shader "DTET/FeaturedBackgroundStar"
                 float antialias = clamp(.5*fwidth(radial),.002,.75);
                 float coverage = 1-smoothstep(1-antialias,1+antialias,radial);
                 float limb = .45+.55*sqrt(saturate(1-radial*radial));
-                // Compact display glare follows the source through the same lens equation.
-                // Nothing emits at the hole or anywhere lacking background source intensity.
+                // Lens source glare only; the hole emits no added light.
                 float glare = .04*exp(-.75*radial*radial)*(1-smoothstep(2.5,3,radial));
                 return float4(_FeaturedColor.rgb*_FeaturedColor.a*(limb*coverage+glare),0);
             }

@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Build a minimal desktop delivery ZIP without flattening macOS bundle links.
+"""Package existing desktop players; preserve macOS links and permissions.
 
-Only existing release players are inputs. ZIP contents, metadata and an independent
-file extraction are checked. Where Windows cannot create symbolic links, their
-ZIP entries are verified and reported without creating misleading regular files.
-These checks do not establish macOS runtime compatibility,
-code-signing validity, notarization, or binary-to-source provenance.
+Verify ZIP entries and fresh file extraction. Report blocked Windows symlinks
+without flattening them. Checks do not establish macOS execution, signing,
+notarization, or binary-to-source provenance.
 """
 from __future__ import annotations
 
@@ -26,12 +24,12 @@ import zipfile
 
 APP_NAME = "DTET_Binary_Explorer"
 SOURCE_URL = "https://github.com/vincevandriel/Black-Hole-Unity-Project"
-# Leave headroom below legacy Windows file and directory path limits. This is a
-# packaging budget, not a promise about every extractor or destination chosen.
+# Legacy Windows path headroom; not an extractor or destination guarantee.
 PATH_BUDGET = 240
 FORBIDDEN = re.compile(
     r"(?i)(DoNotShip|DontShip|BurstDebugInformation|(^|/)(Library|Temp|obj|logs?|backups?|\.git|\.vs|__pycache__)(/|$)"
-    r"|\.(pdb|mdb|bak|orig|log|tmp|csproj|sln)$|(^|/)\.DS_Store$|~$)"
+    r"|\.(pdb|mdb|bak|orig|log|tmp|csproj|sln|cs|csx|py|ps1|psm1|sh|bat|cmd)$"
+    r"|(^|/)(tests?|benchmarks?|audits?|TestResults|captures)(/|$)|(^|/)\.DS_Store$|~$)"
 )
 NATIVE_MAGIC = {b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe",
                 b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca", b"\xca\xfe\xba\xbf", b"\xbf\xba\xfe\xca"}
@@ -243,8 +241,7 @@ def extract_and_inventory(archive_path: Path, destination: Path) -> tuple[list[d
             except OSError as error:
                 if os.name != "nt" or getattr(error, "winerror", None) != 1314:
                     raise
-                # Do not write a stub file or dereference/copy a linked directory:
-                # that would disguise an incomplete bundle as a runnable app.
+                # Never replace a blocked symlink with a stub or copied directory.
                 data = target.encode("utf-8")
                 deferred_links.append(dict(path=name, kind="symlink", bytes=len(data), sha256=digest(data), link_target=target))
     records = []
@@ -315,8 +312,7 @@ def main() -> None:
         minimum_os = str(plist.get("LSMinimumSystemVersion", "unspecified"))
         require(minimum_os != "unspecified", "Mac bundle must declare its minimum OS version")
     entries: list[dict] = []
-    # Explorer already offers a destination named after the ZIP. Do not repeat
-    # that name inside it. A Windows-only ZIP needs no platform folder either.
+    # Explorer names the extraction folder; avoid an extra archive root.
     root = ""
     windows_prefix = "" if args.windows_only else "Windows/"
     platforms = [windows_prefix] + (["macOS/"] if app is not None else [])
@@ -363,9 +359,7 @@ def main() -> None:
     extracted = output / (args.package_name + "_verified")
     longest_entry = max(entries, key=lambda entry: path_length(entry["path"].rstrip("/")))
     longest_relative = path_length(longest_entry["path"].rstrip("/"))
-    # Also keep the generated verification copy usable by Windows Explorer.
-    # Check before writing anything: a successful Python extraction alone can
-    # hide paths that legacy GUI extractors cannot handle.
+    # Check extraction path limits before writing; Python success alone is insufficient.
     longest_extracted = max(path_length(str(extracted.joinpath(*PurePosixPath(entry["path"]).parts)))
                             for entry in entries)
     require(longest_extracted <= PATH_BUDGET,

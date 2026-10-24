@@ -10,7 +10,7 @@ using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Desktop experiment and recorded replay, with one model and presentation-only optics.</summary>
+    // Shared-state desktop replay and experiment; illustrative optics.
     public sealed class InteractiveBinaryExhibit : MonoBehaviour, IInteractiveExhibitPresenter, IGeneratedFluidPresenter
     {
         public bool Ready { get; private set; }
@@ -213,6 +213,7 @@ namespace DTET.VisualPrototype
             ReducedExhibitUi.Button(hud.transform, "STARLIGHT ONLY", 556, 812, 185, 36, WatchStarlight);
             bendingToggle = ReducedExhibitUi.Button(hud.transform, "BENDING: ON", 751, 812, 170, 36, ToggleStellarBending).GetComponentInChildren<Text>();
             ReducedExhibitUi.Button(hud.transform, "ACCRETION VIEW", 931, 812, 200, 36, ShowAccretionView);
+            ReducedExhibitUi.Button(hud.transform, "OUTGOING WAVES", 1141, 812, 190, 36, WatchOutgoingWaves);
         }
 
         private void RebuildSamples()
@@ -299,8 +300,7 @@ namespace DTET.VisualPrototype
         {
             if (View == null || Session == null) return;
             float r = (float)(GeneratedFluidActive ? GeneratedHistory.HalfExtentRg : Session.Model.HalfExtentXZ);
-            // Frame the binary rather than the much larger reservoir. This is a view command,
-            // never an automatic camera track: navigation and paused inspection stay independent.
+            // Explicit binary view preset; never track automatically or advance time.
             float focus = GeneratedFluidActive ? r : Mathf.Max(16, (float)Snapshot.SeparationRg * 1.6f);
             Vector3[] points = { new Vector3(0, focus * .85f, -focus * 1.3f), new Vector3(0, focus * 1.55f, -.01f), new Vector3(0, focus * .14f, -focus * 1.55f), new Vector3(0, -focus * .85f, -focus * 1.3f), new Vector3(0, r * .95f, -r * 1.8f) };
             if (index < 0 || index >= points.Length) throw new ArgumentOutOfRangeException(nameof(index));
@@ -366,8 +366,7 @@ namespace DTET.VisualPrototype
         {
             bool enabled = Profile.GasEnabled && OpticalStyle != InteractiveOpticalStyle.Off;
             if (Optics != null) Optics.Prepare(SceneTarget, View, Session.Model, Snapshot, enabled, LensGain, WaveGain);
-            // A selected style can still have both gains at zero. In that state Prepare
-            // intentionally skips binding; never copy its previous active frame's uniforms.
+            // Zero gains skip binding; do not reuse stale active uniforms.
             enabled = enabled && Optics != null && Optics.Active;
             if (sky != null)
             {
@@ -434,8 +433,7 @@ namespace DTET.VisualPrototype
         public void ShowAccretionView()
         {
             if (!Ready || IsGeneratingFluid) return;
-            // Return to the visible prescribed disks without discarding an independently
-            // generated history or changing the selected binary and its physical parameters.
+            // Select prescribed disks without discarding solved fluid or changing the scenario.
             UseGeneratedFluid(false);
             SetWristGas(true);
             SetWristSamples(false);
@@ -449,6 +447,17 @@ namespace DTET.VisualPrototype
             Session.Reset(); Session.SetPlaybackRate(.03);
             SetWristGas(false); SetWristSamples(false); Present(); SetViewPreset(0);
             Wrist.SetRaised(false, true); Session.Play(); RefreshLabels();
+        }
+
+        public void WatchOutgoingWaves()
+        {
+            if (!Ready || IsGeneratingFluid) return;
+            ShowAccretionView();
+            Session.Seek(Math.Max(0, Session.Model.MergerTimeSeconds - 250 * Snapshot.GravitationalTimeSeconds));
+            Session.SetPlaybackRate(.01);
+            SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 2);
+            Present(); SetViewPreset(0); MoveCamera(View.transform.position * .6f);
+            Session.Play(); RefreshLabels();
         }
 
         public void ToggleStellarBending()
@@ -566,8 +575,7 @@ namespace DTET.VisualPrototype
         public void UseGeneratedFluid(bool value)
         {
             if (!Ready || GeneratedFluidPlayer == null) return;
-            // Consume pending completion/invalidation before applying the user's display
-            // choice, so a completed solve cannot immediately replace that choice.
+            // Process pending results before applying the user's display choice.
             Present();
             GeneratedFluidPlayer.Select(value);
             GasVisible = Profile.GasEnabled;

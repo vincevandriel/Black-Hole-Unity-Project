@@ -6,8 +6,7 @@ float4 _CameraOrigin,_CameraRight,_CameraUp,_CameraForward;
 float4 _LensA,_LensB,_LensR,_LensRadii;
 float4 _Optics,_WaveParameters,_WaveBasisX,_WaveBasisY,_Polarization;
 
-// Inverse angular lookup for background light only. The emitting gas and proxy
-// meshes are drawn later and never sampled through this displacement.
+// Inverse angular lookup affects only background light; gas and proxies draw later.
 float2 StellarWaveDisplacement(float2 theta)
 {
     if(_Optics.y<=0||_WaveParameters.x<=0)return 0;
@@ -17,8 +16,7 @@ float2 StellarWaveDisplacement(float2 theta)
     float coordinate=length(probe)*_WaveParameters.w/_WaveParameters.x;
     if(coordinate>1)return 0;
     float u=(coordinate*(_WaveHistory_TexelSize.z-1)+.5)*_WaveHistory_TexelSize.x;
-    // Explicit LOD permits the same history calculation in the point-star
-    // vertex shader and the extended-star fragment shader.
+    // Explicit LOD shares history sampling between star vertex and fragment shaders.
     float4 history=tex2Dlod(_WaveHistory,float4(u,.5,0,0));
     if(history.b<.999)return 0;
     float2 signal=clamp(history.rg*_WaveParameters.y,-4,4);

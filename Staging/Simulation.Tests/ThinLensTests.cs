@@ -30,13 +30,13 @@ internal static class ThinLensTests
         Check(Contains(images, count, 0, 0) && Contains(images, count, Math.Sqrt(1.64), 0)
             && Contains(images, count, -Math.Sqrt(1.64), 0) && Contains(images, count, 0, 0.6)
             && Contains(images, count, 0, -0.6), "Independent symmetric-binary roots");
-        // Translating the lens plane must translate the images without changing the deflections.
+        // Lens-plane translations must preserve deflection.
         lenses[0] = new PointLens(1.2, -3, 0.5); lenses[1] = new PointLens(2.8, -3, 0.5);
         count = ThinLensModel.FindImages(2, -3, lenses, 2, images);
         Check(count == 5, "Binary translation invariance");
         CheckResiduals(2, -3, lenses, 2, images, count);
         Check(Contains(images, count, 2, -3), "Translated central image");
-        // Finite-difference the lens map to independently check the analytical Jacobian used for image stretching.
+        // Finite-difference the lens-map Jacobian.
         lenses[0] = new PointLens(0, 0, 1);
         ThinLensModel.Map(1.4, 0.2, lenses, 1, out _, out _, out var jxx, out var jxy, out var jyy);
         const double h = 1e-5;

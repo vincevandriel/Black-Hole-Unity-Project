@@ -131,7 +131,7 @@ namespace BlackHole.Staging.Simulation
         }
     }
 
-    /// <summary>One deterministic scenario consumed by scene, gas, graph and illustrative optics.</summary>
+    // Shared deterministic scenario for scene, gas, graphs and display optics.
     public sealed class InteractiveBinaryScenario
     {
         public const double NominalSolarGM = 1.3271244e20;
@@ -284,8 +284,7 @@ namespace BlackHole.Staging.Simulation
                 distance: p.ObserverDistanceMeters, inclination: p.InclinationRadians, polarization: p.PolarizationRadians, envelope: amplitude);
         }
 
-        // Retarded time is a lookup into retained/valid source history, never a looping shader clock.
-        // Strain remains at the declared far-field observer distance: radius here only selects display delay.
+        // Radius selects retarded history time; strain stays at the declared far-field observer distance.
         public InteractiveSignalSample EvaluateRetardedSignal(double receptionElapsedSeconds, double radiusRg)
         {
             ReferenceFlowModel.RequireFinite(receptionElapsedSeconds, nameof(receptionElapsedSeconds));

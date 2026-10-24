@@ -36,7 +36,7 @@ namespace DTET.VisualPrototype
         }
         [Serializable] private sealed class Receipt
         {
-            public bool success, performanceOnly;
+            public bool success, performanceOnly, previewOnly;
             public string unityVersion, graphicsDevice, graphicsApi, processor, scope, timingMethod;
             public string[] checks, images;
             public Window[] performance;
@@ -68,9 +68,7 @@ namespace DTET.VisualPrototype
                 benchmarkSeconds = Math.Max(2, Math.Min(15, seconds));
             QualitySettings.vSyncCount = 0; Application.targetFrameRate = -1;
             yield return new WaitForSecondsRealtime(.75f);
-            // Initialize the presentation surface before measuring ordinary camera frames.
-            // A hidden Windows launch can defer that surface until the first resolution event.
-            // This does not draw a camera or substitute a manual render for the pixel checks.
+            // Warm up the hidden player's windowed surface before measuring automatic frames.
             Screen.SetResolution(1280, 720, FullScreenMode.Windowed);
             yield return new WaitForSecondsRealtime(.2f);
             Screen.SetResolution(1600, 900, FullScreenMode.Windowed);
@@ -82,8 +80,16 @@ namespace DTET.VisualPrototype
             Check(FindFirstObjectByType<ReducedBinaryExhibit>() == null && FindFirstObjectByType<ReferenceFlowLab>() == null && FindFirstObjectByType<VisualPrototypeBootstrap>() == null,
                 "interactive entry does not instantiate a competing simulation");
             bool performanceOnly = Environment.GetEnvironmentVariable("DTET_INTERACTIVE_PERFORMANCE_ONLY") == "1";
+            bool previewOnly = Environment.GetEnvironmentVariable("DTET_WAVE_PREVIEW_ONLY") == "1";
             if (!performanceOnly) Capture("launcher.png", true);
-            if (performanceOnly)
+            if (previewOnly)
+            {
+                exhibit.Launch(ExhibitQualityProfile.Balanced); yield return null;
+                ValidateOutgoingWaves();
+                yield return CaptureOutgoingWaveSequence();
+                exhibit.ReturnToLauncher(); yield return null; yield return null;
+            }
+            else if (performanceOnly)
             {
                 exhibit.Launch(ExhibitQualityProfile.High); yield return null;
                 exhibit.Wrist.SetRaised(true, true); exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 1, 1);
@@ -101,7 +107,7 @@ namespace DTET.VisualPrototype
                 "all paths release scene, session, optics and wrist references");
             var receipt = new Receipt
             {
-                success = passed, performanceOnly = performanceOnly, unityVersion = Application.unityVersion,
+                success = passed, performanceOnly = performanceOnly, previewOnly = previewOnly, unityVersion = Application.unityVersion,
                 graphicsDevice = SystemInfo.graphicsDeviceName, graphicsApi = SystemInfo.graphicsDeviceType.ToString(), processor = SystemInfo.processorType,
                 checks = checks.ToArray(), images = images.ToArray(), performance = windows.ToArray(), gpuFixtures = fixtures.ToArray(),
                 scope = "Desktop recorded replay and bounded adjustable educational experiment, prescribed gas, illustrative lens/wave warp and emulated holographic wrist. No scientific GRMHD, exact binary metric, headset, human usability or laptop certification.",
@@ -271,8 +277,10 @@ namespace DTET.VisualPrototype
                 Check(PixelDifference(one, two) < 1e-6, "rewind restores the same optical image without a shader clock");
                 ValidateVisibleScene();
                 ValidateStellarLight();
+                ValidateOutgoingWaves();
                 if (Environment.GetEnvironmentVariable("DTET_STAR_MOVIE") == "1") yield return CaptureStellarSequence();
                 if (Environment.GetEnvironmentVariable("DTET_DISK_MOVIE") == "1") yield return CaptureAccretionSequence();
+                if (Environment.GetEnvironmentVariable("DTET_OUTGOING_WAVE_MOVIE") == "1") yield return CaptureOutgoingWaveSequence();
                 if (Environment.GetEnvironmentVariable("DTET_VISUAL_MOVIE") == "1") yield return CaptureMergerSequence();
             }
             foreach (var scenario in new[] { "replay-paused", "experiment-playback", "camera-motion", "repeated-seek" }) yield return Measure(scenario);
@@ -286,9 +294,7 @@ namespace DTET.VisualPrototype
 
         private IEnumerator ValidateAutomaticAccretion(string profile)
         {
-            // These images must come from ordinary enabled-camera frames. In particular,
-            // do not call RenderFrame or SubmitRenderRequest anywhere in this measurement.
-            // A batch/headless environment that suppresses normal rendering fails explicitly.
+            // Require ordinary camera frames; never use RenderFrame or SubmitRenderRequest in this measurement.
             exhibit.View.enabled = true; exhibit.CaptureCamera.enabled = true;
             Check(exhibit.GasVisible && exhibit.Snapshot.ElapsedSeconds == 0 && !exhibit.Session.IsPlaying,
                 profile + " ordinary startup has gas enabled at the paused initial epoch");
@@ -368,8 +374,7 @@ namespace DTET.VisualPrototype
 
         private void CaptureAutomaticScene(string name)
         {
-            // Direct diagnostic readback of the already rendered linear scene target;
-            // no manual draw, alternate camera target, UI render, or display tone map.
+            // Read the existing linear scene directly, without another draw or display tone mapping.
             var active = RenderTexture.active; RenderTexture.active = exhibit.SceneTarget;
             var image = new Texture2D(exhibit.SceneTarget.width, exhibit.SceneTarget.height, TextureFormat.RGB24, false, true);
             try
@@ -404,8 +409,7 @@ namespace DTET.VisualPrototype
                 double change = PixelDifference(noWave, wave);
                 fixtures.Add(new Fixture { label = "rendered wave-only image difference / view " + view,
                     measuredX = change });
-                // Background points occupy far fewer pixels than the former full gas warp.
-                // Check actual nonzero stellar response here; the featured source is reviewed separately.
+                // Check rendered background response; isolated source tests follow.
                 Check(change > .000001, "wave distortion displaces background stellar pixels from viewpoint " + view);
             }
             exhibit.SetViewPreset(0); exhibit.SetWristOptics(InteractiveOpticalStyle.Off, 0, 0);
@@ -465,7 +469,7 @@ namespace DTET.VisualPrototype
             {
                 exhibit.Session.Seek(Math.Max(0, Math.Min(exhibit.Snapshot.DurationSeconds, centre - .16 + .25 * i / 119)));
                 exhibit.Present(); Capture("movie/frame-" + i.ToString("D3") + ".png");
-                // Permit deferred texture disposal between frames; no 120-frame memory spike.
+                // Allow deferred texture disposal between captures.
                 yield return null;
             }
         }
@@ -517,6 +521,170 @@ namespace DTET.VisualPrototype
             Check(exhibit.GasVisible, "restart restores the accretion view after starlight inspection");
         }
 
+        private void ValidateOutgoingWaves()
+        {
+            var sky = FindFirstObjectByType<ReducedExhibitSky>();
+            Check(sky != null && sky.BackgroundReady, "fixed stellar backdrop is ready for outgoing-wave inspection");
+            if (sky == null || !sky.BackgroundReady) return;
+            bool pointSources = sky.Visible, backdrop = sky.BackdropVisible;
+            bool featured = exhibit.FeaturedStar != null && exhibit.FeaturedStar.Visibility;
+            try
+            {
+                exhibit.SelectWristScenario(true); exhibit.SetWristGas(false);
+                exhibit.WatchOutgoingWaves();
+                double watchTime = Math.Max(0, exhibit.Session.Model.MergerTimeSeconds - 250 * exhibit.Snapshot.GravitationalTimeSeconds);
+                Check(exhibit.GasVisible && !exhibit.GeneratedFluidActive && !exhibit.SamplesVisible
+                    && exhibit.Session.IsPlaying && exhibit.Session.PlaybackRate == .01
+                    && Math.Abs(exhibit.Snapshot.ElapsedSeconds - watchTime) < 1e-10
+                    && !exhibit.Wrist.Raised && exhibit.OpticalStyle == InteractiveOpticalStyle.Enhanced
+                    && exhibit.LensGain == .35f && exhibit.WaveGain == 2,
+                    "outgoing-wave button restores gas and starts the shared clock at the declared epoch, rate and gains");
+                exhibit.SetWristPlaying(false); Capture("outgoing-waves-view.png");
+
+                // Isolate the continuous background so point sources cannot satisfy these checks.
+                sky.Visible = false; sky.BackdropVisible = true;
+                if (exhibit.FeaturedStar != null) exhibit.FeaturedStar.Visibility = false;
+                exhibit.SetWristGas(false); exhibit.SetWristSamples(false);
+                for (int view = 0; view < 4; view++)
+                {
+                    exhibit.SetViewPreset(view);
+                    exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 0); exhibit.RenderFrame();
+                    var noWave = ReadPixels(exhibit.SceneTarget);
+                    Capture("outgoing-background-view-" + view + "-off.png");
+                    exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 2); exhibit.RenderFrame();
+                    var wave = ReadPixels(exhibit.SceneTarget);
+                    double difference = PixelDifference(noWave, wave);
+                    int changed = 0, maximum = 0;
+                    for (int i = 0; i < wave.Length; i++)
+                    {
+                        int delta = Math.Max(Math.Abs(wave[i].r - noWave[i].r),
+                            Math.Max(Math.Abs(wave[i].g - noWave[i].g), Math.Abs(wave[i].b - noWave[i].b)));
+                        if (delta > 0) changed++;
+                        maximum = Math.Max(maximum, delta);
+                    }
+                    fixtures.Add(new Fixture { label = "outgoing background response / view " + view,
+                        measuredX = difference, measuredY = changed, absoluteError = maximum / 255.0 });
+                    Check(changed > 0 && difference > 0,
+                        "outgoing waves change isolated background pixels / view " + view + " / " + changed);
+                    Capture("outgoing-background-view-" + view + "-on.png");
+
+                    exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 0); exhibit.RenderFrame();
+                    Check(PixelDifference(noWave, ReadPixels(exhibit.SceneTarget)) < 1e-6,
+                        "zero gains restore the isolated background after outgoing waves / view " + view);
+                    exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 2);
+                    exhibit.SeekWrist(.8); exhibit.Session.Seek(watchTime); exhibit.Present(); exhibit.RenderFrame();
+                    Check(PixelDifference(wave, ReadPixels(exhibit.SceneTarget)) < 1e-6,
+                        "rewind restores the isolated outgoing-wave image / view " + view);
+                }
+
+                exhibit.SetViewPreset(0); exhibit.Session.Seek(0); exhibit.Present();
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 0); exhibit.RenderFrame();
+                var initialBackground = ReadPixels(exhibit.SceneTarget);
+                exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 0, 2); exhibit.RenderFrame();
+                Check(PixelDifference(initialBackground, ReadPixels(exhibit.SceneTarget)) < 1e-6,
+                    "event time zero adds no outgoing-wave image before positive-radius history exists");
+                var zeroHistory = ReadUploadedWaveHistory();
+                bool noPrehistory = true;
+                for (int i = 1; i < zeroHistory.Length; i++)
+                    noPrehistory &= zeroHistory[i].b == 0 && zeroHistory[i].r == 0 && zeroHistory[i].g == 0;
+                Check(noPrehistory, "event time zero uploads no invented waveform at positive radius");
+                ValidateOutwardWaveHistory();
+            }
+            finally
+            {
+                sky.Visible = pointSources; sky.BackdropVisible = backdrop;
+                if (exhibit.FeaturedStar != null) exhibit.FeaturedStar.Visibility = featured;
+                exhibit.ShowAccretionView(); exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
+            }
+        }
+
+        private void ValidateOutwardWaveHistory()
+        {
+            var model = exhibit.Session.Model;
+            double radiusStep = exhibit.Optics.WaveRadiusRg / (InteractiveOpticsReference.WaveSamples - 1);
+            double tg = model.GravitationalTimeSeconds;
+            double interval = Math.Min(model.MergerTimeSeconds, exhibit.Optics.WaveRadiusRg * tg);
+            int available = Math.Min(InteractiveOpticsReference.WaveSamples - 1,
+                (int)(.7 * interval / (radiusStep * tg)));
+            int inner = Math.Max(1, available / 3), outer = Math.Max(inner + 1, 2 * available / 3);
+            Check(outer <= available, "outward-wave fixtures fit inside the retained inspiral history");
+            if (outer > available) return;
+            double innerRadius = inner * radiusStep, outerRadius = outer * radiusStep;
+            double relativeTolerance = ((Texture2D)exhibit.Optics.WarpMaterial.GetTexture("_WaveHistory")).format
+                == TextureFormat.RGBAHalf ? .002 : 0;
+            bool nonzeroTransported = false;
+            foreach (double phase in new[] { .10, .15, .20 })
+            {
+                double emission = phase * interval;
+                double firstTime = emission + innerRadius * tg, secondTime = emission + outerRadius * tg;
+                var expected = model.EvaluateSignal(emission);
+                double plus = expected.Kind == InteractiveSignalKind.QuadrupoleStrain
+                    ? expected.HPlus.GetValueOrDefault() / InteractiveBinaryScenario.ReferenceStrainAmplitude
+                    : expected.NormalizedRealH22.GetValueOrDefault();
+                double cross = expected.Kind == InteractiveSignalKind.QuadrupoleStrain
+                    ? expected.HCross.GetValueOrDefault() / InteractiveBinaryScenario.ReferenceStrainAmplitude
+                    : expected.NormalizedImaginaryH22.GetValueOrDefault();
+                exhibit.Session.Seek(firstTime); exhibit.Present(); exhibit.RenderFrame();
+                var first = ReadUploadedWaveHistory();
+                double firstScale = exhibit.Optics.WarpMaterial.GetVector("_WaveParameters").y;
+                exhibit.Session.Seek(secondTime); exhibit.Present(); exhibit.RenderFrame();
+                var second = ReadUploadedWaveHistory();
+                double secondScale = exhibit.Optics.WarpMaterial.GetVector("_WaveParameters").y;
+                var a = first[inner]; var b = second[outer];
+                double error = Math.Max(Math.Max(Math.Abs(a.r * firstScale - plus), Math.Abs(a.g * firstScale - cross)),
+                    Math.Max(Math.Abs(b.r * secondScale - plus), Math.Abs(b.g * secondScale - cross)));
+                double tolerance = 2e-6 + relativeTolerance * Math.Max(Math.Abs(plus), Math.Abs(cross));
+                var firstSignal = model.EvaluateRetardedSignal(firstTime, innerRadius);
+                var secondSignal = model.EvaluateRetardedSignal(secondTime, outerRadius);
+                Check(expected.IsAvailable && firstSignal.IsAvailable && secondSignal.IsAvailable
+                    && Math.Abs(firstSignal.EmissionElapsedSeconds - emission) < 1e-10
+                    && Math.Abs(secondSignal.EmissionElapsedSeconds - emission) < 1e-10
+                    && a.b > .999f && b.b > .999f && error <= tolerance,
+                    "signed GPU waveform follows one emission epoch to a later outer radius / " + phase);
+                fixtures.Add(new Fixture { label = "outward signed waveform / bounded-interval fraction " + phase,
+                    expectedX = plus, expectedY = cross, measuredX = b.r * secondScale,
+                    measuredY = b.g * secondScale, absoluteError = error });
+                fixtures.Add(new Fixture { label = "outward propagation / radius and reception time / " + phase,
+                    expectedX = innerRadius, expectedY = firstTime, measuredX = outerRadius, measuredY = secondTime });
+                bool coverage = true; int firstFront = -1, secondFront = -1;
+                for (int i = 0; i < first.Length; i++)
+                {
+                    bool firstCovered = model.EvaluateSignal(firstTime - i * radiusStep * tg).IsAvailable;
+                    bool secondCovered = model.EvaluateSignal(secondTime - i * radiusStep * tg).IsAvailable;
+                    coverage &= (first[i].b > .999f) == firstCovered && (second[i].b > .999f) == secondCovered;
+                    if (first[i].b > .999f) firstFront = i;
+                    if (second[i].b > .999f) secondFront = i;
+                }
+                Check(coverage && secondFront > firstFront,
+                    "GPU coverage front expands outward with source time / " + phase + " / bins " + firstFront + " to " + secondFront);
+                nonzeroTransported |= Math.Max(Math.Abs(plus), Math.Abs(cross)) > 1e-4
+                    && Math.Max(Math.Abs(a.r * firstScale), Math.Abs(a.g * firstScale)) > 1e-4
+                    && Math.Max(Math.Abs(b.r * secondScale), Math.Abs(b.g * secondScale)) > 1e-4;
+            }
+            Check(nonzeroTransported, "outward propagation carries a nonzero signed waveform rather than only a coverage flag");
+        }
+
+        private Color[] ReadUploadedWaveHistory()
+        {
+            var wave = exhibit.Optics.WarpMaterial.GetTexture("_WaveHistory") as Texture2D;
+            if (wave == null) throw new InvalidOperationException("Outgoing-wave history is unavailable.");
+            var target = new RenderTexture(wave.width, 1, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+            var image = new Texture2D(wave.width, 1, TextureFormat.RGBAFloat, false, true);
+            var previous = RenderTexture.active; bool previousSrgb = GL.sRGBWrite;
+            try
+            {
+                if (!target.Create()) throw new InvalidOperationException("Cannot allocate outgoing-wave history readback.");
+                GL.sRGBWrite = false; Graphics.Blit(wave, target); RenderTexture.active = target;
+                image.ReadPixels(new Rect(0, 0, wave.width, 1), 0, 0); image.Apply();
+                return image.GetPixels();
+            }
+            finally
+            {
+                GL.sRGBWrite = previousSrgb; RenderTexture.active = previous;
+                Destroy(image); target.Release(); Destroy(target);
+            }
+        }
+
         private void ValidateFeaturedProjectionAndFormula()
         {
             var source = exhibit.FeaturedStar;
@@ -529,6 +697,7 @@ namespace DTET.VisualPrototype
             float previousLens = exhibit.LensGain, previousWave = exhibit.WaveGain;
             RenderTexture previousActive = RenderTexture.active;
             Material material = source.StarMaterial;
+            material.EnableKeyword("DTET_QA_FIXTURES");
             float previousFixture = material.GetFloat("_StellarFixture");
             Vector4 previousInput = material.GetVector("_StellarFixtureInput"), previousLensInput = material.GetVector("_StellarFixtureLens");
             var ownedTargets = new HashSet<int>();
@@ -543,8 +712,7 @@ namespace DTET.VisualPrototype
             {
                 exhibit.BackgroundStarsVisible = false; exhibit.SetWristGas(false); exhibit.SetWristSamples(false);
                 exhibit.SetWristOptics(InteractiveOpticalStyle.Off, 0, 0); material.SetFloat("_StellarFixture", 0);
-                // Compare real emitted pixels to Unity's independent world-space projection.
-                // Both vertical signs matter: a centred source can hide a render-target Y flip.
+                // Test both vertical signs against Unity's projection to expose render-target Y flips.
                 foreach (Vector2 rotation in new[] { new Vector2(-5, -5), new Vector2(-5, 5), new Vector2(5, -5), new Vector2(5, 5) })
                 {
                     view.transform.rotation = previousRotation * Quaternion.Euler(rotation.y, rotation.x, 0);
@@ -572,9 +740,7 @@ namespace DTET.VisualPrototype
                         + "-pitch-" + rotation.y.ToString("0", CultureInfo.InvariantCulture) + ".png");
                 }
 
-                // Render the actual production mesh and shader through an independent camera.
-                // A Graphics.Blit quad has a different vertex-position convention and would
-                // not validate this shader's explicit clip-space geometry.
+                // Use the production mesh; a blit has different vertex coordinates.
                 const int side = 65;
                 fixtureTarget = new RenderTexture(side, side, 24, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear)
                     { name = "QA featured stellar reference target" };
@@ -657,6 +823,29 @@ namespace DTET.VisualPrototype
                 exhibit.Session.Seek(end * i / 119); exhibit.Present();
                 Capture("accretion-movie/frame-" + i.ToString("D3") + ".png"); yield return null;
             }
+            exhibit.ShowAccretionView();
+        }
+
+        private IEnumerator CaptureOutgoingWaveSequence()
+        {
+            Directory.CreateDirectory(Path.Combine(output, "outgoing-wave-movie"));
+            exhibit.SelectWristScenario(true); exhibit.WatchOutgoingWaves(); exhibit.SetWristPlaying(false);
+            double start = exhibit.Snapshot.ElapsedSeconds;
+            double end = Math.Min(exhibit.Snapshot.DurationSeconds, start + 6 * exhibit.Session.PlaybackRate);
+            bool sharedClock = true;
+            for (int i = 0; i < 180; i++)
+            {
+                double time = start + (end - start) * i / 179;
+                exhibit.Session.Seek(time); exhibit.Present();
+                Capture("outgoing-wave-movie/frame-" + i.ToString("D3") + ".png");
+                sharedClock &= exhibit.GasVisible && !exhibit.GeneratedFluidActive
+                    && Math.Abs(exhibit.Snapshot.ElapsedSeconds - time) < 1e-10
+                    && exhibit.Wrist.PresentedSourceTime == exhibit.Snapshot.ElapsedSeconds;
+                yield return null;
+            }
+            fixtures.Add(new Fixture { label = "outgoing-wave preview event interval / six presentation seconds",
+                expectedX = start, measuredX = end, measuredY = exhibit.Session.PlaybackRate });
+            Check(sharedClock, "outgoing-wave preview keeps visible gas and the wrist on the shared event clock");
             exhibit.ShowAccretionView();
         }
 
@@ -756,8 +945,7 @@ namespace DTET.VisualPrototype
                 GL.sRGBWrite = false;
                 Graphics.Blit(wave, target); RenderTexture.active = target;
                 image.ReadPixels(new Rect(0, 0, wave.width, 1), 0, 0); image.Apply();
-                // Decode with the uniform used by the real distortion shader, then compare to
-                // ideal CPU display magnitudes. This does not reproduce texture encoding.
+                // Decode with the shader's scale and compare against CPU display magnitudes.
                 double displayScale = material.GetVector("_WaveParameters").y;
                 double relativeTolerance = wave.format == TextureFormat.RGBAHalf ? .002 : 0;
                 bool coverageMatches = true, valuesMatch = true, nonzeroSurvives = false;
@@ -813,6 +1001,7 @@ namespace DTET.VisualPrototype
             var originalStyle = exhibit.OpticalStyle;
             float originalLens = exhibit.LensGain, originalWave = exhibit.WaveGain;
             var optics = exhibit.Optics.WarpMaterial;
+            optics.EnableKeyword("DTET_QA_FIXTURES");
             var target = new RenderTexture(exhibit.SceneTarget.width, exhibit.SceneTarget.height, 0,
                 RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
             var previousTarget = RenderTexture.active;
@@ -879,6 +1068,7 @@ namespace DTET.VisualPrototype
             var target = new RenderTexture(1, 1, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear); target.Create();
             var image = new Texture2D(1, 1, TextureFormat.RGBAFloat, false, true);
             var optics = new Material(Resources.Load<Shader>("DTET/InteractiveOptics"));
+            optics.EnableKeyword("DTET_QA_FIXTURES");
             var active = RenderTexture.active;
             try
             {
@@ -930,6 +1120,7 @@ namespace DTET.VisualPrototype
             Material gas = exhibit.GasMaterial;
             if (gas == null) throw new InvalidOperationException("The adjustable gas fixture requires an active gas material.");
             float previousTest = gas.GetFloat("_FieldTest"); Vector4 previousPoint = gas.GetVector("_FieldPoint");
+            bool fixturesEnabled = gas.IsKeywordEnabled("DTET_QA_FIXTURES");
             Renderer[] renderers = exhibit.GetComponentsInChildren<Renderer>(true);
             var enabled = new bool[renderers.Length];
             for (int i = 0; i < renderers.Length; i++) enabled[i] = renderers[i].enabled;
@@ -940,9 +1131,7 @@ namespace DTET.VisualPrototype
                 target = new RenderTexture(side, side, 24, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
                 if (!target.Create()) throw new InvalidOperationException("Could not allocate the linear gas fixture target.");
                 image = new Texture2D(side, side, TextureFormat.RGBAFloat, false, true);
-                // The volume is a world-space, front-culled cube. A fullscreen blit would not
-                // exercise its actual vertex/culling path. A dedicated camera also avoids the
-                // exhibit's normal endCameraRendering optical composite callback.
+                // A dedicated camera exercises the volume's world-space vertices and front-face culling.
                 cameraObject = new GameObject("QA adjustable gas fixture camera");
                 Camera camera = cameraObject.AddComponent<Camera>(); camera.CopyFrom(exhibit.View);
                 camera.enabled = false; camera.targetTexture = null; camera.aspect = 1;
@@ -953,6 +1142,7 @@ namespace DTET.VisualPrototype
                     (float)-exhibit.Session.Model.HalfExtentXZ * 2);
                 camera.transform.LookAt(Vector3.zero);
                 for (int i = 0; i < renderers.Length; i++) renderers[i].enabled = renderers[i].sharedMaterial == gas;
+                gas.EnableKeyword("DTET_QA_FIXTURES");
                 gas.SetFloat("_FieldTest", 1);
                 foreach (Vector3 point in new[] { new Vector3((float)(exhibit.Snapshot.GasState.ReservoirInnerRadiusRg * 1.3), 0, 0),
                     V(exhibit.Snapshot.GasState.BodyA.PositionRg) + new Vector3(5, 0, 0), new Vector3(10, 0, 0), new Vector3(1000, 0, 0) })
@@ -972,6 +1162,7 @@ namespace DTET.VisualPrototype
             finally
             {
                 gas.SetFloat("_FieldTest", previousTest); gas.SetVector("_FieldPoint", previousPoint);
+                if (!fixturesEnabled) gas.DisableKeyword("DTET_QA_FIXTURES");
                 for (int i = 0; i < renderers.Length; i++) if (renderers[i] != null) renderers[i].enabled = enabled[i];
                 RenderTexture.active = previous;
                 if (cameraObject != null) Destroy(cameraObject);

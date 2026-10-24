@@ -19,7 +19,7 @@ internal static class AdmObserverTests
         var sameConservedEnergy = new PhotonFourMomentum(4, new MetricVector3(-2, 0, 0));
         Near(lapseSample.MeasurePhotonEnergy(sameConservedEnergy, rest), 2, "Static gravitational blueshift measurement");
         Near(AdmMetricSample.FrequencyRatio(1, 2), 2, "Endpoint energy ratio convention");
-        // Independent static Schwarzschild check at r=10 M, theta=pi/2. Test fixture only, not the exhibit metric.
+        // Schwarzschild fixture at r=10 M, theta=pi/2; separate from the exhibit metric.
         var schwarzschild = new AdmMetricSample(Math.Sqrt(0.8), rest, 1 / 0.8, 0, 0, 100, 0, 100);
         Near(schwarzschild.ProperTimeRate(rest), Math.Sqrt(0.8), "Static Schwarzschild clock rate at r=10 M");
         Near(schwarzschild.MeasurePhotonEnergy(new PhotonFourMomentum(1 / 0.8, new MetricVector3(-1, 0, 0)), rest),

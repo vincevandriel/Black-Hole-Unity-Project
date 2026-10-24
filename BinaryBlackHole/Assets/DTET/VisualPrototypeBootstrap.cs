@@ -7,10 +7,7 @@ using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>
-    /// Desktop SI inspiral lesson with a separately selectable artistic storyboard.
-    /// Merger, gas and observer optics remain outside this bounded model.
-    /// </summary>
+    // SI inspiral lesson with a separate artistic storyboard; no merger, gas or observer-optics model.
     public sealed partial class VisualPrototypeBootstrap : MonoBehaviour, ILessonHudProvider
     {
         private static readonly Color Ink = Hex("#07101F");
@@ -459,7 +456,7 @@ namespace DTET.VisualPrototype
 
         private void BuildLearningHud(Transform parent)
         {
-            // A physical exhibit board, not a camera viewport overlay.
+            // World-space exhibit board.
             var reserved = Block(parent, "Learning reserved background", Ink, Anchor.Stretch, Vector2.zero, Vector2.zero);
             reserved.GetComponent<Image>().raycastTarget = false;
             TextAt(parent, "DT / ET", 34, White, new Vector2(42, -36), new Vector2(620, 50), TextAnchor.MiddleLeft, Anchor.TopLeft);

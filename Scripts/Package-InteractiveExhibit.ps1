@@ -3,11 +3,10 @@
 .SYNOPSIS
 Packages an already-built, already-tested Windows x64 development player.
 .DESCRIPTION
-Does not build or launch Unity. TestedRevision is the caller's provenance assertion:
-the supplied build log and validation receipt cannot prove which source produced a
-binary. Preserve the build/revision record made by the release operator separately.
-Sorted ZIP entries use the tested commit timestamp. Given identical input bytes,
-arguments and PowerShell/.NET compressor, repeated runs have reproducible contents.
+Packages without building or launching Unity. TestedRevision is caller-declared;
+passing receipts and build markers do not establish binary-to-source identity.
+Retain separate build/revision evidence. Sorted ZIP entries use the tested commit
+timestamp; identical inputs and compressor produce identical contents.
 .EXAMPLE
 .\Scripts\Package-InteractiveExhibit.ps1 -BuildDirectory C:\build\VisualQA `
   -TestedRevision <full-40-character-commit> -ValidationReceipt C:\qa\interactive-exhibit-integration.json `
@@ -105,7 +104,7 @@ foreach ($path in @($dtetPackage, $dtetZip, $dtetManifestPath, $dtetSummaryPath)
 }
 if ($VerifyExtractedPackage -and (Test-Path -LiteralPath $dtetExtracted)) { throw "Refusing to overwrite: $dtetExtracted" }
 
-# Explicit player root allowlist; no repository/build-directory wildcard copy.
+# Copy only allowlisted player roots.
 $dtetRuntimeRoots = @('BinaryBlackHole_VisualQA.exe','UnityPlayer.dll','UnityCrashHandler64.exe','BinaryBlackHole_VisualQA_Data','MonoBleedingEdge','D3D12','WinPixEventRuntime.dll')
 foreach ($name in @('BinaryBlackHole_VisualQA.exe','UnityPlayer.dll','BinaryBlackHole_VisualQA_Data','MonoBleedingEdge')) {
     if (!(Test-Path -LiteralPath (Join-Path $dtetBuild $name))) { throw "Required player root is missing: $name" }
@@ -142,7 +141,7 @@ $dtetTemplateNames = @('READ_ME_FIRST.txt','NOTICES.txt','START_OBSERVATORY.cmd'
 foreach ($name in $dtetTemplateNames) {
     if (!(Test-Path -LiteralPath (Join-Path $dtetTemplates $name) -PathType Leaf)) { throw "Missing package template: $name" }
 }
-# Reuse the tested harness, changing only its two explicit player-location lines.
+# Adapt only the tested harness's two player-location lines.
 $dtetRunner = Get-Content -LiteralPath (Join-Path $dtetRepo 'Scripts/Test-InteractiveExhibit.ps1') -Raw
 $dtetOldRepo = '$dtetRepo = Split-Path -Parent $PSScriptRoot'
 $dtetOldPlayer = '$dtetPlayer = Join-Path $dtetRepo ''BinaryBlackHole\Builds\VisualQA\BinaryBlackHole_VisualQA.exe'''
@@ -176,8 +175,7 @@ foreach ($relative in $dtetDocuments) {
     [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($destination)) | Out-Null
     [IO.File]::Copy($source, $destination, $false)
 }
-# Keep local links among shipped documents. Other relative Markdown links lead to
-# source at the packaging checkout revision, without copying the repository itself.
+# Keep shipped document links local; point other relative links to the checkout revision.
 foreach ($relative in $dtetDocuments | Where-Object { $_.EndsWith('.md') }) {
     $destination = Join-Path $dtetPackage $relative
     $text = [IO.File]::ReadAllText($destination)

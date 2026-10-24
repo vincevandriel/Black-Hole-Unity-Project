@@ -5,7 +5,7 @@ using UnityEngine.Rendering;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>A finite, hypothetical background source. Its light is evaluated before foreground gas.</summary>
+    // Hypothetical finite source rendered before foreground gas.
     public sealed class FeaturedBackgroundStar : MonoBehaviour
     {
         private static readonly Vector3 FixedDirection = new Vector3(.10f, -.547f, .831f).normalized;
@@ -56,7 +56,7 @@ namespace DTET.VisualPrototype
             SourcePositionRg = FixedDirection * (float)distance; SourceRadiusRg = (float)radius;
             material.SetVector("_FeaturedSource", new Vector4(SourcePositionRg.x, SourcePositionRg.y, SourcePositionRg.z, SourceRadiusRg));
             InteractiveOptics.CopyStellarUniforms(material, opticsMaterial, enabled);
-            // Refresh the actual camera even when effects are off or a capture moved it this frame.
+            // Camera changes also apply when bending is disabled.
             material.SetVector("_CameraOrigin", view.transform.position); material.SetVector("_CameraRight", view.transform.right);
             material.SetVector("_CameraUp", view.transform.up); material.SetVector("_CameraForward", view.transform.forward);
             float tangent = Mathf.Tan(.5f * view.fieldOfView * Mathf.Deg2Rad);

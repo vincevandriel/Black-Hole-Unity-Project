@@ -2,7 +2,7 @@ using System;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Deterministic artistic staging, NOT physical orbital phase or an inspiral solver.</summary>
+    // Deterministic artistic motion, not a physical inspiral.
     public static class StoryboardChoreography
     {
         public static double Phase(double progress)

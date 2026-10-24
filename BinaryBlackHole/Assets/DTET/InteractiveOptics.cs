@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Shared lens and retarded-wave uniforms for background stellar light.</summary>
+    // Shared lens and retarded-wave uniforms for background stellar light.
     public sealed class InteractiveOptics : MonoBehaviour
     {
         private Material material;
@@ -49,7 +49,7 @@ namespace DTET.VisualPrototype
             return Output;
         }
 
-        // Must run before drawing the background stars, including explicit QA renders.
+        // Bind before drawing background stars, including explicit QA frames.
         public void Prepare(RenderTexture input, Camera camera, InteractiveBinaryScenario scenario,
             InteractiveBinarySnapshot state, bool enabled, float requestedLensGain, float requestedWaveGain, bool gasIsVisible = true,
             GeneratedFluidPlayer generatedField = null)
@@ -68,11 +68,10 @@ namespace DTET.VisualPrototype
             BindCamera();
         }
 
-        /// <summary>Call after explicitly rendering the astronomical camera, including hidden QA captures.</summary>
+        // Return the completed astronomical target, including hidden QA frames.
         public RenderTexture RenderNow()
         {
-            // Source shaders have already applied the optical effects. No intermediate
-            // image, image sampling or extra render target is needed for the completed scene.
+            // Source shaders apply optics; no intermediate target is needed.
             return source;
         }
 
@@ -112,8 +111,7 @@ namespace DTET.VisualPrototype
             {
                 ulong hash = 14695981039346656037UL;
                 CoveredWaveSamples = 0;
-                // Half cannot retain small physical strains. Store their existing display
-                // normalization in that texture only; model values and fingerprints stay unchanged.
+                // Half stores display-normalized strain; physical values and fingerprints stay unchanged.
                 float storageScale = waveTexture.format == TextureFormat.RGBAHalf
                     && snapshot.Signal.Kind == InteractiveSignalKind.QuadrupoleStrain
                     ? (float)(1 / InteractiveBinaryScenario.ReferenceStrainAmplitude) : 1;
@@ -137,7 +135,9 @@ namespace DTET.VisualPrototype
             // Keep absolute strain separate from its fixed, declared display normalization.
             float scale = WaveDisplayScale;
             float effectiveWaveGain = waveTexture == null ? 0 : waveGain;
+            #if DEVELOPMENT_BUILD || UNITY_EDITOR
             material.SetFloat("_OpticsFixture", 0);
+            #endif
             material.SetVector("_WaveParameters", new Vector4((float)radialExtent, scale, gasVisible ? 1 : 0,
                 (float)InteractiveOpticsReference.WaveRadialCompression));
             bool hasWaveTexture = waveTexture != null;
@@ -160,8 +160,7 @@ namespace DTET.VisualPrototype
             Vector4 radii = new Vector4((float)(snapshot.BodyA?.HorizonRadiusRg ?? 0), (float)(snapshot.BodyB?.HorizonRadiusRg ?? 0), (float)(snapshot.Remnant?.HorizonRadiusRg ?? 0), 0);
             if (!snapshot.Remnant.HasValue && snapshot.BodyA.HasValue)
             {
-                // A presentation-only bridge of the summed lenses into the common lens. Proxies,
-                // gas, orbit and waveform remain the exact scenario snapshot throughout.
+                // Blend presentation lenses only; retain the scenario's bodies, gas and signal.
                 double blend = snapshot.Mode == InteractiveScenarioMode.AdjustableExperiment ? snapshot.MergerProgress
                     : Math.Max(0, Math.Min(1, 1 - (model.MergerTimeSeconds - snapshot.ElapsedSeconds) / (50 * snapshot.GravitationalTimeSeconds)));
                 if (blend > 0)

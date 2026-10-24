@@ -110,7 +110,7 @@ internal static class ReducedBinaryFlowTests
         Check(GC.GetAllocatedBytesForCurrentThread() == beforeAllocation && accumulated > 0,
             "Pure absolute state reconstruction and sampling allocate no per-seek storage");
 
-        // The transition is an explicitly prescribed C1 envelope, not gas evolution from a solver.
+        // C1 prescribed transition; no fluid evolution.
         double epsilon = 1e-4 * model.GravitationalTimeSeconds;
         var pre = model.EvaluateState(model.CommonHorizonElapsedSeconds - epsilon);
         var common = model.EvaluateState(model.CommonHorizonElapsedSeconds);
@@ -122,7 +122,7 @@ internal static class ReducedBinaryFlowTests
         {
             var state = model.EvaluateState(model.CommonHorizonElapsedSeconds + aligned * model.GravitationalTimeSeconds);
             double integratedEmission = 0;
-            // Resolve the central plane independently of camera direction or volume march.
+            // Sample the central plane independently of camera rays.
             for (int z = -64; z <= 64; z++)
             for (int x = -64; x <= 64; x++)
                 integratedEmission += model.Sample(state, x * .25, 0, z * .25).NormalizedBolometricEmission * .0625;
@@ -137,9 +137,8 @@ internal static class ReducedBinaryFlowTests
             Check(difference < 1e-6, "No field jump when numerical individual horizons switch to common horizon");
         }
 
-        // Independent cylindrical/elliptical volume integrals compare complete Cartesian grids.
-        // The ring angular contrast integrates to zero. Stream coordinate Jacobian is chord length;
-        // the across-stream integral of (1-v^2-h^2)^2 is pi*width*height/3.
+        // Independent volume integrals: ring contrast averages to zero; stream Jacobian is chord length.
+        // The stream cross section integrates to pi*width*height/3.
         double maximumCoarseMassError = 0, maximumFineMassError = 0;
         double maximumCoarseEmissionError = 0, maximumFineEmissionError = 0;
         foreach (ReducedBinaryFlowState state in new[] { initial, common, late })
@@ -157,7 +156,7 @@ internal static class ReducedBinaryFlowTests
             maximumFineEmissionError = Math.Max(maximumFineEmissionError, Math.Abs(fineEmission / expectedEmission - 1));
             Console.WriteLine($"M4 field integral t={state.ElapsedSeconds:R}: unmasked component mass={expectedMass:R}, emission={expectedEmission:R}; 96 mass={coarseMass:R}, emission={coarseEmission:R}; 192 mass={fineMass:R}, emission={fineEmission:R}");
         }
-        // Error for an individual shifted compact feature is not strictly monotone under midpoint refinement.
+        // Shifted compact-feature midpoint errors need not decrease monotonically.
         Check(maximumFineMassError < maximumCoarseMassError && maximumFineEmissionError < maximumCoarseEmissionError,
             "Spatial refinement improves worst-epoch mass and emission error without changing the source field");
         Console.WriteLine("PASS M4 reduced binary field, SXS binding, deterministic seeks, bounded support, merger continuity and integral refinement");

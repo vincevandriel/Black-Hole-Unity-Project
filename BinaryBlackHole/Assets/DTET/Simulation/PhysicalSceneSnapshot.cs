@@ -2,7 +2,7 @@ using System;
 
 namespace BlackHole.Staging.Simulation
 {
-    /// <summary>One immutable time/units contract for all scene consumers. Not detector strain or a metric.</summary>
+    // One immutable time/units contract for all scene consumers. Not detector strain or a metric.
     public sealed class PhysicalSceneSnapshot
     {
         public const int SchemaVersion = 1;

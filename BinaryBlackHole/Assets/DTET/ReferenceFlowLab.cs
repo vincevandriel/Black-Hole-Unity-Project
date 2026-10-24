@@ -8,7 +8,7 @@ using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Isolated M3 reference. Launch with --reference-lab; never attached to SXS gas.</summary>
+    // Isolated reference field, launched with --reference-lab.
     public sealed class ReferenceFlowLab : MonoBehaviour
     {
         private ReferenceFlowCache cache;

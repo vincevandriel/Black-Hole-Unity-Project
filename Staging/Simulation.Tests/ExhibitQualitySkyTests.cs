@@ -85,8 +85,7 @@ internal static class ExhibitQualitySkyTests
         Near(meanY2 / high.Length, 1.0 / 3, .025, "Uniform solid-angle sphere second moment");
         Near(low.Take(32).Sum(s => s.RelativeFlux), brightFlux, 0, "Bright prefix integrated flux stable");
 
-        // Inspect the actual opening camera frustum rather than just the whole sphere:
-        // a large global flux range is useless if all bright sources start behind us.
+        // Check brightness variation within the opening camera frustum.
         double viewLength = Math.Sqrt(.85 * .85 + 1.3 * 1.3), tangent = Math.Tan(26 * Math.PI / 180);
         var visible = low.Where(star =>
         {
@@ -109,8 +108,7 @@ internal static class ExhibitQualitySkyTests
         Check(broadest / narrowest > 3 && broadest <= 3 && narrowest <= .75,
             "Visible PSFs have clear size variation while bright cores remain compact");
 
-        // Independent discrete pixel sums exercise subpixel phase and resolution, not just a
-        // mirrored one-sample formula. Each full PSF must collect the source's prescribed flux.
+        // Integrate each PSF across subpixel phases and resolutions to check total flux.
         foreach (int height in new[] { 270, 360, 450, 630, 900, 1800 })
         foreach (double flux in new[] { .0001, .01, 1.0, 4.0, 100.0 })
         foreach (double phase in new[] { 0.0, .19, .49 })

@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Shared model frequency curve in physical mode; qualitative artwork in storyboard mode. Neither is detector strain.</summary>
+    // Model frequency or qualitative storyboard curve; neither represents detector strain.
     public sealed class HudSignalGraphic : MaskableGraphic
     {
         private float progress;
@@ -38,7 +38,7 @@ namespace DTET.VisualPrototype
             MaximumFrequencyHz = 0;
             if (value != null)
             {
-                // Graph presentation only; authoritative native samples remain full precision in the model.
+                // Downsample for display; retain full-precision model samples.
                 const int count = 1536;
                 eventSamples = new float[count];
                 for (int i = 0; i < count; i++)

@@ -24,7 +24,7 @@ internal static class StellarLensTests
         foreach (double sourceDepth in new[] { -1.0, 0, 99, 100 })
             Near(StellarLensReference.EinsteinRadiusSquared(100,.5,sourceDepth),0,0,"Foreground source has no background lensing");
 
-        // Compare the shader-reference map against independently solved analytic image locations.
+        // Compare the shader map with analytic image locations.
         foreach (double sourceAngle in new[] { .005, .03, .1, .4 })
         {
             double root = Math.Sqrt(sourceAngle*sourceAngle+4*einstein2);

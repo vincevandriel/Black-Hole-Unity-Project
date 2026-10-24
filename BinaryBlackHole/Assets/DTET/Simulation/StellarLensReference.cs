@@ -2,11 +2,8 @@ using System;
 
 namespace BlackHole.Staging.Simulation
 {
-    /// <summary>
-    /// Display reference for a hypothetical solar-radius background star at one AU.
-    /// Thin-lens point-mass deflection is used outside a bounded core; this is neither
-    /// a binary spacetime nor evidence for a star accompanying GW150914.
-    /// </summary>
+    // Hypothetical solar-radius star at one AU, mapped by a thin point-mass lens with a bounded core.
+    // This is not a binary spacetime model or an observed GW150914 companion.
     public static class StellarLensReference
     {
         public const double AstronomicalUnitMeters = 149597870700;
@@ -32,7 +29,7 @@ namespace BlackHole.Staging.Simulation
             return 4 * massFraction * geometry * Math.Min(gain, 2) / lensDepthRg;
         }
 
-        /// <summary>Positive bending alpha; source angle is image angle minus alpha.</summary>
+        // Positive bending alpha; source angle is image angle minus alpha.
         public static void Deflection(double relativeAngleX, double relativeAngleY, double lensDepthRg,
             double massFraction, double horizonRadiusRg, double sourceDepthRg, double gain, out double x, out double y)
         {
@@ -48,7 +45,7 @@ namespace BlackHole.Staging.Simulation
             if (length > MaximumDeflectionRadians) { x /= length; y /= length; }
         }
 
-        /// <summary>Assumed linear limb darkening, not a fitted stellar atmosphere.</summary>
+        // Assumed linear limb darkening, not a fitted stellar atmosphere.
         public static double SurfaceBrightness(double normalizedRadius)
         {
             if (!Finite(normalizedRadius) || normalizedRadius < 0) throw new ArgumentOutOfRangeException(nameof(normalizedRadius));

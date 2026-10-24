@@ -6,7 +6,7 @@ using System.Threading;
 
 namespace BlackHole.Staging.Simulation
 {
-    /// <summary>Numerical configuration, independent of any rendering fidelity profile.</summary>
+    // Physical grid configuration, independent of rendering quality.
     public sealed class GeneratedFluidSettings
     {
         public int GridSize { get; }
@@ -23,7 +23,7 @@ namespace BlackHole.Staging.Simulation
         }
     }
 
-    /// <summary>Immutable, self-generated finite-volume surface-density history, not an imported GR/MHD solution.</summary>
+    // Immutable finite-volume surface-density history from the Newtonian solver.
     public sealed class GeneratedFluidHistory
     {
         public const string ModelId = "generated-isothermal-newtonian-muscl-ssprk2-v1";
@@ -49,10 +49,10 @@ namespace BlackHole.Staging.Simulation
         public IReadOnlyList<double> FrameTimes => readOnlyTimes;
         public IReadOnlyList<GeneratedFluidDiagnostics> FrameDiagnostics => frameDiagnostics;
         public GeneratedFluidDiagnostics Diagnostics => frameDiagnostics[frameDiagnostics.Count - 1];
-        /// <summary>Array payload only; excludes object headers, source scenario and renderer textures.</summary>
+        // Array payload only; excludes object headers, source scenario and renderer textures.
         public long MemoryBytes => 3L * sigma.Length * sizeof(float) + frameTimes.Length * sizeof(double)
             + frameDiagnostics.Count * (8L * sizeof(double) + 2L * sizeof(long));
-        /// <summary>Peak generation array payload: completed cache plus working conservative grid.</summary>
+        // Peak generation array payload: completed cache plus working conservative grid.
         public long GenerationWorkingMemoryBytes => MemoryBytes + 18L * GridSize * GridSize * sizeof(double);
         private GeneratedFluidHistory(InteractiveBinaryScenario scenario, GeneratedFluidSettings settings, double start, double extent,
             float[] sigma, float[] vx, float[] vz, double[] times, GeneratedFluidDiagnostics[] diagnostics)
@@ -75,7 +75,7 @@ namespace BlackHole.Staging.Simulation
             double durationTg = Math.Min(settings.MaximumDurationTg, scenario.DurationSeconds / tg);
             double start = Math.Max(0, scenario.DurationSeconds - durationTg * tg);
             InteractiveBinarySnapshot initialSnapshot = scenario.Evaluate(start);
-            // A finite assumed ring is initialized at this cache start, not evolved from an unrecorded early epoch.
+            // Initialize the assumed ring at cache start; no earlier evolution is available.
             double separation = Math.Max(8, initialSnapshot.SeparationRg);
             double extent = Math.Max(32, 3.5 * separation), ringRadius = 2.1 * separation, width = .35 * separation;
             double InitialDensity(double r) => Math.Exp(-.5 * Math.Pow((r - ringRadius) / width, 2));
@@ -111,7 +111,7 @@ namespace BlackHole.Staging.Simulation
                     GeneratedFluidForcing midpoint = GeneratedFluidForcing.FromSnapshot(scenario.Evaluate(start + (tau + .5 * dt) * tg));
                     double allowed = solver.StableStep(dt, midpoint);
                     if (allowed < dt) { dt = allowed; midpoint = GeneratedFluidForcing.FromSnapshot(scenario.Evaluate(start + (tau + .5 * dt) * tg)); }
-                    // The final stability check is performed by Step itself. No wall-clock or Unity API is used.
+                    // Step performs the final stability check.
                     solver.Step(dt, midpoint); tau += dt;
                 }
                 times[frame] = frame == settings.FrameCount - 1 ? scenario.DurationSeconds : start + targetTg * tg;

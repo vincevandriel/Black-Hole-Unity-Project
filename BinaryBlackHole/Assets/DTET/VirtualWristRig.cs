@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Emulated hand pose for the same world-space wrist UI used by a tracked pose source.</summary>
+    // Emulated pose for the world-space wrist UI.
     public sealed class VirtualWristRig : MonoBehaviour
     {
         private Camera head;
@@ -55,7 +55,7 @@ namespace DTET.VisualPrototype
         {
             if (trackedWrist != null) return;
             Raised = value;
-            // Capture a pose when raising, rather than head-locking a menu that follows every look.
+            // Hold the raised pose steady while the visitor looks around.
             raisedOffset = head.transform.TransformVector(new Vector3(0.27f, -0.05f, 0.58f));
             loweredOffset = head.transform.TransformVector(new Vector3(0.42f, -0.66f, 0.48f));
             raisedRotation = head.transform.rotation * Quaternion.Euler(-6, 10, -12);
@@ -68,7 +68,7 @@ namespace DTET.VisualPrototype
             menu.gameObject.SetActive(Raised);
         }
 
-        /// <summary>Pose-source boundary only; no claim that an XR device has been configured.</summary>
+        // Accept an external pose; XR device setup is separate.
         public void BindTrackedWrist(Transform trackedPose, bool showPreviewGlove = false)
         {
             trackedWrist = trackedPose;

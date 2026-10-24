@@ -5,7 +5,7 @@ using UnityEngine.InputSystem;
 
 namespace DTET.VisualPrototype
 {
-    /// <summary>Virtual visitor/head pose emulator. The exhibit and world UI do not have a desktop layout.</summary>
+    // Emulated visitor pose for the world-space exhibit.
     public sealed class ExhibitCameraRig : MonoBehaviour
     {
         public enum ObservationTarget { Binary, BodyA, BodyB }

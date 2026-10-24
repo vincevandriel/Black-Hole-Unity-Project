@@ -2,7 +2,7 @@ using System;
 
 namespace BlackHole.Staging.Simulation
 {
-    /// <summary>Bounded display warp references. These are not a binary metric or geodesic solver.</summary>
+    // Bounded display optics, not a metric or geodesic solver.
     public static class InteractiveOpticsReference
     {
         public const int WaveSamples = 512;
@@ -13,7 +13,7 @@ namespace BlackHole.Staging.Simulation
         public const double WaveAngularCore = .18;
         public const double WaveRadialCompression = 12;
 
-        /// <summary>Presentation-only compressed distance; it never changes waveform or graph time.</summary>
+        // Presentation-only compressed distance; it never changes waveform or graph time.
         public static double WaveHistoryRadius(double displayRadiusRg)
         {
             if (!Finite(displayRadiusRg) || displayRadiusRg < 0
@@ -40,11 +40,8 @@ namespace BlackHole.Staging.Simulation
             double soft = Math.Max(.75 * Math.Max(0, horizonRadiusRg), .15 * massFraction) / lensDepthRg;
             double strength = 4 * massFraction * geometry * Math.Min(gain, 2)
                 / (lensDepthRg * Math.Max(1e-12, thetaX * thetaX + thetaY * thetaY + soft * soft));
-            // A screen image contains foreground gas and horizon silhouettes, not independent
-            // background rays. Extending the weak formula into its strong regime folded that
-            // image through itself and produced spurious nested luminous rings. Preserve the
-            // exact far weak limit; smoothly cap near-field magnification by mass fraction.
-            // The active binary/remnant mass fractions sum to at most one.
+            // Cap near-field magnification to prevent folds while preserving the far weak-lens limit.
+            // Active binary/remnant mass fractions sum to at most one.
             double cap = MaximumLensFraction * Math.Min(massFraction, 1);
             double ratio = strength / cap;
             if (ratio > .5) strength = cap * (ratio >= 1.5 ? 1 : 1 - .5 * Math.Pow(1.5 - ratio, 2));
@@ -58,8 +55,7 @@ namespace BlackHole.Staging.Simulation
             if (!Finite(thetaX) || !Finite(thetaY) || !Finite(normalizedPlus) || !Finite(normalizedCross) || !Finite(gain))
                 throw new ArgumentOutOfRangeException(nameof(thetaX));
             double plus = Clamp(normalizedPlus, -4, 4), cross = Clamp(normalizedCross, -4, 4);
-            // Fixed display amplification makes the signed wavefront visible on distant
-            // stars without emitting light. The angular core keeps the centre regular.
+            // Amplify signed stellar displacement for display; the angular core regularizes the centre.
             double scale = WavePresentationScale * Clamp(gain, 0, 2)
                 / (WaveAngularCore + Math.Sqrt(thetaX * thetaX + thetaY * thetaY));
             dx = scale * (plus * thetaX + cross * thetaY);
@@ -67,7 +63,7 @@ namespace BlackHole.Staging.Simulation
             Limit(ref dx, ref dy, MaximumWaveAngle);
         }
 
-        /// <summary>One bounded apparent centre per distant source; its flux/PSF are unchanged.</summary>
+        // One bounded apparent centre per distant source; its flux/PSF are unchanged.
         public static void SkyApparentOffset(double thetaX, double thetaY, double lensDepthRg,
             double massFraction, double horizonRadiusRg, double gain, out double dx, out double dy)
         {

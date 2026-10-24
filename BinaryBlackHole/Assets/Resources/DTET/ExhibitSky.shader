@@ -46,7 +46,7 @@ Shader "DTET/ExhibitSky"
             Varyings Vertex(Attributes i)
             {
                 Varyings o;
-                // Rotation only. Translating freely around the binary produces no fake stellar parallax.
+                // Distant directions rotate with the camera; no translation parallax.
                 float3 directionVS = mul((float3x3)UNITY_MATRIX_V, i.direction.xyz);
                 o.visible = -directionVS.z - 0.00001;
                 if(o.visible>0)
@@ -56,12 +56,10 @@ Shader "DTET/ExhibitSky"
                     float2 delta=SkyDeflection(theta,_SkyLensA,_SkyLensRadii.x)
                         +SkyDeflection(theta,_SkyLensB,_SkyLensRadii.y)+SkyDeflection(theta,_SkyLensR,_SkyLensRadii.z);
                     delta*=min(1,.22/max(length(delta),1e-12));
-                    // Move the source centre before constructing its quad. The unchanged
-                    // pixel-integrated PSF retains its width/flux without stretching stars,
-                    // and the later gas pass cannot be sampled into false extra disks.
+                    // Move centers before building quads; preserve each PSF's width and flux.
+                    // Gas renders later and stays independent.
                     directionVS.xy+=delta*depth;
-                    // First-order forward placement is the negative inverse wave lookup.
-                    // Only the background star centres move; foreground emission is stable.
+                    // Forward wave placement negates inverse lookup; move background centers only.
                     directionVS.xy-=StellarWaveDisplacement(directionVS.xy/depth)*depth;
                 }
                 float4 center = mul(UNITY_MATRIX_P, float4(directionVS, 0));
@@ -88,8 +86,7 @@ Shader "DTET/ExhibitSky"
             float4 Fragment(Varyings i):SV_Target
             {
                 clip(i.visible);
-                // Pixel-area integration, rather than sampling a radial glow, preserves total flux
-                // when the star crosses pixel boundaries or the capped render resolution changes.
+                // Pixel-area integration preserves flux across subpixel shifts and render resolutions.
                 float mass = .25 * PixelInterval(i.localPixels.x, i.sigma)
                     * PixelInterval(i.localPixels.y, i.sigma) / .9946076967722628;
                 return float4(i.color.rgb * (i.color.a * max(0, mass)), 0);
