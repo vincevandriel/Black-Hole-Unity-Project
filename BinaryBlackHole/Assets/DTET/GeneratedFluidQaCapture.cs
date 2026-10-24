@@ -164,6 +164,12 @@ namespace DTET.VisualPrototype
             var material = exhibit.GeneratedFluidMaterial;
             Check(material != null && material.shader.isSupported, "generated fluid shader supported");
             if (material == null) return;
+            var storedFrame = material.GetTexture("_GeneratedFrameA") as Texture2D;
+            bool halfPrecision = storedFrame != null && storedFrame.format == TextureFormat.RGBAHalf;
+            Check(storedFrame != null && (halfPrecision || storedFrame.format == TextureFormat.RGBAFloat),
+                "generated field uses an admitted floating-point texture");
+            if (Environment.GetEnvironmentVariable("DTET_FORCE_HALF_TEXTURES_QA") == "1")
+                Check(halfPrecision, "forced compatibility fixture uses actual Half fluid storage");
             var target = new RenderTexture(65, 65, 24, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
             target.Create(); var image = new Texture2D(65, 65, TextureFormat.RGBAFloat, false, true);
             var go = new GameObject("Generated field fixture camera"); var camera = go.AddComponent<Camera>();
@@ -186,8 +192,12 @@ namespace DTET.VisualPrototype
                     var actual = image.GetPixel(32, 32);
                     history.TrySample(time, point.x, point.z, out var sample);
                     double rho = sample.SurfaceDensity * Math.Exp(-point.y * point.y / 8.0) / (2 * Math.Sqrt(2 * Math.PI));
-                    Check(Math.Abs(actual.r - sample.SurfaceDensity) < 2e-4 && Math.Abs(actual.g - rho) < 2e-4
-                        && Math.Abs(actual.b - sample.VelocityXRgPerTg) < 2e-4 && Math.Abs(actual.a - sample.VelocityZRgPerTg) < 2e-4,
+                    // Half's 10-bit fraction adds a bounded quantization error to the existing
+                    // sampling tolerance. CPU history and its conservative solver stay unchanged.
+                    double relativeTolerance = halfPrecision ? .002 : 0;
+                    bool Close(double measured, double expected) => Math.Abs(measured - expected) < 2e-4 + relativeTolerance * Math.Abs(expected);
+                    Check(Close(actual.r, sample.SurfaceDensity) && Close(actual.g, rho)
+                        && Close(actual.b, sample.VelocityXRgPerTg) && Close(actual.a, sample.VelocityZRgPerTg),
                         "CPU/GPU generated field and velocity " + point);
                 }
             }

@@ -37,7 +37,7 @@ namespace DTET.VisualPrototype
         public double WaveRadiusRg => radialExtent;
         public Material WarpMaterial => material;
         public long AllocatedBytes => (target == null ? 0 : (long)target.width * target.height * (target.format == RenderTextureFormat.ARGBHalf ? 8 : 4))
-            + (waveTexture == null ? 0 : 2L * InteractiveOpticsReference.WaveSamples * 16)
+            + (waveTexture == null ? 0 : 2L * InteractiveOpticsReference.WaveSamples * (waveTexture.format == TextureFormat.RGBAHalf ? 8 : 16))
             + InteractiveOpticsReference.WaveSamples * 16;
 
         public RenderTexture Apply(RenderTexture input, Camera camera, InteractiveBinaryScenario scenario,
@@ -78,9 +78,9 @@ namespace DTET.VisualPrototype
                 if (shader == null || !shader.isSupported) { Status = "Optical approximation unavailable: shader support."; return false; }
                 material = new Material(shader) { name = "Bounded binary lens and retarded-wave approximation" };
             }
-            if (waveTexture == null && SystemInfo.SupportsTextureFormat(TextureFormat.RGBAFloat))
+            if (waveTexture == null && GeneratedFluidPlayer.TrySelectFilteredFloatFormat(out var waveFormat))
             {
-                waveTexture = new Texture2D(InteractiveOpticsReference.WaveSamples, 1, TextureFormat.RGBAFloat, false, true)
+                waveTexture = new Texture2D(InteractiveOpticsReference.WaveSamples, 1, waveFormat, false, true)
                     { name = "Retarded signed waveform / coverage", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
                 material.SetTexture("_WaveHistory", waveTexture); sampledTime = double.NaN;
             }
@@ -114,6 +114,11 @@ namespace DTET.VisualPrototype
             {
                 ulong hash = 14695981039346656037UL;
                 CoveredWaveSamples = 0;
+                // Half cannot retain small physical strains. Store their existing display
+                // normalization in that texture only; model values and fingerprints stay unchanged.
+                float storageScale = waveTexture.format == TextureFormat.RGBAHalf
+                    && snapshot.Signal.Kind == InteractiveSignalKind.QuadrupoleStrain
+                    ? (float)(1 / InteractiveBinaryScenario.ReferenceStrainAmplitude) : 1;
                 for (int i = 0; i < wavePixels.Length; i++)
                 {
                     double radius = radialExtent * i / (wavePixels.Length - 1);
@@ -125,15 +130,14 @@ namespace DTET.VisualPrototype
                         cross = (float)(signal.HCross ?? signal.NormalizedImaginaryH22 ?? 0);
                         CoveredWaveSamples++;
                     }
-                    wavePixels[i] = new Color(plus, cross, signal.IsAvailable ? 1 : 0, 0);
+                    wavePixels[i] = new Color(plus * storageScale, cross * storageScale, signal.IsAvailable ? 1 : 0, 0);
                     hash = Mix(hash, plus); hash = Mix(hash, cross); hash = Mix(hash, signal.IsAvailable ? 1 : 0);
                 }
                 waveTexture.SetPixels(wavePixels); waveTexture.Apply(false, false);
                 WaveFingerprint = hash; WaveUploadCount++; sampledTime = snapshot.ElapsedSeconds; sampledGeneration = snapshot.Generation;
             }
-            bool strain = snapshot.Signal.Kind == InteractiveSignalKind.QuadrupoleStrain;
             // Keep absolute strain separate from its fixed, declared display normalization.
-            float scale = strain ? (float)(1 / InteractiveBinaryScenario.ReferenceStrainAmplitude) : 1;
+            float scale = WaveDisplayScale;
             float effectiveWaveGain = waveTexture == null ? 0 : waveGain;
             material.SetFloat("_OpticsFixture", 0);
             material.SetVector("_WaveParameters", new Vector4((float)radialExtent, scale, gasVisible ? 1 : 0, 0));
@@ -177,9 +181,8 @@ namespace DTET.VisualPrototype
             float centreDepth = Vector3.Dot(-origin, forward);
             material.SetVector("_SystemAngle", new Vector4(Vector3.Dot(-origin, right) / Math.Max(.01f, centreDepth),
                 Vector3.Dot(-origin, up) / Math.Max(.01f, centreDepth), 0, 0));
-            bool strain = snapshot.Signal.Kind == InteractiveSignalKind.QuadrupoleStrain;
             material.SetVector("_WaveParameters", new Vector4((float)radialExtent,
-                strain ? (float)(1 / InteractiveBinaryScenario.ReferenceStrainAmplitude) : 1,
+                WaveDisplayScale,
                 gasVisible ? 1 : 0, centreDepth));
             Vector3 direction = origin.sqrMagnitude > 1e-8 ? origin.normalized : -forward;
             Vector3 e1 = Vector3.Cross(Vector3.up, direction);
@@ -187,6 +190,10 @@ namespace DTET.VisualPrototype
             e1.Normalize(); Vector3 e2 = Vector3.Cross(direction, e1).normalized;
             material.SetVector("_Polarization", new Vector4(Vector3.Dot(e1, right), Vector3.Dot(e1, up), Vector3.Dot(e2, right), Vector3.Dot(e2, up)));
         }
+
+        private float WaveDisplayScale => snapshot.Signal.Kind == InteractiveSignalKind.QuadrupoleStrain
+            && (waveTexture == null || waveTexture.format != TextureFormat.RGBAHalf)
+            ? (float)(1 / InteractiveBinaryScenario.ReferenceStrainAmplitude) : 1;
 
         private Vector4 Lens(InteractiveBinaryBody? body)
         {

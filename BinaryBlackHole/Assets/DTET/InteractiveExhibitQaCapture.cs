@@ -132,6 +132,7 @@ namespace DTET.VisualPrototype
             Check(ReferenceEquals(exhibit.PresentedTexture, exhibit.SceneTarget), prefix + " zero gains are an exact bypass");
             double sameSignal = exhibit.CaptureWristState().Signal;
             exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, 1, 1); exhibit.RenderFrame();
+            if (profile == ExhibitQualityProfile.Balanced && !fallback) ValidateWaveHistoryReadback("recorded replay");
             Check(exhibit.CaptureWristState().Signal == sameSignal && exhibit.Snapshot.ElapsedSeconds == before.ElapsedSeconds,
                 prefix + " optical gain leaves event and signal unchanged");
             if (!fallback) Check(!ReferenceEquals(exhibit.PresentedTexture, exhibit.SceneTarget), prefix + " enabled optics uses the owned composite target");
@@ -167,6 +168,10 @@ namespace DTET.VisualPrototype
             Check(sampled.HasValue && Math.Abs(sampled.Value - state.FrequencyHz) < 1e-9 && state.FrequencyAvailable,
                 prefix + " frequency plot matches the bounded physical model");
             Check(state.SignalAvailable && !state.ReplayMode && state.SignalUnitLabel.Contains("strain"), prefix + " experiment and replay signals have distinct labels");
+            if (profile == ExhibitQualityProfile.Balanced && !fallback)
+            {
+                exhibit.RenderFrame(); ValidateWaveHistoryReadback("adjustable physical signal");
+            }
             exhibit.Wrist.SetFrequencyPlot(false); exhibit.SetViewPreset(0); Capture(prefix + "-experiment.png");
             exhibit.SeekWrist(exhibit.Session.Model.CutoffTimeSeconds / exhibit.Snapshot.DurationSeconds);
             Check(!exhibit.CaptureWristState().SignalAvailable && !exhibit.CaptureWristState().FrequencyAvailable,
@@ -318,6 +323,76 @@ namespace DTET.VisualPrototype
             Check(!exhibit.Wrist.InputFocused, "lowering the wrist releases flight input immediately");
             EventSystem.current.SetSelectedGameObject(null);
             exhibit.Wrist.SetRaised(true, true); exhibit.Wrist.SetFrequencyPlot(false);
+        }
+
+        private void ValidateWaveHistoryReadback(string label)
+        {
+            var material = exhibit.Optics.WarpMaterial;
+            var wave = material == null ? null : material.GetTexture("_WaveHistory") as Texture2D;
+            Check(wave != null && wave.width == InteractiveOpticsReference.WaveSamples && wave.height == 1,
+                label + " has the actual uploaded wave history");
+            if (wave == null) return;
+            if (Environment.GetEnvironmentVariable("DTET_FORCE_HALF_TEXTURES_QA") == "1")
+                Check(wave.format == TextureFormat.RGBAHalf, label + " forced Half wave texture is selected");
+            Check(wave.filterMode == FilterMode.Bilinear, label + " wave texture uses linear filtering");
+            var target = new RenderTexture(wave.width, 1, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+            var image = new Texture2D(wave.width, 1, TextureFormat.RGBAFloat, false, true);
+            var previous = RenderTexture.active;
+            bool previousSrgbWrite = GL.sRGBWrite;
+            try
+            {
+                Check(target.Create(), label + " wave readback target allocates");
+                if (!target.IsCreated()) return;
+                GL.sRGBWrite = false;
+                Graphics.Blit(wave, target); RenderTexture.active = target;
+                image.ReadPixels(new Rect(0, 0, wave.width, 1), 0, 0); image.Apply();
+                // Decode with the uniform used by the real distortion shader, then compare to
+                // ideal CPU display magnitudes. This does not reproduce texture encoding.
+                double displayScale = material.GetVector("_WaveParameters").y;
+                double relativeTolerance = wave.format == TextureFormat.RGBAHalf ? .002 : 0;
+                bool coverageMatches = true, valuesMatch = true, nonzeroSurvives = false;
+                int covered = 0, worstIndex = 0;
+                double maximumError = 0, worstExpectedPlus = 0, worstExpectedCross = 0;
+                double worstMeasuredPlus = 0, worstMeasuredCross = 0;
+                for (int i = 0; i < wave.width; i++)
+                {
+                    double radius = exhibit.Optics.WaveRadiusRg * i / (wave.width - 1);
+                    var ideal = exhibit.Session.Model.EvaluateRetardedSignal(exhibit.Snapshot.ElapsedSeconds, radius);
+                    double plus = ideal.IsAvailable ? (ideal.Kind == InteractiveSignalKind.QuadrupoleStrain
+                        ? ideal.HPlus.GetValueOrDefault() / InteractiveBinaryScenario.ReferenceStrainAmplitude
+                        : ideal.NormalizedRealH22.GetValueOrDefault()) : 0;
+                    double cross = ideal.IsAvailable ? (ideal.Kind == InteractiveSignalKind.QuadrupoleStrain
+                        ? ideal.HCross.GetValueOrDefault() / InteractiveBinaryScenario.ReferenceStrainAmplitude
+                        : ideal.NormalizedImaginaryH22.GetValueOrDefault()) : 0;
+                    var pixel = image.GetPixel(i, 0);
+                    double measuredPlus = pixel.r * displayScale, measuredCross = pixel.g * displayScale;
+                    coverageMatches &= float.IsFinite(pixel.b) && Math.Abs(pixel.b - (ideal.IsAvailable ? 1 : 0)) < 1e-6;
+                    if (ideal.IsAvailable) covered++;
+                    double error = Math.Max(Math.Abs(measuredPlus - plus), Math.Abs(measuredCross - cross));
+                    valuesMatch &= double.IsFinite(measuredPlus) && double.IsFinite(measuredCross)
+                        && Math.Abs(measuredPlus - plus) <= 2e-6 + relativeTolerance * Math.Abs(plus)
+                        && Math.Abs(measuredCross - cross) <= 2e-6 + relativeTolerance * Math.Abs(cross);
+                    nonzeroSurvives |= ideal.IsAvailable && Math.Max(Math.Abs(plus), Math.Abs(cross)) > 1e-4
+                        && Math.Max(Math.Abs(measuredPlus), Math.Abs(measuredCross)) > 1e-4;
+                    if (i == 0 || error > maximumError)
+                    {
+                        maximumError = error; worstIndex = i; worstExpectedPlus = plus; worstExpectedCross = cross;
+                        worstMeasuredPlus = measuredPlus; worstMeasuredCross = measuredCross;
+                    }
+                }
+                fixtures.Add(new Fixture { label = label + " decoded wave history / " + wave.format + " / worst sample " + worstIndex,
+                    expectedX = worstExpectedPlus, expectedY = worstExpectedCross,
+                    measuredX = worstMeasuredPlus, measuredY = worstMeasuredCross, absoluteError = maximumError });
+                Check(coverageMatches && covered == exhibit.Optics.CoveredWaveSamples && covered > 0,
+                    label + " GPU coverage agrees with retarded CPU history");
+                Check(valuesMatch, label + " decoded GPU waveform agrees with CPU display magnitude");
+                Check(nonzeroSurvives, label + " nonzero covered waveform survives GPU storage");
+            }
+            finally
+            {
+                GL.sRGBWrite = previousSrgbWrite; RenderTexture.active = previous;
+                Destroy(image); target.Release(); Destroy(target);
+            }
         }
 
         private void ValidateGpuFixtures()

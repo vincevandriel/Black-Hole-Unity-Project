@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BlackHole.Staging.Simulation;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 
 namespace DTET.VisualPrototype
 {
@@ -59,9 +60,8 @@ namespace DTET.VisualPrototype
             if (disposed) return;
             Reset("Preparing a new fluid solve.");
             var shader = Resources.Load<Shader>("DTET/GeneratedFluidVolume");
-            if (shader == null || !shader.isSupported || (!SystemInfo.SupportsTextureFormat(TextureFormat.RGBAFloat)
-                && !SystemInfo.SupportsTextureFormat(TextureFormat.RGBAHalf)))
-            { Status = "Generated fluid unavailable: floating-point texture or shader support."; return; }
+            if (shader == null || !shader.isSupported || !TrySelectFilteredFloatFormat(out textureFormat))
+            { Status = "Generated fluid unavailable: filtered floating-point texture or shader support."; return; }
             sourceScenario = scenario; sourceGeneration = generation;
             var request = new Work(scenario, generation);
             work = request;
@@ -164,7 +164,6 @@ namespace DTET.VisualPrototype
         {
             int count = checked(History.GridSize * History.GridSize);
             pixels = new Color[count]; sigma = new float[count]; velocityX = new float[count]; velocityZ = new float[count];
-            textureFormat = SystemInfo.SupportsTextureFormat(TextureFormat.RGBAFloat) ? TextureFormat.RGBAFloat : TextureFormat.RGBAHalf;
             frameA = FrameTexture("Generated fluid lower frame"); frameB = FrameTexture("Generated fluid upper frame");
             Material = new Material(Resources.Load<Shader>("DTET/GeneratedFluidVolume")) { name = "Generated isothermal fluid / assumed emission" };
             Material.SetFloat("_Steps", raySteps);
@@ -178,6 +177,26 @@ namespace DTET.VisualPrototype
 
         private Texture2D FrameTexture(string label) => new Texture2D(History.GridSize, History.GridSize, textureFormat, false, true)
         { name = label, wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+
+        internal static bool TrySelectFilteredFloatFormat(out TextureFormat format)
+        {
+            bool forceHalf = false;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // Exercise the real fallback in QA without pretending unsupported hardware can use it.
+            forceHalf = Environment.GetEnvironmentVariable("DTET_FORCE_HALF_TEXTURES_QA") == "1";
+#endif
+            // A GPU may support float textures without supporting their linear filtering.
+            if (!forceHalf && SupportsFilteredFormat(TextureFormat.RGBAFloat, GraphicsFormat.R32G32B32A32_SFloat))
+            { format = TextureFormat.RGBAFloat; return true; }
+            if (SupportsFilteredFormat(TextureFormat.RGBAHalf, GraphicsFormat.R16G16B16A16_SFloat))
+            { format = TextureFormat.RGBAHalf; return true; }
+            format = default; return false;
+        }
+
+        private static bool SupportsFilteredFormat(TextureFormat texture, GraphicsFormat graphics) =>
+            SystemInfo.SupportsTextureFormat(texture)
+            && SystemInfo.IsFormatSupported(graphics, GraphicsFormatUsage.Sample)
+            && SystemInfo.IsFormatSupported(graphics, GraphicsFormatUsage.Linear);
 
         private void Upload(Texture2D texture, int index)
         {
