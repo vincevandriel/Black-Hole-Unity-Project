@@ -26,6 +26,9 @@ import zipfile
 
 APP_NAME = "DTET_Binary_Explorer"
 SOURCE_URL = "https://github.com/vincevandriel/Black-Hole-Unity-Project"
+# Leave headroom below legacy Windows file and directory path limits. This is a
+# packaging budget, not a promise about every extractor or destination chosen.
+PATH_BUDGET = 240
 FORBIDDEN = re.compile(
     r"(?i)(DoNotShip|DontShip|BurstDebugInformation|(^|/)(Library|Temp|obj|logs?|backups?|\.git|\.vs|__pycache__)(/|$)"
     r"|\.(pdb|mdb|bak|orig|log|tmp|csproj|sln)$|(^|/)\.DS_Store$|~$)"
@@ -49,6 +52,11 @@ def file_hash(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             value.update(block)
     return value.hexdigest()
+
+
+def path_length(value: str) -> int:
+    """Windows paths count UTF-16 code units, including surrogate pairs."""
+    return len(value.encode("utf-16-le")) // 2
 
 
 def within(path: Path, root: Path) -> bool:
@@ -266,7 +274,7 @@ def main() -> None:
     parser.add_argument("--source-revision", required=True)
     parser.add_argument("--mac-source-revision", help="Mac runtime source commit; defaults to --source-revision")
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--package-name", default="DTET_Binary_Explorer_Desktop")
+    parser.add_argument("--package-name", default="DTET")
     parser.add_argument("--mac-signing-status", choices=("unknown", "unsigned", "ad-hoc", "developer-id-notarized"), default="unknown")
     args = parser.parse_args()
     require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}", args.package_name) is not None, "Unsafe package name")
@@ -307,9 +315,12 @@ def main() -> None:
         minimum_os = str(plist.get("LSMinimumSystemVersion", "unspecified"))
         require(minimum_os != "unspecified", "Mac bundle must declare its minimum OS version")
     entries: list[dict] = []
-    root = args.package_name + "/"
-    platforms = ["Windows/"] + (["macOS/"] if app is not None else [])
-    for directory in [root, root + "Notices/"] + [root + platform for platform in platforms]:
+    # Explorer already offers a destination named after the ZIP. Do not repeat
+    # that name inside it. A Windows-only ZIP needs no platform folder either.
+    root = ""
+    windows_prefix = "" if args.windows_only else "Windows/"
+    platforms = [windows_prefix] + (["macOS/"] if app is not None else [])
+    for directory in ["Notices/"] + [platform for platform in platforms if platform]:
         entries.append(dict(path=directory, kind="directory", mode=stat.S_IFDIR | 0o755,
                             bytes=0, sha256=digest(b""), inline=b""))
     roots = [APP_NAME + ".exe", "UnityPlayer.dll", "UnityCrashHandler64.exe", APP_NAME + "_Data",
@@ -317,7 +328,7 @@ def main() -> None:
     for name in roots:
         path = windows / name
         if path.exists():
-            collect_tree(path, root + "Windows/" + name, windows, False, entries)
+            collect_tree(path, windows_prefix + name, windows, False, entries)
     if app is not None:
         collect_tree(app, root + "macOS/" + app.name, app, True, entries)
     source_notice = ("Caller-declared runtime source revision: " + revision if app is None else
@@ -346,26 +357,43 @@ def main() -> None:
     for platform in platforms:
         require(sum(entry["kind"] == "file" and entry["path"].startswith(root + platform) for entry in entries) >= 10,
                 f"Unexpectedly small runtime inventory: {platform}")
-    output.mkdir(parents=True, exist_ok=True)
     zip_path = output / (args.package_name + ".zip")
     manifest_path = output / (args.package_name + ".manifest.json")
     summary_path = output / (args.package_name + ".summary.json")
-    extracted = output / (args.package_name + "_extracted_verification")
+    extracted = output / (args.package_name + "_verified")
+    longest_entry = max(entries, key=lambda entry: path_length(entry["path"].rstrip("/")))
+    longest_relative = path_length(longest_entry["path"].rstrip("/"))
+    # Also keep the generated verification copy usable by Windows Explorer.
+    # Check before writing anything: a successful Python extraction alone can
+    # hide paths that legacy GUI extractors cannot handle.
+    longest_extracted = max(path_length(str(extracted.joinpath(*PurePosixPath(entry["path"]).parts)))
+                            for entry in entries)
+    require(longest_extracted <= PATH_BUDGET,
+            f"Verification path would be {longest_extracted} UTF-16 units (budget {PATH_BUDGET}). "
+            "Use a shorter --output directory and --package-name.")
     for path in (zip_path, manifest_path, summary_path, extracted):
         require(not path.exists(), f"Refusing to overwrite: {path}")
+    output.mkdir(parents=True, exist_ok=True)
     write_zip(zip_path, entries, timestamp)
     validate_zip(zip_path, entries)
     extracted_inventory, deferred_links = extract_and_inventory(zip_path, extracted)
     expected_extraction = [{key: value for key, value in public_entry(entry).items() if key != "mode"} for entry in entries]
     require(sorted(extracted_inventory + deferred_links, key=lambda item: item["path"]) == expected_extraction,
             "Independent extracted file inventory and ZIP link records do not match source payload")
-    manifest = dict(schema="dtet.desktop-package.v1", packageName=args.package_name,
+    manifest = dict(schema="dtet.desktop-package.v2", packageName=args.package_name,
+                    archiveLayout="windows-flat" if args.windows_only else "platform-folders",
                     includedPlatforms=["Windows x64"] + (["macOS"] if app is not None else []),
                     callerDeclaredRuntimeSourceRevision=common_revision,
                     callerDeclaredPlatformRuntimeSourceRevisions=platform_revisions, sourceUrl=SOURCE_URL,
                     files=[public_entry(entry) for entry in entries])
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     summary = dict(success=True, package=str(zip_path), bytes=zip_path.stat().st_size, sha256=file_hash(zip_path),
+                   archiveLayout=manifest["archiveLayout"],
+                   longestRelativePath=longest_entry["path"].rstrip("/"),
+                   longestRelativePathUtf16=longest_relative,
+                   longestVerifiedPathUtf16=longest_extracted,
+                   conservativePathBudgetUtf16=PATH_BUDGET,
+                   recommendedMaximumExtractionDirectoryUtf16=PATH_BUDGET - 1 - longest_relative,
                    includedPlatforms=manifest["includedPlatforms"], macIncluded=app is not None,
                    fileCount=sum(entry["kind"] == "file" for entry in entries),
                    symlinkCount=sum(entry["kind"] == "symlink" for entry in entries),

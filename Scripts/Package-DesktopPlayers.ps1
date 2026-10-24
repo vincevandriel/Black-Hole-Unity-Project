@@ -10,6 +10,8 @@ creation, their ZIP records are verified separately and the extraction is marked
 incomplete; no link is flattened to a regular file. Reports stay outside the ZIP.
 SourceRevision is the caller-declared Windows revision; MacSourceRevision defaults
 to it. These declarations are not proof of binary-to-source identity.
+ZIPs have no repeated outer folder. Windows-only players are at the archive root.
+Use a short output path; verification paths must fit the packager's 240-unit budget.
 #>
 [CmdletBinding()]
 param(
@@ -19,7 +21,7 @@ param(
     [Parameter(Mandatory=$true)][ValidatePattern('^[0-9a-fA-F]{40}$')][string]$SourceRevision,
     [ValidatePattern('^[0-9a-fA-F]{40}$')][string]$MacSourceRevision,
     [Parameter(Mandatory=$true)][string]$OutputDirectory,
-    [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$')][string]$PackageName = 'DTET_Binary_Explorer_Desktop',
+    [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$')][string]$PackageName = 'DTET',
     [string]$PythonPath = 'python',
     [ValidateSet('unknown','unsigned','ad-hoc','developer-id-notarized')][string]$MacSigningStatus = 'unknown'
 )

@@ -4,11 +4,19 @@ The current accretion-view release opens the interactive observatory and fidelit
 
 ## Current release, 24 October 2026
 
-**DTET_Binary_Explorer_AccretionView.zip** contains Windows x64 and a universal Intel/Apple Silicon app for macOS 12.0 or later. Size: **86,832,709 bytes**, **339 files**. SHA-256:
+The corrected packages remove the repeated outer folder that could cause Explorer error **0x80010135 / Path too long**. Use the smaller Windows-only package on Windows.
 
-`25c56fe8ccb643e7f2e8ef6840ab99f02342f10929b7c837dccab71be1b44bd4`
+| ZIP | Contents | Bytes | Files | Longest internal path |
+| --- | --- | ---: | ---: | ---: |
+| `DTET-Win.zip` | Windows x64; executable directly at the extraction root | 39,131,137 | 170 | 97 UTF-16 units |
+| `DTET-All.zip` | Windows x64 and universal Intel/Apple Silicon macOS 12+; `Windows/` and `macOS/` at the extraction root | 86,806,119 | 339 | 126 UTF-16 units |
 
-Both platform runtimes were built from `2f1d3a76c235cc41d7d1ac578a1e14044370232f` with Unity **6000.3.25f1**. This replaces the Starlight ZIP with corrected gas-view transitions. No gas shader, fluid solver, waveform or stellar-light mapping changed in this repair. Older ZIPs and historical receipts remain outside the repository.
+SHA-256:
+
+- `DTET-Win.zip`: `1529b45e877f48f06082c359633a71576b5032505ddca40ef62f42e63e10a312`
+- `DTET-All.zip`: `dd1f68f245507232d9196e9feb843a03c3022d885ede6ca205d0c2678e366222`
+
+Both platform runtimes were built from `2f1d3a76c235cc41d7d1ac578a1e14044370232f` with Unity **6000.3.25f1**. Their bytes are unchanged from the prior AccretionView ZIP; only archive layout and instructions changed for this extraction repair. No DLL, data directory or Mac bundle internals were renamed. Older ZIPs and historical receipts remain outside the repository.
 
 **ACCRETION VIEW** and **RESTART** restore visible illustrative disks, close framing and the paused beginning, including after gas was hidden or generated-fluid mode selected. **WATCH MERGER** selects visible illustrative gas. Selecting generated fluid enables gas and seeks covered time when needed; selecting illustrative gas also restores visibility. **STARLIGHT ONLY** intentionally hides gas and the header reports it. See [accretion-view validation](ACCRETION_VIEW_VALIDATION.md) and [controls](INTERACTIVE_OBSERVATORY.md).
 
@@ -16,7 +24,17 @@ The existing optical pipeline bends background stellar light. A hypothetical Sun
 
 Windows development-player integration, extracted release startup and archive verification passed. The Mac build and static inspections passed; it is **ad-hoc signed, not notarized and not runtime-tested on a Mac**. Metal rendering, native signature/resource-seal validation and Gatekeeper acceptance remain untested. The included README links to Apple's per-app first-launch instructions.
 
-## Validation
+## Extraction-path repair
+
+The previous `DTET_Binary_Explorer_AccretionView.zip` repeated its 34-character name as an internal directory. Its longest internal path was 161 characters, for the Mac copy of `UnityEngine.RuntimeInitializeOnLoadManagerInitializerModule.dll`; the Windows copy's path was 140. Extracting that archive beside the old local release using Explorer's default destination would produce a 273-character Mac path. This demonstrates a path-limit failure route consistent with the reported error; the user's actual extraction destination was not confirmed.
+
+Use a short destination such as `C:\DTET`. Cancel a failed extraction rather than skipping required DLLs, then extract the complete package into a fresh short folder. The new ZIPs have no repeated archive-name directory, and the Windows-only archive also omits the platform subfolder. Long destinations can still exceed filesystem/extractor limits.
+
+The packager now reports the longest member and verified absolute paths in UTF-16 units. It rejects a verification path above a conservative **240-unit budget before creating output**, asking for a shorter destination/name. An overlong 384-unit case was tested and rejected without leaving an output directory. Recommended maximum destination-directory lengths are 142 units for the current Windows ZIP and 113 for the combined ZIP, including the full absolute directory path but excluding its trailing separator. These are packaging budgets, not promises about every extractor.
+
+Windows PowerShell **5.1.19041.7802 Expand-Archive** successfully extracted `DTET-Win.zip` to `C:/Users/vince/Downloads/DTET-Releases/Play`. All **170** file sizes and SHA-256 hashes matched the manifest; the longest absolute file path is **141 units**. The extracted executable passed a 15-second hidden default-startup check with the installation marker and no matched runtime errors. This is standard PowerShell extraction and startup evidence, not an Explorer UI test or native-window usability test. The fresh archive and extraction audits preserve the earlier runtime validation below.
+
+## Runtime validation
 
 The corrected QA player and both non-development releases built successfully. Editor logs retain Unity licensing and URP host-type diagnostics; this is not a clean-Console claim. Both final Windows runs report success, exit zero and no failed check records:
 
@@ -68,12 +86,18 @@ Float field/wave textures require both sampling and linear-filter support, with 
   -WindowsBuildDirectory <DesktopWindows> `
   -MacAppPath <DTET_Binary_Explorer.app> `
   -SourceRevision 2f1d3a76c235cc41d7d1ac578a1e14044370232f `
-  -OutputDirectory <new-delivery-folder> `
-  -PackageName DTET_Binary_Explorer_AccretionView -MacSigningStatus ad-hoc
+  -OutputDirectory C:\Users\vince\Downloads\DTET-Releases `
+  -PackageName DTET-All -MacSigningStatus ad-hoc
+
+.\Scripts\Package-DesktopPlayers.ps1 `
+  -WindowsBuildDirectory <DesktopWindows> -WindowsOnly `
+  -SourceRevision 2f1d3a76c235cc41d7d1ac578a1e14044370232f `
+  -OutputDirectory C:\Users\vince\Downloads\DTET-Releases `
+  -PackageName DTET-Win
 ```
 
-The packager includes only the two applications, runtime dependencies, short instructions and retained notices. Source, caches, symbols, logs, test captures and the optional preview video remain outside the ZIP. Every archive path, size and SHA-256 matches its input inventory; an independently extracted inventory also matches. An independent **19-check** audit confirms archive CRC, exclusions, Windows x64 headers, both audited assemblies, Mac hashes/permissions and the new README instructions/source links. All six Mac native entries retain Unix 0755 permissions. This bundle contains no symbolic links, so the verification extraction is complete. Future link entries are preserved and explicitly reported if Windows cannot extract them; they are never flattened.
+The packager includes only the selected applications, runtime dependencies, short instructions and retained notices. Source, caches, symbols, logs, test captures and the optional preview video remain outside the ZIP. Every archive path, size and SHA-256 matches its input inventory; an independently extracted inventory also matches. An independent **39-check** audit across the two new archives confirms CRC, clean paths, rootless layouts, Windows x64 headers and updated README instructions/source links. All **166 Windows and 169 Mac runtime files** match their prior AccretionView bytes. Every Mac mode is preserved, including Unix 0755 on all six native files. This bundle contains no symbolic links, so the verification extraction is complete. Future link entries are preserved and explicitly reported if Windows cannot extract them; they are never flattened.
 
-The local workspace retains `outputs/Accretion-view-release/` for the ZIP, manifest, summary, verification extraction, screenshot and separate preview MP4, and `outputs/Accretion-view-validation/` for test receipts, captures, build logs, platform assembly audits, static Mac verification and extracted Windows startup. Runtime source association is the release operator's assertion; hashes identify the actual tested and packaged bytes.
+Current ZIPs, manifests and short verification extractions are in `C:/Users/vince/Downloads/DTET-Releases/`; `Play/` contains the independently extracted, launch-tested Windows copy. The task workspace retains `outputs/Extraction-path-validation/` for path, extraction and startup evidence. Its earlier `outputs/Accretion-view-release/` and `outputs/Accretion-view-validation/` retain the previous package, screenshot/preview, runtime receipts, build logs and static Mac audit. Runtime source association is the release operator's assertion; hashes identify the actual tested and packaged bytes.
 
 The bright gas, featured star and amplified, spatially compressed optical waves are declared display assumptions. SXS0305 remains a representative replay, not a unique reconstruction of GW150914. The finite-source thin lens is not a binary spacetime solution. The computed gas is a coarse 2D Newtonian/isothermal model; its detailed morphology is not resolution-converged. This release does not establish GRMHD, a solved binary spacetime, laptop certification, tracked XR or Mac runtime validation. See [generated fluid validation](GENERATED_FLUID_VALIDATION.md) and [desktop scope](FINAL_DESKTOP_SCOPE.md).

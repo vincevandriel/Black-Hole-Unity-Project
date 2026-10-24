@@ -1,6 +1,10 @@
 DT-ET Binary Explorer
 
 Extract the complete ZIP before launching. Unity Editor is not required.
+On Windows choose a short destination such as C:\DTET. There is no repeated
+package-name folder inside the ZIP. If Explorer reports 0x80010135 / Path too long,
+cancel and extract to a shorter destination. Do not skip DLLs or rename runtime
+files. The separate Windows-only ZIP has fewer nested folders.
 
 Windows (64-bit): open Windows, then double-click DTET_Binary_Explorer.exe.
 Keep the executable with its neighbouring data and engine files.
