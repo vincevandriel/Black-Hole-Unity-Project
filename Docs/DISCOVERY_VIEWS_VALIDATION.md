@@ -1,5 +1,7 @@
 # Wave map and star finder validation
 
+Historical view milestone. The later [smooth-merger validation](SMOOTH_MERGER_VALIDATION.md) and [desktop distribution](DESKTOP_DISTRIBUTION.md) describe the current release.
+
 Runtime source `89b9d82107ba753e86f014d1260a55f12891a213`, 24 October 2026, Unity 6000.3.25f1.
 
 ## Delivered views
