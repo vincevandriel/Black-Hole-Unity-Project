@@ -1,5 +1,32 @@
 # Black-Hole-Unity-Project
 
+## Open or download the editable Unity source
+
+**The complete editable Unity project is in [BinaryBlackHole/](BinaryBlackHole/), on the `main` branch.**
+
+| Source | Location |
+| --- | --- |
+| C# scripts: simulation, rendering, camera and interface | [Assets/DTET](BinaryBlackHole/Assets/DTET/) |
+| Physics models and shared event state | [Assets/DTET/Simulation](BinaryBlackHole/Assets/DTET/Simulation/) |
+| Guided pauses, inspection cards and voice controls | [GuidedObservationController.cs](BinaryBlackHole/Assets/DTET/GuidedObservationController.cs) |
+| Imported procedural HUD animation | [Assets/DTET/ApproachHUD](BinaryBlackHole/Assets/DTET/ApproachHUD/) |
+| Scene | [BinaryBlackHole_VisualStaging.unity](BinaryBlackHole/Assets/DTET/Scenes/BinaryBlackHole_VisualStaging.unity) |
+| Shaders, narration and numerical input | [Assets/Resources](BinaryBlackHole/Assets/Resources/) |
+| Prepared gas and transported material | [Assets/StreamingAssets](BinaryBlackHole/Assets/StreamingAssets/) |
+| Unity dependencies and project settings | [Packages](BinaryBlackHole/Packages/) / [ProjectSettings](BinaryBlackHole/ProjectSettings/) |
+
+To get the source, use this repository's **Code > Download ZIP**, or clone it:
+
+```text
+git clone https://github.com/vincevandriel/Black-Hole-Unity-Project.git
+```
+
+In Unity Hub, add the downloaded **`BinaryBlackHole` folder** using Unity **6000.3.25f1**. Open `Assets/DTET/Scenes/BinaryBlackHole_VisualStaging.unity`, select **DT-ET > Startup Exhibit > Interactive Suit Observatory**, then press Play. See the [project opening instructions](BinaryBlackHole/README.md).
+
+The separate `DTET-Win.zip` and `DTET-All.zip` downloads are compiled applications. Use the repository download above for editable source. Unity generates `Library`, `Temp`, `.sln` and `.csproj` files when needed; those generated files are excluded from Git.
+
+## Current exhibit
+
 The default observatory now uses **evolved mini-disk fluid**, prepared from the same numerical binary motion and streamed two frames at a time. The finite inventory is initialized 1000 gravitational times before common-horizon formation. Pressure, gravity, shocks and accretion change the gas instead of moving prescribed disk cutouts or feeding tubes. Curved rays through that field and velocity-dependent Doppler brightness make it inspectable from different viewpoints. Changing masses or separation pauses playback while preparing matching gas. [Model and limitations](Docs/MINIDISK_DYNAMICS.md) describe this conditional Newtonian calculation and approximate optics; it is not observed GW150914 gas or a GRMHD reconstruction.
 
 The [plasma appearance update](Docs/PLASMA_APPEARANCE.md) carries material detail through that flow with passive tracers, renders an assumed locally varying disk thickness, and adds optional automatic slow motion around coalescence. Manual speed selection disables the automatic timing. All scientific readouts still use the shared source epoch. The extra structure is illustrative; it is not resolved plasma turbulence.
@@ -68,7 +95,7 @@ The partner's `InspiralDemo_Build.zip` was a Unity **6000.5.10f1 compiled Window
 
 ## Build a standalone Windows demo
 
-With Unity Editor **6000.3.25f1**, choose **DT-ET > Build Submission Demo**. This creates a non-development player at `BinaryBlackHole/Builds/Submission/DTET_Prototype.exe`, with its required runtime/data folders alongside it. Keep those folders together; the executable does not require Unity Editor on the recipient's Windows computer. The development-only screenshot/video harnesses are excluded from this build.
+With Unity Editor **6000.3.25f1**, choose **DT-ET > Build Desktop Release > Windows**. This creates the current non-development observatory at `BinaryBlackHole/Builds/DesktopWindows/DTET_Binary_Explorer.exe`, with its required runtime/data folders alongside it. Keep those folders together; the executable does not require Unity Editor on the recipient's Windows computer. The development-only screenshot/video harnesses are excluded from this build. The **macOS Universal** menu builds the Mac application when the matching Unity build module is installed.
 
 For a clean submission ZIP with a prominent launcher, see [submission packaging](Docs/SUBMISSION_DEMO_PACKAGE.md) and `Scripts/Package-SubmissionDemo.ps1`. Templates are in `Packaging/Demo/`. The [video capture guide](Docs/PROTOTYPE_VIDEO_DEMO.md) describes the 36-second captioned prototype tour and how to reproduce it; its caption source is `Scripts/PrototypeDemo.ass`. Generated MP4s remain outside this source repository.
 
