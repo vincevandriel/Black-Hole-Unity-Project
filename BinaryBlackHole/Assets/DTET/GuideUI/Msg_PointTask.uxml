@@ -1,0 +1,10 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GuideStyles.uss" />
+    <ui:Template name="GuidePopup" src="GuidePopup.uxml" />
+    <ui:VisualElement name="pointTask" class="guide-message-root" picking-mode="Ignore">
+        <ui:Instance template="GuidePopup" name="popup" class="guide-wide">
+            <ui:AttributeOverrides element-name="titleLabel" text="TASK" />
+            <ui:AttributeOverrides element-name="bodyLabel" text="Point to the inspiral, then the merger, then the post-merger" />
+        </ui:Instance>
+    </ui:VisualElement>
+</ui:UXML>

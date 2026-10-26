@@ -1,0 +1,15 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GuideStyles.uss" />
+    <ui:VisualElement name="transcriptRoot" class="guide-transcript" picking-mode="Ignore">
+        <ui:Label text="TRANSCRIPT" class="guide-transcript-title" picking-mode="Ignore" />
+        <ui:VisualElement class="guide-transcript-divider" picking-mode="Ignore" />
+        <ui:VisualElement name="transcriptLines" class="guide-transcript-lines" picking-mode="Ignore">
+            <ui:Label name="line1" class="guide-transcript-line" picking-mode="Ignore"
+                text="&lt;color=#5EE0D4&gt;&lt;b&gt;Guide&lt;/b&gt;&lt;/color&gt;  Move the black holes closer. What do you expect?" />
+            <ui:Label name="line2" class="guide-transcript-line" picking-mode="Ignore"
+                text="&lt;color=#9EB3C7&gt;&lt;b&gt;You&lt;/b&gt;&lt;/color&gt;  The orbit gets faster." />
+            <ui:Label name="line3" class="guide-transcript-line" picking-mode="Ignore"
+                text="&lt;color=#5EE0D4&gt;&lt;b&gt;Guide&lt;/b&gt;&lt;/color&gt;  Closer means a faster orbit and a higher frequency." />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

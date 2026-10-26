@@ -1,0 +1,166 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GuideStyles.uss" />
+    <ui:Template name="GuidePopup" src="GuidePopup.uxml" />
+    <ui:Template name="GuideTag" src="GuideTag.uxml" />
+    <ui:Template name="GuideVoice" src="GuideVoice.uxml" />
+    <ui:Template name="GuideTimer" src="GuideTimer.uxml" />
+    <ui:Template name="GuideTranscript" src="GuideTranscript.uxml" />
+    <ui:VisualElement name="guideRoot" class="guide-gallery" picking-mode="Ignore">
+        <ui:VisualElement class="guide-group" picking-mode="Ignore">
+            <ui:Label text="ALWAYS AVAILABLE  (floats in front of the eyes)" class="guide-gallery-heading" picking-mode="Ignore" />
+            <ui:Instance template="GuidePopup" name="turnToOrbit" class="guide-no-title">
+                <ui:AttributeOverrides element-name="bodyLabel" text="Please turn a little toward the orbit" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="answerRight" class="guide-success guide-no-title">
+                <ui:AttributeOverrides element-name="bodyLabel" text="Your answer is right" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="answerWrong" class="guide-warning guide-no-title">
+                <ui:AttributeOverrides element-name="bodyLabel" text="Not quite. Let's look again" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="mergerComplete" class="guide-no-title">
+                <ui:AttributeOverrides element-name="bodyLabel" text="The conceptual merger is complete" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="outOfRange" class="guide-warning">
+                <ui:AttributeOverrides element-name="titleLabel" text="OUT OF RANGE" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="That value is outside the model's range. Try between X and Y" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="congratulation" class="guide-success guide-no-title">
+                <ui:AttributeOverrides element-name="bodyLabel" text="Well done!" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="finalCongratulations" class="guide-success guide-wide">
+                <ui:AttributeOverrides element-name="titleLabel" text="EXPERIENCE COMPLETE" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="Congratulations! You finished the experience" />
+            </ui:Instance>
+        </ui:VisualElement>
+        <ui:VisualElement class="guide-group" picking-mode="Ignore">
+            <ui:Label text="ZONE TAGS" class="guide-gallery-heading" picking-mode="Ignore" />
+            <ui:Instance template="GuideTag" name="learningBoardTag">
+                <ui:AttributeOverrides element-name="tagLabel" text="Learning board" />
+            </ui:Instance>
+            <ui:Instance template="GuideTag" name="mainAreaTag">
+                <ui:AttributeOverrides element-name="tagLabel" text="Main area" />
+            </ui:Instance>
+        </ui:VisualElement>
+        <ui:VisualElement class="guide-group" picking-mode="Ignore">
+            <ui:Label text="STAGE 1" class="guide-gallery-heading" picking-mode="Ignore" />
+            <ui:Instance template="GuidePopup" name="lookAround">
+                <ui:AttributeOverrides element-name="titleLabel" text="STAGE 1" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="Have a look around" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="learningGoals" class="guide-wide">
+                <ui:AttributeOverrides element-name="titleLabel" text="WHAT YOU WILL LEARN" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="•  See what happens to the wave when the black holes move closer&#10;•  Find out why they orbit faster and faster&#10;•  Follow them from orbit to merger and see what the wave does&#10;•  Compare two systems and find out why they differ&#10;•  Find out why one perfect sphere makes no waves, but two orbiting bodies do" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="walkToBlackHoles">
+                <ui:AttributeOverrides element-name="titleLabel" text="TASK" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="Walk toward the black holes" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="arrived" class="guide-success guide-no-title">
+                <ui:AttributeOverrides element-name="bodyLabel" text="You have arrived" />
+            </ui:Instance>
+        </ui:VisualElement>
+        <ui:VisualElement class="guide-group" picking-mode="Ignore">
+            <ui:Label text="STAGE 2" class="guide-gallery-heading" picking-mode="Ignore" />
+            <ui:Instance template="GuidePopup" name="orbitIntro">
+                <ui:AttributeOverrides element-name="titleLabel" text="STAGE 2" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="The two black holes orbit each other" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="walkAround">
+                <ui:AttributeOverrides element-name="titleLabel" text="TASK" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="Walk around the system" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="askGuide">
+                <ui:AttributeOverrides element-name="titleLabel" text="VOICE" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="Ask the guide by voice" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="rescaled" class="guide-warning">
+                <ui:AttributeOverrides element-name="titleLabel" text="NOTE" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="Sizes and distances are rescaled" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="symmetryTask">
+                <ui:AttributeOverrides element-name="titleLabel" text="TASK" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="Does the pair look the same from every side?" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="tryAnotherViewpoint" class="guide-no-title">
+                <ui:AttributeOverrides element-name="bodyLabel" text="Try another viewpoint" />
+            </ui:Instance>
+        </ui:VisualElement>
+        <ui:VisualElement class="guide-group" picking-mode="Ignore">
+            <ui:Label text="STAGE 3" class="guide-gallery-heading" picking-mode="Ignore" />
+            <ui:Instance template="GuidePopup" name="moveCloser">
+                <ui:AttributeOverrides element-name="titleLabel" text="STAGE 3" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="Move the black holes closer. What do you expect?" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="inspiralStarted" class="guide-no-title">
+                <ui:AttributeOverrides element-name="bodyLabel" text="The inspiral has started" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="separationShrinking" class="guide-no-title">
+                <ui:AttributeOverrides element-name="bodyLabel" text="The separation is shrinking" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="paused" class="guide-plain guide-small guide-no-title">
+                <ui:AttributeOverrides element-name="bodyLabel" text="Paused" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="closerFaster" class="guide-no-title">
+                <ui:AttributeOverrides element-name="bodyLabel" text="Closer means a faster orbit and a higher frequency" />
+            </ui:Instance>
+        </ui:VisualElement>
+        <ui:VisualElement class="guide-group" picking-mode="Ignore">
+            <ui:Label text="STAGE 4" class="guide-gallery-heading" picking-mode="Ignore" />
+            <ui:Instance template="GuidePopup" name="watchSlowMotion">
+                <ui:AttributeOverrides element-name="titleLabel" text="STAGE 4" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="Watch the merger in slow motion" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="postMerger" class="guide-warning guide-wide">
+                <ui:AttributeOverrides element-name="titleLabel" text="CONCEPTUAL" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="Conceptual post-merger state. The simple formula no longer applies this close." />
+            </ui:Instance>
+        </ui:VisualElement>
+        <ui:VisualElement class="guide-group" picking-mode="Ignore">
+            <ui:Label text="STAGE 5" class="guide-gallery-heading" picking-mode="Ignore" />
+            <ui:Instance template="GuidePopup" name="chirpNotPicture" class="guide-warning">
+                <ui:AttributeOverrides element-name="titleLabel" text="STAGE 5" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="Chirp: a detector-like signal, not a picture" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="frequencyMatches" class="guide-no-title">
+                <ui:AttributeOverrides element-name="bodyLabel" text="The rising frequency matches the faster orbit" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="pointTask" class="guide-wide">
+                <ui:AttributeOverrides element-name="titleLabel" text="TASK" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="Point to the inspiral, then the merger, then the post-merger" />
+            </ui:Instance>
+            <ui:Instance template="GuideTag" name="chirpInspiralTag">
+                <ui:AttributeOverrides element-name="tagLabel" text="Inspiral: frequency rising" />
+            </ui:Instance>
+            <ui:Instance template="GuideTag" name="chirpMergerTag">
+                <ui:AttributeOverrides element-name="tagLabel" text="Merger: the peak" />
+            </ui:Instance>
+            <ui:Instance template="GuideTag" name="chirpPostTag">
+                <ui:AttributeOverrides element-name="tagLabel" text="Post-merger: the signal fades" />
+            </ui:Instance>
+        </ui:VisualElement>
+        <ui:VisualElement class="guide-group" picking-mode="Ignore">
+            <ui:Label text="STAGE 6" class="guide-gallery-heading" picking-mode="Ignore" />
+            <ui:Instance template="GuidePopup" name="systemsIntro">
+                <ui:AttributeOverrides element-name="titleLabel" text="STAGE 6" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="System 1 and System 2" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="whatIfCloser">
+                <ui:AttributeOverrides element-name="titleLabel" text="TASK" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="What if it had started closer?" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="onlyStartDiffers" class="guide-no-title">
+                <ui:AttributeOverrides element-name="bodyLabel" text="Only the starting separation differs" />
+            </ui:Instance>
+            <ui:Instance template="GuidePopup" name="whichMergesFirst">
+                <ui:AttributeOverrides element-name="titleLabel" text="TASK" />
+                <ui:AttributeOverrides element-name="bodyLabel" text="Which system merges first, and why?" />
+            </ui:Instance>
+        </ui:VisualElement>
+        <ui:VisualElement class="guide-group" picking-mode="Ignore">
+            <ui:Label text="VOICE BARS, QUESTION TIMER, TRANSCRIPT" class="guide-gallery-heading" picking-mode="Ignore" />
+            <ui:Instance template="GuideVoice" name="voiceIndicator" />
+            <ui:Instance template="GuideTimer" name="questionTimer" />
+            <ui:Instance template="GuideTranscript" name="transcript" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

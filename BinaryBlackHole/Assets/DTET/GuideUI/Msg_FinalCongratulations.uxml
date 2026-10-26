@@ -1,0 +1,10 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GuideStyles.uss" />
+    <ui:Template name="GuidePopup" src="GuidePopup.uxml" />
+    <ui:VisualElement name="finalCongratulations" class="guide-message-root" picking-mode="Ignore">
+        <ui:Instance template="GuidePopup" name="popup" class="guide-success guide-wide">
+            <ui:AttributeOverrides element-name="titleLabel" text="EXPERIENCE COMPLETE" />
+            <ui:AttributeOverrides element-name="bodyLabel" text="Congratulations! You finished the experience" />
+        </ui:Instance>
+    </ui:VisualElement>
+</ui:UXML>

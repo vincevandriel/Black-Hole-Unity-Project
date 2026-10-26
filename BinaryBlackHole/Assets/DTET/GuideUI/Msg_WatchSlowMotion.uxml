@@ -1,0 +1,10 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GuideStyles.uss" />
+    <ui:Template name="GuidePopup" src="GuidePopup.uxml" />
+    <ui:VisualElement name="watchSlowMotion" class="guide-message-root" picking-mode="Ignore">
+        <ui:Instance template="GuidePopup" name="popup">
+            <ui:AttributeOverrides element-name="titleLabel" text="STAGE 4" />
+            <ui:AttributeOverrides element-name="bodyLabel" text="Watch the merger in slow motion" />
+        </ui:Instance>
+    </ui:VisualElement>
+</ui:UXML>

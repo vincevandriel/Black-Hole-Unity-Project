@@ -1,0 +1,10 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Template name="GuidePopup" src="project://database/Assets/DTET/GuideUI/GuidePopup.uxml?fileID=9197481963319205126&amp;guid=1a58ed44a7fd946459b8cb937fcff93d&amp;type=3#GuidePopup"/>
+    <Style src="project://database/Assets/DTET/GuideUI/GuideStyles.uss?fileID=7433441132597879392&amp;guid=08a7f1367048c41b2b0e434fc02c75c2&amp;type=3#GuideStyles"/>
+    <ui:VisualElement name="whatIfCloser" picking-mode="Ignore" class="guide-message-root">
+        <ui:Instance template="GuidePopup" name="popup">
+            <AttributeOverrides element-name="titleLabel" text="TASK"/>
+            <AttributeOverrides element-name="bodyLabel" text="What if it had started closer?"/>
+        </ui:Instance>
+    </ui:VisualElement>
+</ui:UXML>

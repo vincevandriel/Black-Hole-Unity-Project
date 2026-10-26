@@ -1,0 +1,263 @@
+:root {
+  --guide-accent: #5EE0D4;
+  --guide-warning: #F2B35C;
+  --guide-text: #E6F0F7;
+  --guide-muted: #9EB3C7;
+  --guide-panel: rgba(18, 26, 38, 0.94);
+  --guide-edge: rgba(255, 255, 255, 0.16);
+}
+
+/* ---------- show / hide (toggle this class from whatever decides when) ---------- */
+
+.guide-hidden {
+  display: none;
+}
+
+/* root of every Msg_*.uxml: fills the UI Document and centres the pop-up in it */
+
+.guide-message-root {
+  flex-grow: 1;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------- pop-up (GuidePopup.uxml) ---------- */
+
+.guide-popup {
+  flex-direction: row;
+  width: 480px;
+  min-height: 100px;
+  margin: 6px;
+  padding: 14px 22px 14px 14px;
+  background-color: var(--guide-panel);
+  border-width: 2px;
+  border-color: var(--guide-edge);
+  border-radius: 16px;
+}
+
+.guide-accent-bar {
+  width: 6px;
+  margin-right: 16px;
+  background-color: var(--guide-accent);
+  border-radius: 3px;
+}
+
+.guide-text-column {
+  flex-grow: 1;
+  flex-shrink: 1;
+  justify-content: center;
+}
+
+.guide-title {
+  margin-bottom: 4px;
+  font-size: 15px;
+  letter-spacing: 1px;
+  color: var(--guide-accent);
+  -unity-font-style: bold;
+}
+
+.guide-body {
+  font-size: 26px;
+  color: var(--guide-text);
+  white-space: normal;
+}
+
+/* kinds: add one of these classes to the instance. No class = info. */
+
+.guide-warning .guide-accent-bar {
+  background-color: var(--guide-warning);
+}
+
+.guide-warning .guide-title {
+  color: var(--guide-warning);
+}
+
+.guide-plain .guide-accent-bar {
+  background-color: var(--guide-muted);
+}
+
+.guide-plain .guide-title {
+  color: var(--guide-muted);
+}
+
+.guide-success .guide-popup {
+  background-color: rgba(30, 58, 66, 0.96);
+}
+
+/* sizes and options */
+
+.guide-wide .guide-popup {
+  width: 700px;
+}
+
+.guide-small .guide-popup {
+  width: 300px;
+  min-height: 80px;
+}
+
+.guide-no-title .guide-title {
+  display: none;
+}
+
+/* ---------- name tag (GuideTag.uxml) ---------- */
+
+.guide-tag {
+  align-items: center;
+  justify-content: center;
+  width: 240px;
+  margin: 6px;
+  padding: 8px 14px;
+  background-color: var(--guide-panel);
+  border-width: 2px;
+  border-color: var(--guide-edge);
+  border-radius: 14px;
+}
+
+.guide-tag-label {
+  font-size: 22px;
+  color: var(--guide-text);
+  white-space: normal;
+  -unity-text-align: middle-center;
+}
+
+/* ---------- voice bars (GuideVoice.uxml) ---------- */
+
+.guide-voice {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  width: 150px;
+  height: 70px;
+  margin: 6px;
+  background-color: var(--guide-panel);
+  border-width: 2px;
+  border-color: var(--guide-edge);
+  border-radius: 16px;
+}
+
+.guide-voice-bar {
+  width: 10px;
+  margin: 0 7px;
+  background-color: var(--guide-accent);
+  border-radius: 5px;
+}
+
+.guide-voice-bar-1 {
+  height: 20px;
+}
+
+.guide-voice-bar-2 {
+  height: 34px;
+}
+
+.guide-voice-bar-3 {
+  height: 44px;
+}
+
+.guide-voice-bar-4 {
+  height: 30px;
+}
+
+.guide-voice-bar-5 {
+  height: 22px;
+}
+
+/* ---------- question timer (GuideTimer.uxml) ---------- */
+
+.guide-timer {
+  width: 220px;
+  margin: 6px;
+  padding: 10px 20px 16px 20px;
+  background-color: var(--guide-panel);
+  border-width: 2px;
+  border-color: var(--guide-edge);
+  border-radius: 16px;
+}
+
+.guide-timer-label {
+  font-size: 40px;
+  color: var(--guide-text);
+  -unity-text-align: middle-center;
+}
+
+.guide-timer-track {
+  height: 12px;
+  background-color: rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+}
+
+.guide-timer-fill {
+  width: 100%;
+  height: 12px;
+  background-color: var(--guide-text);
+  border-radius: 6px;
+}
+
+/* last seconds: add this class to the timer instance */
+.guide-timer-warning .guide-timer-label {
+  color: var(--guide-warning);
+}
+
+.guide-timer-warning .guide-timer-fill {
+  background-color: var(--guide-warning);
+}
+
+/* ---------- transcript (GuideTranscript.uxml) ---------- */
+
+.guide-transcript {
+  width: 600px;
+  height: 380px;
+  margin: 6px;
+  padding: 14px 24px;
+  background-color: var(--guide-panel);
+  border-width: 2px;
+  border-color: var(--guide-edge);
+  border-radius: 16px;
+}
+
+.guide-transcript-title {
+  font-size: 15px;
+  letter-spacing: 1px;
+  color: var(--guide-accent);
+  -unity-font-style: bold;
+}
+
+.guide-transcript-divider {
+  height: 2px;
+  margin: 8px 0 12px 0;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.guide-transcript-lines {
+  flex-grow: 1;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+.guide-transcript-line {
+  margin-bottom: 12px;
+  font-size: 22px;
+  color: var(--guide-text);
+  white-space: normal;
+}
+
+/* ---------- gallery only (GuideScreen.uxml); delete when building the real screen ---------- */
+
+.guide-gallery {
+  align-items: flex-start;
+  padding: 24px;
+  background-color: rgb(10, 14, 22);
+}
+
+.guide-group {
+  align-items: flex-start;
+  margin-bottom: 28px;
+}
+
+.guide-gallery-heading {
+  margin: 0 6px 6px 6px;
+  font-size: 16px;
+  letter-spacing: 1px;
+  color: var(--guide-muted);
+  -unity-font-style: bold;
+}

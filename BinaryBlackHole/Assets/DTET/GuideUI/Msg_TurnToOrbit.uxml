@@ -1,0 +1,9 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GuideStyles.uss" />
+    <ui:Template name="GuidePopup" src="GuidePopup.uxml" />
+    <ui:VisualElement name="turnToOrbit" class="guide-message-root" picking-mode="Ignore">
+        <ui:Instance template="GuidePopup" name="popup" class="guide-no-title">
+            <ui:AttributeOverrides element-name="bodyLabel" text="Please turn a little toward the orbit" />
+        </ui:Instance>
+    </ui:VisualElement>
+</ui:UXML>

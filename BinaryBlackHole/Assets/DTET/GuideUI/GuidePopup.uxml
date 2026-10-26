@@ -1,0 +1,10 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GuideStyles.uss" />
+    <ui:VisualElement name="popupRoot" class="guide-popup" picking-mode="Ignore">
+        <ui:VisualElement name="accentBar" class="guide-accent-bar" picking-mode="Ignore" />
+        <ui:VisualElement class="guide-text-column" picking-mode="Ignore">
+            <ui:Label name="titleLabel" text="TITLE" class="guide-title" picking-mode="Ignore" />
+            <ui:Label name="bodyLabel" text="Message text" class="guide-body" picking-mode="Ignore" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -1,0 +1,10 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GuideStyles.uss" />
+    <ui:Template name="GuidePopup" src="GuidePopup.uxml" />
+    <ui:VisualElement name="outOfRange" class="guide-message-root" picking-mode="Ignore">
+        <ui:Instance template="GuidePopup" name="popup" class="guide-warning">
+            <ui:AttributeOverrides element-name="titleLabel" text="OUT OF RANGE" />
+            <ui:AttributeOverrides element-name="bodyLabel" text="That value is outside the model's range. Try between X and Y" />
+        </ui:Instance>
+    </ui:VisualElement>
+</ui:UXML>
