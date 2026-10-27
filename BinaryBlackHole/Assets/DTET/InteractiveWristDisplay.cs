@@ -129,6 +129,9 @@ namespace DTET.VisualPrototype
             if (presenter != null) throw new InvalidOperationException("The wrist display is already initialized.");
             interfaceCamera = presentationCamera != null ? presentationCamera : throw new ArgumentNullException(nameof(presentationCamera));
             presenter = source ?? throw new ArgumentNullException(nameof(source));
+            frequencyPlot = refreshing = pendingEdits = hasState = false;
+            plottedGeneration = long.MinValue; localValidation = null; nextTextRefresh = 0; reveal = 0;
+            Pinned = false;
             font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             CreateRoundedSprite();
             var root = new GameObject("Suit hologram / full resolution presentation", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
@@ -474,10 +477,14 @@ namespace DTET.VisualPrototype
             roundedTexture.SetPixels(pixels); roundedTexture.Apply(false, true);
             rounded = Sprite.Create(roundedTexture, new Rect(0, 0, side, side), new Vector2(.5f, .5f), 100, 0, SpriteMeshType.FullRect, new Vector4(8, 8, 8, 8));
         }
-        private void OnDestroy()
+        public void Release()
         {
+            if (canvas != null) { canvas.gameObject.SetActive(false); Destroy(canvas.gameObject); }
             if (rounded != null) Destroy(rounded);
             if (roundedTexture != null) Destroy(roundedTexture);
+            canvas = null; rounded = null; roundedTexture = null; panel = suitRect = fluidPanel = null;
+            presenter = null; fluidPresenter = null; plot = null;
         }
+        private void OnDestroy() { Release(); }
     }
 }

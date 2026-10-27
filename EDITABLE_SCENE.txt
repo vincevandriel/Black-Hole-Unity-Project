@@ -1,0 +1,18 @@
+This patch is based on GitHub main at 8c43e9f22ed19b4a73589d84462d50489091adcd. It does not include a player build or a standalone Unity project.
+Copy the included BinaryBlackHole/Assets files into the matching project folders, preserving their .meta files. If those scripts or the scene have local edits, merge the source changes instead of overwriting them. For a custom scene, add EditableObservatory.prefab once instead of replacing your scene.
+
+Open BinaryBlackHole with Unity 6000.6.5f1.
+Open Assets/DTET/Scenes/BinaryBlackHole_VisualStaging.unity, or use DT-ET > Open Editable Observatory.
+
+The EditableObservatory instance is saved in the scene. Its nested prefabs are in Assets/DTET/Prefabs:
+- PrimaryBody, SecondaryBody and RemnantBody: attach your scripts here, before entering Play mode.
+- Tutor and WristControls: persistent controller roots for custom components.
+- EditableObservatory: the assembled scene hierarchy, inspection camera and explicit object references.
+
+The body objects and their attached components survive seeking, scenario changes, returning to the launcher and relaunching. Save scene overrides or apply changes to the relevant prefab normally.
+
+InteractiveBinaryExhibit.SceneObjects contains the Inspector-assigned references. The existing InteractiveBinarySession remains the source of physical state. SimulationBodyBinding applies that state to these saved bodies and exposes State, HasBody and StateUpdated for additional scripts. Positions and radii use the existing total gravitational-radius coordinate units.
+
+The simulation owns body positions, sizes and existence during playback. Editing an initial Transform does not change the scenario's masses or trajectory; use the existing experiment controls/session API. The supplied SphereColliders are triggers for interaction. If a Rigidbody is needed for your interaction scripts, make it kinematic so Unity's rigid-body solver does not compete with the existing binary simulation.
+
+GPU textures, gas/sky meshes and the tutor's generated interface content are still initialized at runtime beneath the saved attachment roots. Their generation does not replace or delete the saved bodies, camera, tutor or wrist roots. The recorded event, gas data, shaders and physics equations are unchanged.

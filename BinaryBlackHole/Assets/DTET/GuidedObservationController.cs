@@ -50,6 +50,8 @@ namespace DTET.VisualPrototype
 
         public void Initialize(InteractiveBinaryExhibit owner, Transform parent)
         {
+            released = false; enabledStops = true; context = -1; coverage = double.NaN;
+            focused = pinned = null; stageId = cardId = null; gazePresent = false; dwell = away = 0;
             exhibit = owner;
             var asset = Resources.Load<TextAsset>("DTET/GuidedTour");
             if (asset == null) throw new InvalidOperationException("Guided tour content is missing.");
@@ -61,7 +63,8 @@ namespace DTET.VisualPrototype
             var rect = root.GetComponent<RectTransform>(); rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one;
             rect.offsetMin = rect.offsetMax = Vector2.zero;
             BuildInterface();
-            audioSource = gameObject.AddComponent<AudioSource>();
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
             audioSource.playOnAwake = false; audioSource.loop = false; audioSource.spatialBlend = 0;
             if (FindFirstObjectByType<AudioListener>() == null) exhibit.CaptureCamera.gameObject.AddComponent<AudioListener>();
             Sync();
@@ -107,7 +110,7 @@ namespace DTET.VisualPrototype
 
         public void Sync()
         {
-            if (released || !exhibit.Ready) return;
+            if (released || exhibit == null || !exhibit.Ready) return;
             var s = exhibit.Session;
             double start = exhibit.GeneratedFluidActive && exhibit.GeneratedHistory != null ? exhibit.GeneratedHistory.StartSeconds
                 : exhibit.EvolvedDisksSelected && exhibit.MiniDisks.Ready ? exhibit.MiniDisks.Cache.StartSeconds : 0;
@@ -152,7 +155,7 @@ namespace DTET.VisualPrototype
 
         public void Tick(float dt)
         {
-            if (released || !exhibit.Ready) return;
+            if (released || exhibit == null || !exhibit.Ready) return;
             Sync(); UpdateTargets();
             if (!exhibit.Session.IsPlaying && !exhibit.IsPreparingDisks && !exhibit.IsGeneratingFluid)
                 Tour.ClampForward(exhibit.Session.PlaybackTimeSeconds, exhibit.Session.PlaybackTimeSeconds, exhibit.Session.Generation, out _);
@@ -343,7 +346,12 @@ namespace DTET.VisualPrototype
         public void CloseCard() { StopVoice(); cardId = null; if (card != null) card.SetActive(false); }
         void HideFocus() { focused = pinned = null; gazePresent = false; dwell = away = 0; if (Animation != null) Animation.Hide(); }
         public void Release()
-        { released = true; CloseCard(); entries.Clear(); targets.Clear(); if (sourceObject != null) Destroy(sourceObject); }
+        {
+            released = true; CloseCard(); entries.Clear(); targets.Clear();
+            if (sourceObject != null) { sourceObject.SetActive(false); Destroy(sourceObject); }
+            if (root != null) { root.SetActive(false); Destroy(root); }
+            root = sourceObject = null; focused = pinned = null;
+        }
         void OnDestroy() { Release(); }
         static Vector3 V(NumericalVector3 v) => new Vector3((float)v.X, (float)v.Y, (float)v.Z);
     }

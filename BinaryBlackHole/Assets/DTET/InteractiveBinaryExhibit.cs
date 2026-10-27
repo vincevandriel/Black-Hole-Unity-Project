@@ -13,6 +13,11 @@ namespace DTET.VisualPrototype
     // Shared-state desktop replay and experiment; illustrative optics.
     public sealed class InteractiveBinaryExhibit : MonoBehaviour, IInteractiveExhibitPresenter, IGeneratedFluidPresenter
     {
+        [SerializeField] private ObservatorySceneObjects sceneObjects;
+        public ObservatorySceneObjects SceneObjects => sceneObjects;
+        private readonly System.Collections.Generic.List<GameObject> runtimeViews = new System.Collections.Generic.List<GameObject>();
+        private Transform gasRuntime;
+        private bool initialized;
         public bool Ready { get; private set; }
         public ExhibitQualitySettings Profile { get; private set; }
         public ExhibitQualityProfile SelectedProfile { get; private set; } = ExhibitQualityProfile.Auto;
@@ -90,6 +95,14 @@ namespace DTET.VisualPrototype
 
         private void Awake()
         {
+            if (sceneObjects != null)
+            {
+                if (!VisualPrototypeBootstrap.UsesInteractiveScene()) { gameObject.SetActive(false); return; }
+                sceneObjects.ValidateBindings();
+                sceneObjects.WorldRoot.SetActive(false);
+                sceneObjects.ParkInterface();
+            }
+            initialized = true;
             RenderPipelineManager.endCameraRendering += AfterSceneRender;
             CaptureCamera = Camera.main;
             if (CaptureCamera == null)
@@ -172,36 +185,70 @@ namespace DTET.VisualPrototype
             }
             finally { Resources.UnloadAsset(data); }
             Session.SetPlaybackRate(.05);
-            sceneRoot = new GameObject("Interactive astronomical scene"); sceneRoot.transform.SetParent(transform);
-            var camera = new GameObject("Astronomical inspection camera"); camera.transform.SetParent(sceneRoot.transform);
-            View = camera.AddComponent<Camera>(); View.cullingMask = ~(1 << 5);
+            if (sceneObjects != null)
+            {
+                sceneObjects.ValidateBindings();
+                sceneRoot = sceneObjects.WorldRoot;
+                sceneRoot.SetActive(true);
+                View = sceneObjects.InspectionCamera;
+            }
+            else
+            {
+                sceneRoot = new GameObject("Interactive astronomical scene"); sceneRoot.transform.SetParent(transform);
+                var camera = new GameObject("Astronomical inspection camera"); camera.transform.SetParent(sceneRoot.transform);
+                View = camera.AddComponent<Camera>();
+            }
+            View.enabled = true; View.cullingMask = ~(1 << 5);
             View.clearFlags = CameraClearFlags.SolidColor; View.backgroundColor = new Color(.001f, .002f, .004f);
             View.nearClipPlane = .04f; View.farClipPlane = 20000; View.fieldOfView = 52;
             View.depth = -10; View.allowHDR = true; View.allowMSAA = false;
             ResizeTarget();
-            sky = sceneRoot.AddComponent<ReducedExhibitSky>(); sky.Initialize(View, Profile.StarCount);
-            bodyMaterial = new Material(Resources.Load<Shader>("DTET/SolidSurface")); bodyMaterial.SetColor("_Color", Color.black);
-            bodyA = BuildMarker("Primary horizon proxy");
-            bodyB = BuildMarker("Secondary horizon proxy");
-            remnant = BuildMarker("Remnant horizon proxy");
+            var environment = RuntimeView(sceneObjects == null ? sceneRoot.transform : sceneObjects.EnvironmentRoot);
+            gasRuntime = RuntimeView(sceneObjects == null ? sceneRoot.transform : sceneObjects.GasRoot).transform;
+            var mergerView = RuntimeView(sceneObjects == null ? sceneRoot.transform : sceneObjects.MergerRoot);
+            var waveView = RuntimeView(sceneObjects == null ? sceneRoot.transform : sceneObjects.WaveRoot);
+            var opticsView = RuntimeView(sceneObjects == null ? sceneRoot.transform : sceneObjects.OpticsRoot);
+            sky = environment.AddComponent<ReducedExhibitSky>(); sky.Initialize(View, Profile.StarCount);
+            if (sceneObjects != null)
+            {
+                bodyA = sceneObjects.PrimaryBody.transform;
+                bodyB = sceneObjects.SecondaryBody.transform;
+                remnant = sceneObjects.Remnant.transform;
+            }
+            else
+            {
+                bodyMaterial = new Material(Resources.Load<Shader>("DTET/SolidSurface")); bodyMaterial.SetColor("_Color", Color.black);
+                bodyA = BuildMarker("Primary horizon proxy");
+                bodyB = BuildMarker("Secondary horizon proxy");
+                remnant = BuildMarker("Remnant horizon proxy");
+            }
             bodyRendererA = bodyA.GetComponent<Renderer>(); bodyRendererB = bodyB.GetComponent<Renderer>();
             remnantRenderer = remnant.GetComponent<Renderer>();
-            MergerSurface = sceneRoot.AddComponent<MergerSurfaceView>(); MergerSurface.Initialize();
+            MergerSurface = mergerView.AddComponent<MergerSurfaceView>(); MergerSurface.Initialize();
             if (Profile.GasEnabled && !useEvolvedDisks) BuildGas();
             BuildHud();
-            Optics = sceneRoot.AddComponent<InteractiveOptics>();
-            FeaturedStar = sceneRoot.AddComponent<FeaturedBackgroundStar>(); FeaturedStar.Initialize(View);
-            WaveSurface = sceneRoot.AddComponent<WaveSurfaceView>();
-            GeneratedFluidPlayer = sceneRoot.AddComponent<GeneratedFluidPlayer>(); GeneratedFluidPlayer.Initialize(Profile.RaySteps);
-            MiniDisks = sceneRoot.AddComponent<CachedMiniDiskPlayer>(); MiniDisks.Initialize(View, Profile.RaySteps);
+            Optics = opticsView.AddComponent<InteractiveOptics>();
+            FeaturedStar = environment.AddComponent<FeaturedBackgroundStar>(); FeaturedStar.Initialize(View);
+            WaveSurface = waveView.AddComponent<WaveSurfaceView>();
+            GeneratedFluidPlayer = gasRuntime.gameObject.AddComponent<GeneratedFluidPlayer>(); GeneratedFluidPlayer.Initialize(Profile.RaySteps);
+            MiniDisks = gasRuntime.gameObject.AddComponent<CachedMiniDiskPlayer>(); MiniDisks.Initialize(View, Profile.RaySteps);
             diskPreparation = new MiniDiskPreparation();
             Ready = true; GasVisible = Profile.GasEnabled; SamplesVisible = false;
             PrepareMiniDisks();
-            Wrist = hud.AddComponent<InteractiveWristDisplay>(); Wrist.Initialize(CaptureCamera, this);
+            if (sceneObjects != null) sceneObjects.AttachInterface(hud.transform);
+            Wrist = sceneObjects == null ? hud.AddComponent<InteractiveWristDisplay>() : sceneObjects.WristRoot.GetComponent<InteractiveWristDisplay>();
+            Wrist.Initialize(CaptureCamera, this);
             lastGeneration = -1; lastTime = double.NaN;
             launcher.SetActive(false); SetViewPreset(0); Present(); Wrist.SetRaised(false, true);
             if (EvolvedDisksSelected && MiniDisks.Ready) { Session.SetPlaybackRate(.02); Session.Play(); RefreshLabels(); }
-            Observations = hud.AddComponent<GuidedObservationController>(); Observations.Initialize(this, hud.transform);
+            Observations = sceneObjects == null ? hud.AddComponent<GuidedObservationController>() : sceneObjects.TutorRoot.GetComponent<GuidedObservationController>();
+            Observations.Initialize(this, sceneObjects == null ? hud.transform : sceneObjects.TutorRoot);
+        }
+
+        private GameObject RuntimeView(Transform parent)
+        {
+            var view = new GameObject("Runtime rendering"); view.transform.SetParent(parent, false);
+            runtimeViews.Add(view); return view;
         }
 
         private void ResizeTarget()
@@ -225,7 +272,7 @@ namespace DTET.VisualPrototype
         private void BuildGas()
         {
             var box = GameObject.CreatePrimitive(PrimitiveType.Cube); box.name = "Prescribed emitting gas";
-            box.transform.SetParent(sceneRoot.transform); Destroy(box.GetComponent<Collider>()); gasBox = box.transform;
+            box.transform.SetParent(gasRuntime); Destroy(box.GetComponent<Collider>()); gasBox = box.transform;
             gasMaterial = new Material(Resources.Load<Shader>("DTET/ReducedBinaryVolume"));
             gasMaterial.SetFloat("_Steps", Profile.RaySteps); gasMaterial.SetFloat("_Exposure", 2.5f);
             gasMaterial.SetFloat("_Opacity", (float)ReducedBinaryFlowModel.GrayExtinctionPerRg);
@@ -287,7 +334,7 @@ namespace DTET.VisualPrototype
             sampleMesh = new Mesh { name = "Interactive weighted spatial samples" }; sampleMesh.MarkDynamic();
             sampleMesh.vertices = vertices; sampleMesh.uv = uv; sampleMesh.colors = sampleColours; sampleMesh.triangles = indices;
             sampleMesh.bounds = new Bounds(Vector3.zero, new Vector3((float)x * 2, (float)y * 2, (float)x * 2));
-            sampleObject = new GameObject("Weighted density overlay", typeof(MeshFilter), typeof(MeshRenderer)); sampleObject.transform.SetParent(sceneRoot.transform);
+            sampleObject = new GameObject("Weighted density overlay", typeof(MeshFilter), typeof(MeshRenderer)); sampleObject.transform.SetParent(gasRuntime);
             sampleObject.GetComponent<MeshFilter>().sharedMesh = sampleMesh; sampleRenderer = sampleObject.GetComponent<MeshRenderer>();
             sampleRenderer.sharedMaterial = sampleMaterial; sampleRenderer.enabled = SamplesVisible;
         }
@@ -365,6 +412,8 @@ namespace DTET.VisualPrototype
 
         private void PresentBody(Transform target, InteractiveBinaryBody? body)
         {
+            SimulationBodyBinding binding = target.GetComponent<SimulationBodyBinding>();
+            if (binding != null) { binding.Apply(body); return; }
             target.gameObject.SetActive(body.HasValue); if (!body.HasValue) return;
             target.position = V(body.Value.PositionRg); target.localScale = Vector3.one * (float)(2 * body.Value.HorizonRadiusRg);
         }
@@ -826,10 +875,15 @@ namespace DTET.VisualPrototype
             if (MiniDisks != null) MiniDisks.Release(); MiniDisks = null;
             if (diskPreparation != null) diskPreparation.Dispose(); diskPreparation = null;
             if (GeneratedFluidPlayer != null) GeneratedFluidPlayer.Release(); GeneratedFluidPlayer = null;
+            if (Wrist != null) Wrist.Release();
+            if (sceneObjects != null) sceneObjects.ParkInterface();
             if (sceneRoot != null) sceneRoot.SetActive(false);
+            if (View != null) View.enabled = false;
+            foreach (var view in runtimeViews) if (view != null) { view.SetActive(false); Destroy(view); }
+            runtimeViews.Clear(); gasRuntime = null;
             if (hud != null) hud.SetActive(false);
             if (SceneTarget != null) { if (View != null) View.targetTexture = null; SceneTarget.Release(); Destroy(SceneTarget); }
-            foreach (var owned in new UnityEngine.Object[] { sceneRoot, hud, bodyMaterial, gasMaterial, sampleMaterial, displayMaterial, sampleMesh })
+            foreach (var owned in new UnityEngine.Object[] { sceneObjects == null ? sceneRoot : null, hud, bodyMaterial, gasMaterial, sampleMaterial, displayMaterial, sampleMesh })
                 if (owned != null) Destroy(owned);
             sceneRoot = hud = sampleObject = null; SceneTarget = null; sceneImage = null;
             bodyMaterial = gasMaterial = sampleMaterial = displayMaterial = null; sampleMesh = null;
@@ -843,6 +897,7 @@ namespace DTET.VisualPrototype
         }
         private void OnDestroy()
         {
+            if (!initialized) return;
             RenderPipelineManager.endCameraRendering -= AfterSceneRender;
             disposed = true; ReturnToLauncher();
         }
