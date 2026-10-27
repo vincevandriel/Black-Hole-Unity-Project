@@ -802,7 +802,7 @@ namespace DTET.VisualPrototype
             if (keyboard.digit3Key.wasPressedThisFrame) SetLayer(2);
         }
 
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if UNITY_EDITOR || UNITY_ENABLE_CHECKS
         public void SetQualityCheckView(int layer, float progress)
         {
             SetLearningVisible(true);

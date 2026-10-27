@@ -1,4 +1,4 @@
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if UNITY_EDITOR || UNITY_ENABLE_CHECKS
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -506,9 +506,9 @@ namespace DTET.VisualPrototype
 
         private void ValidateDiscoveryViews(string profile)
         {
-            var ownedTargets = new HashSet<int>();
+            var ownedTargets = new HashSet<EntityId>();
             foreach (var target in Resources.FindObjectsOfTypeAll<RenderTexture>())
-                if (target.IsCreated()) ownedTargets.Add(target.GetInstanceID());
+                if (target.IsCreated()) ownedTargets.Add(target.GetEntityId());
             Renderer[] isolatedRenderers = null;
             bool[] previousForcedOff = null;
             try
@@ -635,7 +635,7 @@ namespace DTET.VisualPrototype
                 exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f); exhibit.RenderFrame();
                 bool noExtraTargets = true;
                 foreach (var target in Resources.FindObjectsOfTypeAll<RenderTexture>())
-                    if (target.IsCreated() && !ownedTargets.Contains(target.GetInstanceID())) noExtraTargets = false;
+                    if (target.IsCreated() && !ownedTargets.Contains(target.GetEntityId())) noExtraTargets = false;
                 Check(noExtraTargets, profile + " discovery views add no persistent render targets");
             }
         }
@@ -1074,10 +1074,10 @@ namespace DTET.VisualPrototype
             material.EnableKeyword("DTET_QA_FIXTURES");
             float previousFixture = material.GetFloat("_StellarFixture");
             Vector4 previousInput = material.GetVector("_StellarFixtureInput"), previousLensInput = material.GetVector("_StellarFixtureLens");
-            var ownedTargets = new HashSet<int>();
+            var ownedTargets = new HashSet<EntityId>();
             foreach (var texture in Resources.FindObjectsOfTypeAll<RenderTexture>())
                 if (texture.IsCreated() && (texture.name == "Bounded interactive scene" || texture.name == "Capped astronomical optics"))
-                    ownedTargets.Add(texture.GetInstanceID());
+                    ownedTargets.Add(texture.GetEntityId());
             Renderer[] renderers = exhibit.GetComponentsInChildren<Renderer>(true);
             var previousEnabled = new bool[renderers.Length];
             for (int i = 0; i < renderers.Length; i++) previousEnabled[i] = renderers[i].enabled;
@@ -1168,7 +1168,7 @@ namespace DTET.VisualPrototype
                 bool noExtraTargets = true;
                 foreach (var texture in Resources.FindObjectsOfTypeAll<RenderTexture>())
                     if (texture.IsCreated() && (texture.name == "Bounded interactive scene" || texture.name == "Capped astronomical optics"
-                        || texture.name == "QA featured stellar reference target") && !ownedTargets.Contains(texture.GetInstanceID())) noExtraTargets = false;
+                        || texture.name == "QA featured stellar reference target") && !ownedTargets.Contains(texture.GetEntityId())) noExtraTargets = false;
                 Check(noExtraTargets, "stellar projection and formula checks retain no additional owned render targets");
             }
         }
@@ -1280,7 +1280,10 @@ namespace DTET.VisualPrototype
             Check(inside, "all wrist panel corners are inside the viewport");
             Button frequency = null;
             foreach (var button in exhibit.Wrist.GetComponentsInChildren<Button>(true))
-                if (button.GetComponentInChildren<Text>().text == "FREQUENCY") frequency = button;
+            {
+                var label = button.GetComponentInChildren<Text>(true);
+                if (label != null && label.text == "FREQUENCY") frequency = button;
+            }
             if (frequency == null) { Check(false, "frequency pointer target exists"); return; }
             var rect = (RectTransform)frequency.transform;
             Vector2 point = RectTransformUtility.WorldToScreenPoint(exhibit.CaptureCamera, rect.TransformPoint(rect.rect.center));

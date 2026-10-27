@@ -1,4 +1,4 @@
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if UNITY_EDITOR || UNITY_ENABLE_CHECKS
 using System;
 using System.Collections;
 using System.Collections.Generic;

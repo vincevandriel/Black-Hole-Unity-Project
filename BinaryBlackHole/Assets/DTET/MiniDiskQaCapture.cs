@@ -1,10 +1,11 @@
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if UNITY_EDITOR || UNITY_ENABLE_CHECKS
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using BlackHole.Staging.Simulation;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using Stopwatch = System.Diagnostics.Stopwatch;
 
@@ -23,6 +24,8 @@ namespace DTET.VisualPrototype
         private long playbackBytes;
         private int movieFrames;
         private bool experimentEnabled;
+        private string frameTextureFormat, frameGraphicsFormat;
+        private bool forcedHalfRequested;
         private double experimentSeconds;
         private readonly List<ProfileEvidence> profileEvidence = new List<ProfileEvidence>();
 
@@ -43,6 +46,8 @@ namespace DTET.VisualPrototype
             public long playbackPayloadBytes;
             public int movieFrames, movieFramesPerSecond;
             public bool adjustedExperimentRequested;
+            public bool forcedHalfRequested;
+            public string frameTextureFormat, frameGraphicsFormat;
             public double adjustedExperimentSeconds;
             public ProfileEvidence[] profiles;
         }
@@ -93,6 +98,7 @@ namespace DTET.VisualPrototype
             yield return new WaitForEndOfFrame();
             exhibit.SetWristOptics(InteractiveOpticalStyle.Enhanced, .35f, 1.3f);
             exhibit.SetWristGas(true); exhibit.SetWristSamples(false); exhibit.RenderFrame();
+            ValidateTextureFormat();
             Check(exhibit.MiniDisks.RendererVisible && exhibit.MiniDisks.IsCovered && !exhibit.GeneratedFluidActive,
                 "evolved mini-disk gas is the covered visible default without an interactive solve");
             playbackBytes = exhibit.MiniDisks.PlaybackPayloadBytes;
@@ -529,6 +535,26 @@ namespace DTET.VisualPrototype
             }
         }
 
+        private void ValidateTextureFormat()
+        {
+            var lower = exhibit.MiniDisks.Material.GetTexture("_GeneratedFrameA") as Texture2D;
+            var upper = exhibit.MiniDisks.Material.GetTexture("_GeneratedFrameB") as Texture2D;
+            forcedHalfRequested = Environment.GetEnvironmentVariable("DTET_FORCE_HALF_TEXTURES_QA") == "1";
+            Check(lower != null && upper != null, "production material binds both allocated cache-frame textures");
+            if (lower == null || upper == null) return;
+            frameTextureFormat = lower.format.ToString(); frameGraphicsFormat = lower.graphicsFormat.ToString();
+            Check(lower.format == upper.format && lower.graphicsFormat == upper.graphicsFormat
+                && (lower.format == TextureFormat.RGBAFloat || lower.format == TextureFormat.RGBAHalf)
+                && SystemInfo.SupportsTextureFormat(lower.format)
+                && SystemInfo.IsFormatSupported(lower.graphicsFormat, GraphicsFormatUsage.Sample)
+                && SystemInfo.IsFormatSupported(lower.graphicsFormat, GraphicsFormatUsage.Linear)
+                && lower.filterMode == FilterMode.Bilinear && upper.filterMode == FilterMode.Bilinear,
+                "actual cache-frame textures use a supported filtered Float/Half format: " + frameTextureFormat);
+            if (forcedHalfRequested)
+                Check(lower.format == TextureFormat.RGBAHalf && upper.format == TextureFormat.RGBAHalf,
+                    "forced-Half run actually allocates RGBAHalf cache-frame textures");
+        }
+
         private void ValidateRecordedField()
         {
             var cache = exhibit.MiniDisks.Cache;
@@ -804,6 +830,7 @@ namespace DTET.VisualPrototype
                 playbackPayloadBytes = playbackBytes,
                 movieFrames = movieFrames, movieFramesPerSecond = 24,
                 adjustedExperimentRequested = experimentEnabled, adjustedExperimentSeconds = experimentSeconds,
+                forcedHalfRequested = forcedHalfRequested, frameTextureFormat = frameTextureFormat, frameGraphicsFormat = frameGraphicsFormat,
                 profiles = profileEvidence.ToArray(),
                 meanCompletedFrameMs = renderMs.Count == 0 ? 0 : total / renderMs.Count,
                 p95CompletedFrameMs = renderMs.Count == 0 ? 0 : renderMs[(int)Math.Ceiling(.95 * renderMs.Count) - 1],

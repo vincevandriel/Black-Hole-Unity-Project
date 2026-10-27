@@ -2,6 +2,8 @@ Shader "DTET/CurvedDiskVolume"
 {
     Properties
     {
+        [HideInInspector] _GeneratedFrameA("Lower gas frame",2D)="black"{}
+        [HideInInspector] _GeneratedFrameB("Upper gas frame",2D)="black"{}
         _GeneratedOpacity("Assumed gray opacity",Float)=8
         _GeneratedExposure("Illustrative emission exposure",Float)=1.6
         _DopplerStrength("Velocity-dependent beaming",Float)=1

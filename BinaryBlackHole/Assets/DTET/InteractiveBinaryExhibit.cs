@@ -32,7 +32,7 @@ namespace DTET.VisualPrototype
         public bool MergerSlowMotion { get; private set; } = true;
         public double EffectivePlaybackRate => !Ready ? 0 : Session.PlaybackRate * (MergerSlowMotion
             ? MergerPlaybackTiming.Factor(Session.PlaybackTimeSeconds, Session.Model.MergerTimeSeconds, Session.Model.GravitationalTimeSeconds) : 1);
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if UNITY_EDITOR || UNITY_ENABLE_CHECKS
         internal bool LegacyGasForQa { get; set; }
 #endif
         public bool WaveMapVisible { get; private set; }
@@ -154,7 +154,7 @@ namespace DTET.VisualPrototype
         private void LaunchInternal(ExhibitQualityProfile profile, bool fallback)
         {
             if (Ready) ReturnToLauncher();
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if UNITY_EDITOR || UNITY_ENABLE_CHECKS
             useEvolvedDisks = !LegacyGasForQa;
 #else
             useEvolvedDisks = true;

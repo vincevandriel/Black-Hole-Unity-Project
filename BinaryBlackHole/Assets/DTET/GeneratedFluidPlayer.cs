@@ -45,7 +45,7 @@ namespace DTET.VisualPrototype
         public int TextureUploads { get; private set; }
         public int LowerFrame => lowerFrame;
         public int UpperFrame => upperFrame;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if UNITY_EDITOR || UNITY_ENABLE_CHECKS
         internal Texture2D LowerFrameTextureForQa => frameA;
 #endif
         public double FrameBlend => blend;
@@ -183,7 +183,7 @@ namespace DTET.VisualPrototype
         internal static bool TrySelectFilteredFloatFormat(out TextureFormat format)
         {
             bool forceHalf = false;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if UNITY_EDITOR || UNITY_ENABLE_CHECKS
             // QA may force Half only when the GPU supports it.
             forceHalf = Environment.GetEnvironmentVariable("DTET_FORCE_HALF_TEXTURES_QA") == "1";
 #endif

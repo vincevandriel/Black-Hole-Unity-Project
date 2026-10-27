@@ -1,5 +1,9 @@
 Shader "DTET/StellarBackdrop"
 {
+    Properties
+    {
+        [HideInInspector] _Optics("Optics", Vector) = (0, 0, 0, 0)
+    }
     SubShader
     {
         Tags { "RenderPipeline"="UniversalPipeline" "Queue"="Background+5" "RenderType"="Transparent" }

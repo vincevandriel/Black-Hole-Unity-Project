@@ -197,10 +197,16 @@ namespace DTET.VisualPrototype.Editor
             var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
             var destination = Path.Combine(projectRoot, "Builds", folder, executable);
             Directory.CreateDirectory(Path.GetDirectoryName(destination));
-            ShaderFixtureStripper.KeepFixtures = (options & BuildOptions.Development) != 0;
+            var named = NamedBuildTarget.Standalone;
+            var previousVariant = PlayerSettings.GetManagedCodeVariant(named);
+            bool keepFixtures = (options & BuildOptions.Development) != 0;
+            var variant = keepFixtures ? ManagedCodeVariant.Checked : ManagedCodeVariant.Release;
             BuildReport report;
             try
             {
+                PlayerSettings.SetManagedCodeVariant(named, variant);
+                ShaderFixtureStripper.KeepFixtures = keepFixtures;
+                Debug.Log($"DTET_MANAGED_CODE_VARIANT {variant}");
                 report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
                 {
                     scenes = new[] { Scene }, locationPathName = destination, target = target, options = options,
@@ -208,7 +214,11 @@ namespace DTET.VisualPrototype.Editor
                         ? new[] { "DTET_LEGACY_LESSON_QA" } : Array.Empty<string>()
                 });
             }
-            finally { ShaderFixtureStripper.KeepFixtures = false; }
+            finally
+            {
+                ShaderFixtureStripper.KeepFixtures = false;
+                PlayerSettings.SetManagedCodeVariant(named, previousVariant);
+            }
             if (report.summary.result != BuildResult.Succeeded)
                 throw new InvalidOperationException("DT-ET player build failed: " + report.summary.result);
             Debug.Log(receipt + " " + destination);

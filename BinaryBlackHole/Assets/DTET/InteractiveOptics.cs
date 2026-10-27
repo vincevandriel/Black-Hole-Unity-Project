@@ -135,7 +135,7 @@ namespace DTET.VisualPrototype
             // Keep absolute strain separate from its fixed, declared display normalization.
             float scale = WaveDisplayScale;
             float effectiveWaveGain = waveTexture == null ? 0 : waveGain;
-            #if DEVELOPMENT_BUILD || UNITY_EDITOR
+            #if UNITY_EDITOR || UNITY_ENABLE_CHECKS
             material.SetFloat("_OpticsFixture", 0);
             #endif
             material.SetVector("_WaveParameters", new Vector4((float)radialExtent, scale, gasVisible ? 1 : 0,
