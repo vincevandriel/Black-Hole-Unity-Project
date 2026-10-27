@@ -209,18 +209,6 @@ namespace DTET.VisualPrototype
             Debug.Log("DTET_STARTUP_EXHIBIT 0");
         }
 
-        internal static bool UsesInteractiveScene()
-        {
-            int fallback = 3;
-#if DTET_LEGACY_LESSON_QA && !UNITY_EDITOR
-            fallback = 0;
-#endif
-#if UNITY_EDITOR
-            fallback = UnityEditor.SessionState.GetInt("DTET.StartupExhibit", 3);
-#endif
-            return ResolveStartupExhibit(Environment.GetCommandLineArgs(), fallback) == 3;
-        }
-
         private static int ResolveStartupExhibit(string[] arguments, int fallback)
         {
             // Explicit CLI choices override session/defaults: interactive > reduced > reference > lessons.

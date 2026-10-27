@@ -15,7 +15,9 @@ namespace DTET.VisualPrototype.Editor
         [MenuItem("DT-ET/Open Editable Observatory")]
         public static void Open()
         {
-            if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) EditorSceneManager.OpenScene(Scene);
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            SessionState.SetInt("DTET.StartupExhibit", 3);
+            EditorSceneManager.OpenScene(Scene);
         }
 
         public static void Create()

@@ -97,11 +97,24 @@ namespace DTET.VisualPrototype
         {
             if (sceneObjects != null)
             {
-                if (!VisualPrototypeBootstrap.UsesInteractiveScene()) { gameObject.SetActive(false); return; }
                 sceneObjects.ValidateBindings();
                 sceneObjects.WorldRoot.SetActive(false);
                 sceneObjects.ParkInterface();
+                return;
             }
+            Initialize();
+        }
+
+        private void Start()
+        {
+            if (sceneObjects == null) return;
+            if (FindAnyObjectByType<VisualPrototypeBootstrap>() != null || FindAnyObjectByType<ReducedBinaryExhibit>() != null ||
+                FindAnyObjectByType<ReferenceFlowLab>() != null) { gameObject.SetActive(false); return; }
+            Initialize();
+        }
+
+        private void Initialize()
+        {
             initialized = true;
             RenderPipelineManager.endCameraRendering += AfterSceneRender;
             CaptureCamera = Camera.main;
