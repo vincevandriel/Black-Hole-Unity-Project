@@ -11,5 +11,5 @@ implementation; the notice is retained for source provenance.
 
 Unity engine/runtime files retain their original embedded notices and licensing.
 This package does not grant new rights to Unity, unrelated code or third-party
-artwork. Project source: @@SOURCE_URL@@
-@@RUNTIME_SOURCE_NOTICE@@
+artwork. Project source: https://github.com/vincevandriel/Black-Hole-Unity-Project
+This directory retains notices for the editable Unity source; runtime notices accompany the distributed player.

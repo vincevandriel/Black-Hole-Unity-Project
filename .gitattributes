@@ -1,3 +1,5 @@
-# Keep the checksummed numerical asset untouched and generated receipts byte-reproducible on Windows.
+# Preserve checksummed data and the exact built player bytes.
 *.bytes binary
-Docs/Data/SXS0305/*.json text eol=lf
+*.mdf binary
+*.mdt binary
+Runtime/** -text

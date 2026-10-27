@@ -1,3 +1,0 @@
-# Retain captured evidence bytes and their published hashes across Git checkouts.
-audit-6cc36ad.stdout.txt -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
-audit-6cc36ad.metrics.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

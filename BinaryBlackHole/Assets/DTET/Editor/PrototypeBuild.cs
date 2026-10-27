@@ -31,20 +31,21 @@ namespace DTET.VisualPrototype.Editor
         private static bool ValidateLessons() => ValidateStartup("M1 and M2 Lessons", 0);
         private static bool ValidateStartup(string item, int value)
         {
-            Menu.SetChecked("DT-ET/Startup Exhibit/" + item, SessionState.GetInt("DTET.StartupExhibit", 0) == value);
+            Menu.SetChecked("DT-ET/Startup Exhibit/" + item, SessionState.GetInt("DTET.StartupExhibit", 3) == value);
             return !EditorApplication.isPlayingOrWillChangePlaymode;
         }
 
         [MenuItem("DT-ET/Validate Assets and Build QA Player")]
         public static void BuildQaPlayer()
         {
+            // Preserve the historical lesson harness; CLI flags can select M3, M4 or the observatory.
             BuildPlayer("VisualQA", "BinaryBlackHole_VisualQA.exe", BuildOptions.Development, "DTET_QA_BUILD_SUCCEEDED");
         }
 
         [MenuItem("DT-ET/Build Submission Demo")]
         public static void BuildSubmissionPlayer()
         {
-            BuildPlayer("Submission", "DTET_Prototype.exe", BuildOptions.None, "DTET_SUBMISSION_BUILD_SUCCEEDED");
+            BuildPlayer("Submission", "DTET_Prototype.exe", BuildOptions.None, "DTET_SUBMISSION_BUILD_SUCCEEDED", interactiveDefault: true);
         }
 
         [MenuItem("DT-ET/Build Desktop Release/Windows")]
@@ -203,7 +204,8 @@ namespace DTET.VisualPrototype.Editor
                 report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
                 {
                     scenes = new[] { Scene }, locationPathName = destination, target = target, options = options,
-                    extraScriptingDefines = interactiveDefault ? new[] { "DTET_DESKTOP_RELEASE" } : Array.Empty<string>()
+                    extraScriptingDefines = !interactiveDefault && (options & BuildOptions.Development) != 0
+                        ? new[] { "DTET_LEGACY_LESSON_QA" } : Array.Empty<string>()
                 });
             }
             finally { ShaderFixtureStripper.KeepFixtures = false; }

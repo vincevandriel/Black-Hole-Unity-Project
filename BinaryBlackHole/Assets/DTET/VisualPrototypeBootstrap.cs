@@ -169,44 +169,54 @@ namespace DTET.VisualPrototype
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            bool interactiveExhibit = Array.IndexOf(Environment.GetCommandLineArgs(), "--interactive-exhibit") >= 0;
-            bool reducedExhibit = Array.IndexOf(Environment.GetCommandLineArgs(), "--reduced-exhibit") >= 0;
-            bool referenceLab = Array.IndexOf(Environment.GetCommandLineArgs(), "--reference-lab") >= 0;
-#if DTET_DESKTOP_RELEASE
-            interactiveExhibit |= !reducedExhibit && !referenceLab
-                && Array.IndexOf(Environment.GetCommandLineArgs(), "--event-lessons") < 0;
+            int defaultExhibit = 3;
+#if DTET_LEGACY_LESSON_QA && !UNITY_EDITOR
+            // The generic legacy QA build opts in; ordinary players still open the observatory.
+            defaultExhibit = 0;
 #endif
 #if UNITY_EDITOR
-            int editorExhibit = UnityEditor.SessionState.GetInt("DTET.StartupExhibit", 0);
-            interactiveExhibit |= editorExhibit == 3;
-            reducedExhibit |= editorExhibit == 2;
-            referenceLab |= editorExhibit == 1;
+            defaultExhibit = UnityEditor.SessionState.GetInt("DTET.StartupExhibit", 3);
 #endif
-            if (interactiveExhibit)
+            int exhibit = ResolveStartupExhibit(Environment.GetCommandLineArgs(), defaultExhibit);
+            if (exhibit == 3)
             {
                 if (FindFirstObjectByType<InteractiveBinaryExhibit>() == null)
                     new GameObject("DT-ET interactive suit observatory").AddComponent<InteractiveBinaryExhibit>();
-#if DTET_DESKTOP_RELEASE
+                Debug.Log("DTET_STARTUP_EXHIBIT 3");
                 Debug.Log("DTET_DESKTOP_OBSERVATORY_INSTALLED");
-#endif
                 return;
             }
-            if (reducedExhibit)
+            if (exhibit == 2)
             {
                 if (FindFirstObjectByType<ReducedBinaryExhibit>() == null)
                     new GameObject("DT-ET reduced binary exhibit").AddComponent<ReducedBinaryExhibit>();
+                Debug.Log("DTET_STARTUP_EXHIBIT 2");
                 return;
             }
-            if (referenceLab)
+            if (exhibit == 1)
             {
                 if (FindFirstObjectByType<ReferenceFlowLab>() == null)
                     new GameObject("DT-ET isolated field reference lab").AddComponent<ReferenceFlowLab>();
+                Debug.Log("DTET_STARTUP_EXHIBIT 1");
                 return;
             }
-            if (FindFirstObjectByType<VisualPrototypeBootstrap>() != null) return;
-            var root = new GameObject("DT-ET Storyboard / approximate thin-lens optics");
-            DontDestroyOnLoad(root);
-            root.AddComponent<VisualPrototypeBootstrap>();
+            if (FindFirstObjectByType<VisualPrototypeBootstrap>() == null)
+            {
+                var root = new GameObject("DT-ET Storyboard / approximate thin-lens optics");
+                DontDestroyOnLoad(root);
+                root.AddComponent<VisualPrototypeBootstrap>();
+            }
+            Debug.Log("DTET_STARTUP_EXHIBIT 0");
+        }
+
+        private static int ResolveStartupExhibit(string[] arguments, int fallback)
+        {
+            // Explicit CLI choices override session/defaults: interactive > reduced > reference > lessons.
+            if (Array.IndexOf(arguments, "--interactive-exhibit") >= 0) return 3;
+            if (Array.IndexOf(arguments, "--reduced-exhibit") >= 0) return 2;
+            if (Array.IndexOf(arguments, "--reference-lab") >= 0) return 1;
+            if (Array.IndexOf(arguments, "--event-lessons") >= 0) return 0;
+            return fallback >= 0 && fallback <= 3 ? fallback : 3;
         }
 
         private void Awake()
