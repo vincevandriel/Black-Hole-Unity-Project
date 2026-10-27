@@ -2,4 +2,4 @@
 *.bytes binary
 *.mdf binary
 *.mdt binary
-Runtime/** -text
+Runtime/** binary
